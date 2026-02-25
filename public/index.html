@@ -1,0 +1,4088 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Norbalat — Gestione Ordini</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f2ec;
+    --surface: #ffffff;
+    --surface2: #f0ede6;
+    --border: #e0dbd0;
+    --text: #1a1814;
+    --text2: #6b6560;
+    --text3: #9b9590;
+    --accent: #2d6a4f;
+    --accent-light: #d8f3dc;
+    --accent2: #e07a00;
+    --accent2-light: #fff3e0;
+    --danger: #c0392b;
+    --danger-light: #fdecea;
+    --blue: #1a5276;
+    --blue-light: #d6eaf8;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 15px;
+  }
+
+  /* ── LOGIN ── */
+  #screen-login {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1a3a2a 0%, #2d6a4f 60%, #52b788 100%);
+  }
+
+  .login-card {
+    background: var(--surface);
+    border-radius: 20px;
+    padding: 48px 40px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .login-logo {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  .login-logo .brand {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+  }
+
+  .login-logo .sub {
+    font-size: 12px;
+    color: var(--text3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .login-roles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .role-btn {
+    padding: 14px 10px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text2);
+  }
+
+  .role-btn .role-icon { font-size: 22px; display: block; margin-bottom: 6px; }
+
+  .role-btn:hover, .role-btn.active {
+    border-color: var(--accent);
+    background: var(--accent-light);
+    color: var(--accent);
+  }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; letter-spacing: 0.5px; text-transform: uppercase; }
+
+  .field input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 15px;
+    background: var(--surface);
+    color: var(--text);
+    transition: border-color 0.2s;
+    outline: none;
+  }
+
+  .field input:focus { border-color: var(--accent); }
+
+  .btn-primary {
+    width: 100%;
+    padding: 14px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .btn-primary:hover { background: #245a42; }
+  .btn-primary:active { transform: scale(0.98); }
+
+  /* ── APP SHELL ── */
+  #screen-app { display: none; min-height: 100vh; }
+
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 1px 0 var(--border);
+  }
+
+  .topbar-brand { font-weight: 700; font-size: 17px; color: var(--accent); letter-spacing: -0.3px; }
+  .topbar-user { display: flex; align-items: center; gap: 12px; }
+  .topbar-role {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: var(--accent-light);
+    color: var(--accent);
+  }
+
+  .topbar-logout {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--text2);
+    transition: all 0.2s;
+  }
+  .topbar-logout:hover { border-color: var(--danger); color: var(--danger); }
+
+  .app-layout { display: flex; min-height: calc(100vh - 60px); }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 220px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px 12px;
+    flex-shrink: 0;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text2);
+    transition: all 0.15s;
+    margin-bottom: 2px;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+  }
+
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
+  .nav-item .nav-icon { font-size: 18px; flex-shrink: 0; }
+
+  /* ── MAIN CONTENT ── */
+  .main { flex: 1; padding: 28px; overflow-y: auto; }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .page-header { margin-bottom: 24px; }
+  .page-title { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  .page-sub { font-size: 14px; color: var(--text2); margin-top: 4px; }
+
+  /* ── STATS CARDS ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .stat-label { font-size: 12px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 30px; font-weight: 700; letter-spacing: -1px; font-family: 'DM Mono', monospace; }
+  .stat-card.green .stat-value { color: var(--accent); }
+  .stat-card.orange .stat-value { color: var(--accent2); }
+  .stat-card.blue .stat-value { color: var(--blue); }
+  .stat-card.red .stat-value { color: var(--danger); }
+
+  /* ── TABLE ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .card-title { font-size: 15px; font-weight: 600; }
+
+  .btn {
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-green { background: var(--accent); color: white; }
+  .btn-green:hover { background: #245a42; }
+  .btn-outline { background: none; border: 1.5px solid var(--border); color: var(--text2); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-danger { background: var(--danger-light); color: var(--danger); border: 1.5px solid #f5c6c2; }
+  .btn-danger:hover { background: var(--danger); color: white; }
+  .btn-orange { background: var(--accent2-light); color: var(--accent2); border: 1.5px solid #ffd599; }
+  .btn-orange:hover { background: var(--accent2); color: white; }
+
+  .search-input {
+    padding: 8px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    width: 220px;
+    background: var(--bg);
+  }
+  .search-input:focus { border-color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    padding: 10px 16px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 12px 16px; font-size: 14px; vertical-align: middle; }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+
+  .badge-green { background: var(--accent-light); color: var(--accent); }
+  .badge-orange { background: var(--accent2-light); color: var(--accent2); }
+  .badge-blue { background: var(--blue-light); color: var(--blue); }
+  .badge-red { background: var(--danger-light); color: var(--danger); }
+  .badge-gray { background: var(--surface2); color: var(--text3); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+    animation: modalIn 0.2s ease;
+  }
+
+  @keyframes modalIn {
+    from { opacity: 0; transform: translateY(-16px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .modal-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .modal-title { font-size: 17px; font-weight: 700; }
+
+  .modal-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    color: var(--text3);
+    padding: 4px;
+    border-radius: 6px;
+    line-height: 1;
+  }
+  .modal-close:hover { background: var(--surface2); color: var(--text); }
+
+  .modal-body { padding: 20px 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-full { grid-column: 1 / -1; }
+
+  select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 14px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    cursor: pointer;
+  }
+  select:focus { border-color: var(--accent); }
+
+  textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 14px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    resize: vertical;
+    min-height: 80px;
+  }
+  textarea:focus { border-color: var(--accent); }
+
+  /* Order lines in modal */
+  .order-lines { border: 1.5px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; margin-top: 8px; }
+  .order-line { display: grid; grid-template-columns: 1fr 80px 36px; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .order-line:last-child { border-bottom: none; }
+  .order-line-add { padding: 8px 12px; border-top: 1px solid var(--border); }
+
+  .qty-input {
+    padding: 6px 8px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    width: 100%;
+    text-align: center;
+    outline: none;
+  }
+  .qty-input:focus { border-color: var(--accent); }
+
+  .line-delete { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 16px; padding: 4px; border-radius: 4px; }
+  .line-delete:hover { background: var(--danger-light); color: var(--danger); }
+
+  /* ── MOBILE VIEW (autista) ── */
+  .mobile-view { max-width: 440px; margin: 0 auto; }
+
+  .mobile-order-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: box-shadow 0.2s;
+  }
+
+  .mobile-order-card:hover { box-shadow: var(--shadow); }
+
+  .mob-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .mob-client { font-size: 16px; font-weight: 700; }
+  .mob-time { font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; }
+
+  .mob-lines { margin: 10px 0; }
+  .mob-line { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; border-bottom: 1px dashed var(--border); }
+  .mob-line:last-child { border-bottom: none; }
+  .mob-line-qty { font-family: 'DM Mono', monospace; font-weight: 600; color: var(--accent); }
+
+  .mob-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .mob-actions .btn { flex: 1; justify-content: center; padding: 10px; font-size: 14px; }
+
+  /* ── MAGAZZINO ── */
+  .warehouse-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: box-shadow 0.15s;
+  }
+
+  .warehouse-card:hover { box-shadow: var(--shadow); }
+  .wh-num { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 700; color: var(--text3); min-width: 40px; }
+  .wh-info { flex: 1; }
+  .wh-client { font-weight: 600; font-size: 15px; }
+  .wh-detail { font-size: 13px; color: var(--text2); margin-top: 2px; }
+  .wh-status { display: flex; align-items: center; gap: 10px; }
+
+  /* ── REPORT ── */
+  .report-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+
+  .chart-placeholder {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    min-height: 200px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .chart-title { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 130px; }
+  .bar-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+  .bar { width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; transition: opacity 0.2s; }
+  .bar:hover { opacity: 0.8; }
+  .bar-label { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; }
+  .bar-val { font-size: 10px; color: var(--accent); font-weight: 600; font-family: 'DM Mono', monospace; }
+
+  /* ── TOAST ── */
+  .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+  .toast {
+    background: var(--text);
+    color: white;
+    padding: 12px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: var(--shadow-lg);
+    animation: toastIn 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+  .toast.success { background: var(--accent); }
+  .toast.warning { background: var(--accent2); }
+
+  /* ── RESPONSIVE ── */
+  /* ══════════════════════════════════
+     RESPONSIVE — TABLET & MOBILE
+     ══════════════════════════════════ */
+
+  /* Piano di carico: griglia pedane */
+  .pedane-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+    padding: 0;
+  }
+  .pedana-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .pedana-card.has-content { border-color: var(--accent); background: var(--accent-light); }
+  .pedana-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text3);
+    letter-spacing: 0.5px;
+  }
+  .pedana-input {
+    width: 100%;
+    min-height: 60px;
+    resize: vertical;
+    font-size: 13px;
+    font-family: inherit;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.4;
+  }
+  .pedana-input:focus { outline: none; border-color: var(--accent); }
+  .pedana-readonly {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 40px;
+    padding: 4px 2px;
+    white-space: pre-wrap;
+  }
+  .pedana-empty { color: var(--text3); font-style: italic; font-size: 12px; }
+
+  @media (max-width: 768px) {
+    /* Layout */
+    .sidebar { display: none; }
+    .main { padding: 16px 12px; }
+    .topbar { padding: 0 12px; }
+    .topbar-username { display: none; }
+
+    /* Grids */
+    .report-grid { grid-template-columns: 1fr; }
+    .form-row { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .search-input { width: 100%; max-width: 100%; }
+
+    /* Page header */
+    .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .page-header > div { flex-wrap: wrap; width: 100%; }
+
+    /* Tables: horizontal scroll con overscroll indicator */
+    .card { overflow: visible; }
+    .table-scroll-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+    table { width: 100%; min-width: 480px; }
+    td, th { font-size: 12px; padding: 8px 10px; white-space: nowrap; }
+
+    /* Modals: slide up dal basso */
+    .modal-overlay { align-items: flex-end; padding: 0; }
+    .modal {
+      max-width: 100% !important;
+      width: 100%;
+      max-height: 95dvh;
+      border-radius: 16px 16px 0 0;
+      margin: 0;
+    }
+    .modal-body {
+      max-height: calc(95dvh - 140px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Stat cards */
+    .stat-card { padding: 14px 12px; }
+    .stat-value { font-size: 26px; }
+
+    /* Buttons touch-friendly */
+    .btn { padding: 9px 14px; font-size: 13px; min-height: 40px; }
+    .btn-sm { padding: 7px 12px; font-size: 12px; min-height: 34px; }
+
+    /* Nascondi colonne non essenziali */
+    .col-note { display: none; }
+    .col-lines { display: none; }
+
+    /* Piano carico: 2 colonne su tablet */
+    .pedane-grid { grid-template-columns: repeat(2, 1fr); }
+
+    /* Card header wrap */
+    .card-header { gap: 8px; }
+  }
+
+  @media (max-width: 480px) {
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .main { padding: 12px 10px; }
+    .page-title { font-size: 19px; }
+    .stat-value { font-size: 24px; }
+    .topbar-role { display: none; }
+    /* Piano carico: colonna singola su mobile piccolo */
+    .pedane-grid { grid-template-columns: 1fr 1fr; }
+    .pedana-input { min-height: 52px; }
+    table { min-width: 400px; }
+  }
+
+  /* ── MOBILE NAV (bottom) ── */
+  .mobile-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 8px 0 env(safe-area-inset-bottom, 8px);
+    z-index: 200;
+  }
+
+  .mobile-nav-items { display: flex; }
+  .mobile-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 4px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text3);
+    border: none;
+    background: none;
+    font-family: inherit;
+    transition: color 0.15s;
+  }
+
+  .mobile-nav-item .mn-icon { font-size: 20px; }
+  .mobile-nav-item.active { color: var(--accent); }
+
+  @media (max-width: 768px) {
+    .mobile-nav { display: block; }
+    .main { padding-bottom: 80px; }
+  }
+
+  /* ── EMPTY STATE ── */
+  .empty-state { text-align: center; padding: 48px 24px; color: var(--text3); }
+  .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 15px; }
+
+  /* ── ANAGRAFICA ── */
+  .anag-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--accent-light);
+    color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.4s; }
+
+  /* ── AUTOCOMPLETE ── */
+  .ac-wrap { position: relative; }
+  .ac-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 14px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .ac-input:focus { border-color: var(--accent); }
+  .ac-input.has-value { border-color: var(--accent); background: var(--accent-light); }
+
+  .ac-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0; right: 0;
+    background: var(--surface);
+    border: 1.5px solid var(--accent);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    z-index: 500;
+    max-height: 260px;
+    overflow-y: auto;
+  }
+  .ac-dropdown.open { display: block; }
+
+  .ac-group-label {
+    padding: 6px 12px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+  }
+
+  .ac-item {
+    padding: 9px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .ac-item:last-child { border-bottom: none; }
+  .ac-item:hover, .ac-item.focused { background: var(--accent-light); }
+  .ac-item .ac-sub { font-size: 11px; color: var(--text3); }
+  .ac-item mark { background: #ffe066; border-radius: 2px; font-weight: 700; }
+  .ac-freq { font-size: 10px; color: var(--accent); margin-left: 5px; font-weight: 700; background: var(--accent-light); padding: 1px 5px; border-radius: 10px; }
+
+  .ac-empty { padding: 14px; text-align: center; color: var(--text3); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ LOGIN ══════════════════ -->
+<div id="screen-login">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="brand">Norbalat</div>
+      <div class="sub">Gestione Ordini</div>
+    </div>
+
+    <div style="margin-bottom:20px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Accedi come</div>
+      <div class="login-roles">
+        <button class="role-btn active" onclick="selectRole('admin',this)">
+          <span class="role-icon">🖥️</span>Admin / Ufficio
+        </button>
+        <button class="role-btn" onclick="selectRole('autista',this)">
+          <span class="role-icon">🚚</span>Autista / Agente
+        </button>
+        <button class="role-btn" onclick="selectRole('magazzino',this)">
+          <span class="role-icon">📦</span>Magazzino
+        </button>
+        <button class="role-btn" onclick="selectRole('direzione',this)">
+          <span class="role-icon">📊</span>Direzione
+        </button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="login-user" placeholder="es. mario.rossi" value="admin">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="login-pass" placeholder="••••••••" value="1234">
+    </div>
+    <button class="btn-primary" onclick="doLogin()">Accedi →</button>
+  </div>
+</div>
+
+<!-- ══════════════════ APP ══════════════════ -->
+<div id="screen-app">
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-brand">🧀 Norbalat Ordini</div>
+    <div class="topbar-user">
+      <span id="topbar-username" style="font-size:14px;font-weight:500;"></span>
+      <span id="topbar-role" class="topbar-role"></span>
+      <button class="topbar-logout" onclick="doLogout()">Esci</button>
+    </div>
+  </div>
+
+  <div class="app-layout">
+    <!-- Sidebar desktop -->
+    <div class="sidebar" id="sidebar">
+      <nav id="sidebar-nav"></nav>
+    </div>
+
+    <!-- Main content -->
+    <div class="main" id="main-content">
+
+      <!-- ─── PAGE: Dashboard Admin ─── -->
+      <div class="page" id="page-dashboard">
+        <div class="page-header">
+          <div class="page-title">Dashboard</div>
+          <div class="page-sub" id="dash-date"></div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card green">
+            <div class="stat-label">Ordini oggi</div>
+            <div class="stat-value" id="stat-oggi">0</div>
+          </div>
+          <div class="stat-card orange">
+            <div class="stat-label">In attesa</div>
+            <div class="stat-value" id="stat-attesa">0</div>
+          </div>
+          <div class="stat-card blue">
+            <div class="stat-label">Consegnati</div>
+            <div class="stat-value" id="stat-consegnati">0</div>
+          </div>
+          <div class="stat-card red">
+            <div class="stat-label">Da preparare</div>
+            <div class="stat-value" id="stat-preparare">0</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Ultimi Ordini</div>
+            <button class="btn btn-green" onclick="openNewOrder()">＋ Nuovo Ordine</button>
+          </div>
+          <div class="table-scroll-wrap"><table>
+            <thead>
+              <tr>
+                <th>N°</th>
+                <th>Cliente</th>
+                <th>Data</th>
+                <th>Inserito da</th>
+                <th>Stato</th>
+                <th>Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="dash-orders-table"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ─── PAGE: Tutti gli Ordini ─── -->
+      <div class="page" id="page-ordini">
+        <div class="page-header">
+          <div class="page-title">Ordini</div>
+          <div class="page-sub">Gestione completa degli ordini</div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <input type="text" class="search-input" id="search-ordini" placeholder="🔍 Cerca cliente, agente…" oninput="renderOrdiniTable()">
+            <div style="display:flex;gap:8px;">
+              <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-stato" onchange="renderOrdiniTable()">
+                <option value="">Tutti gli stati</option>
+                <option value="attesa">In attesa</option>
+                <option value="preparazione">In preparazione</option>
+                <option value="consegnato">Consegnato</option>
+                <option value="annullato">Annullato</option>
+              </select>
+              <button class="btn btn-green" onclick="openNewOrder()">＋ Nuovo</button>
+            </div>
+          </div>
+          <div class="table-scroll-wrap"><table>
+            <thead>
+              <tr>
+                <th>N°</th>
+                <th>Cliente</th>
+                <th>Data</th>
+                <th>Inserito da</th>
+                <th class="col-lines">Prodotti</th>
+                <th>Stato</th>
+                <th class="col-note">Note</th>
+                <th>Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="ordini-table"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ─── PAGE: Clienti ─── -->
+      <div class="page" id="page-clienti">
+        <div class="page-header">
+          <div class="page-title">Clienti</div>
+          <div class="page-sub">Anagrafica clienti aziendali</div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <input type="text" class="search-input" id="search-clienti" placeholder="🔍 Cerca…" oninput="renderClientiTable()">
+            <div style="display:flex;gap:8px;">
+              <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-giro" onchange="renderClientiTable()">
+                <option value="">Tutti i giri</option>
+                <option value="bari nord">Bari Nord</option>
+                <option value="murgia">Murgia</option>
+                <option value="taranto">Taranto</option>
+                <option value="lecce">Lecce</option>
+                <option value="valle itria">Valle Itria</option>
+                <option value="calabria">Calabria</option>
+                <option value="foggia">Foggia</option>
+                <option value="diretto">Diretto</option>
+              </select>
+              <button class="btn btn-green" onclick="openNewCliente()">＋ Nuovo Cliente</button>
+            </div>
+          </div>
+          <div class="table-scroll-wrap"><table>
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Località</th>
+                <th>Giro</th>
+                <th>Ordini</th>
+                <th>Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="clienti-table"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ─── PAGE: Prodotti ─── -->
+      <div class="page" id="page-prodotti">
+        <div class="page-header">
+          <div class="page-title">Prodotti</div>
+          <div class="page-sub">Catalogo prodotti Norbalat</div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <input type="text" class="search-input" id="search-prodotti" placeholder="🔍 Cerca codice, nome…" oninput="renderProdottiTable()">
+            <div style="display:flex;gap:8px;">
+              <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-cat-prodotti" onchange="renderProdottiTable()">
+                <option value="">Tutte le categorie</option>
+                <option value="FORMAGGI">Formaggi</option>
+                <option value="RICOTTA">Ricotta</option>
+                <option value="CAGLIATA">Cagliata</option>
+                <option value="PANNA UHT">Panna UHT</option>
+                <option value="ALTRO">Altro</option>
+              </select>
+              <button class="btn btn-green" onclick="openNewProdotto()">＋ Nuovo Prodotto</button>
+            </div>
+          </div>
+          <div class="table-scroll-wrap"><table>
+            <thead>
+              <tr>
+                <th>Codice</th>
+                <th>Prodotto</th>
+                <th>Categoria</th>
+                <th>U.M.</th>
+                <th>Packaging</th>
+                <th>Peso</th>
+                <th>Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="prodotti-table"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ─── PAGE: Utenti ─── -->
+      <div class="page" id="page-utenti">
+        <div class="page-header">
+          <div class="page-title">Utenti</div>
+          <div class="page-sub">Gestione accessi e ruoli</div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Utenti del sistema</div>
+            <button class="btn btn-green" onclick="openNewUtente()">＋ Nuovo Utente</button>
+          </div>
+          <div class="table-scroll-wrap"><table>
+            <thead>
+              <tr>
+                <th>Utente</th>
+                <th>Username</th>
+                <th>Ruolo</th>
+                <th>Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="utenti-table"></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- ─── PAGE: Vista Autista ─── -->
+      <div class="page" id="page-autista">
+        <div class="page-header">
+          <div class="page-title" id="autista-title">Buongiorno!</div>
+          <div class="page-sub" id="autista-sub"></div>
+        </div>
+
+        <div class="stats-grid" style="grid-template-columns:1fr 1fr 1fr;">
+          <div class="stat-card orange">
+            <div class="stat-label">Da consegnare</div>
+            <div class="stat-value" id="aut-da-consegnare" style="font-size:22px;">0</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-label">Consegnati</div>
+            <div class="stat-value" id="aut-consegnati" style="font-size:22px;">0</div>
+          </div>
+          <div class="stat-card blue">
+            <div class="stat-label">Totale oggi</div>
+            <div class="stat-value" id="aut-totale" style="font-size:22px;">0</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div style="font-weight:600;font-size:15px;">Giro consegne di oggi</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" style="background:var(--accent2-light);color:var(--accent2);border:1px solid #f5d7a0;" onclick="openTentataVendita()">🚚 Tentata Vendita</button>
+            <button class="btn btn-green" onclick="openNewOrder()">＋ Nuovo ordine</button>
+          </div>
+        </div>
+
+        <div class="mobile-view" id="autista-orders"></div>
+
+
+      </div>
+
+      <!-- ─── PAGE: Piano di Carico ─── -->
+      <div class="page" id="page-piano">
+        <div class="page-header">
+          <div>
+            <div class="page-title">🚚 Piano di Carico</div>
+            <div class="page-sub" id="piano-sub">Seleziona il mezzo e compila le pedane</div>
+          </div>
+        </div>
+
+        <!-- Selettore camion -->
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;" id="camion-selector"></div>
+
+        <!-- Corpo piano: layout camion + pedane editabili -->
+        <div id="piano-body"></div>
+
+        <!-- Sezione conferma carico (visibile a magazzino e admin) -->
+        <div id="piano-conferma-section" style="display:none;margin-top:20px;">
+          <div class="card" style="padding:20px;">
+            <div style="font-size:15px;font-weight:700;margin-bottom:12px;">✅ Conferma Carico</div>
+            <div id="piano-conferma-checklist" style="margin-bottom:16px;"></div>
+            <button class="btn btn-green" style="width:100%;font-size:15px;padding:14px;" onclick="confermaCarico()">
+              ✅ Confermo: tutti gli ordini del giro sono caricati
+            </button>
+            <div id="piano-conferma-stato" style="margin-top:12px;font-size:13px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── PAGE: Magazzino ─── -->
+      <div class="page" id="page-magazzino">
+        <div class="page-header">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+            <div>
+              <div class="page-title">Magazzino</div>
+              <div class="page-sub" id="magazzino-sub">Ordini da preparare</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <label style="font-size:13px;font-weight:600;color:var(--text2);">📅</label>
+                <input type="date" id="filter-magazzino-data" onchange="renderMagazzino()"
+                  style="padding:8px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-family:inherit;cursor:pointer;">
+              </div>
+              <select id="filter-magazzino-stato" onchange="renderMagazzino()" style="width:auto;padding:8px 14px;font-size:13px;">
+                <option value="">Tutti gli stati</option>
+                <option value="attesa">In attesa</option>
+                <option value="preparazione">In preparazione</option>
+                <option value="consegnato">Consegnati</option>
+              </select>
+              <select id="filter-magazzino-giro" onchange="renderMagazzino()" style="width:auto;padding:8px 14px;font-size:13px;">
+                <option value="">Tutti i giri</option>
+                <option value="bari nord">Bari Nord</option>
+                <option value="murgia">Murgia</option>
+                <option value="taranto">Taranto</option>
+                <option value="lecce">Lecce</option>
+                <option value="valle itria">Valle Itria</option>
+                <option value="calabria">Calabria</option>
+                <option value="foggia">Foggia</option>
+                <option value="diretto">Diretto</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="magazzino-list"></div>
+        <!-- Piano di carico (view per magazzino) -->
+        <div class="card" style="margin-top:20px;" id="piano-carico-magaz-card">
+          <div class="card-header">
+            <div class="card-title">🚚 Piano di Carico Camion</div>
+            <div style="font-size:13px;color:var(--text2);">Aggiornato dagli autisti</div>
+          </div>
+          <div id="piano-carico-magaz-body" style="padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:20px;"></div>
+        </div>
+
+      </div>
+
+      <!-- ─── PAGE: Report ─── -->
+      <div class="page" id="page-report">
+        <div class="page-header">
+          <div class="page-title">Report & Statistiche</div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="page-sub">Andamento ordini e consegne</div>
+            <button class="btn" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="openPDFGiornaliero()">📄 PDF Giornaliero</button>
+          </div>
+        </div>
+
+        <div class="report-grid">
+          <div class="chart-placeholder">
+            <div class="chart-title">Ordini ultimi 7 giorni</div>
+            <div class="bar-chart" id="chart-week"></div>
+          </div>
+          <div class="chart-placeholder">
+            <div class="chart-title">Ordini per agente</div>
+            <div id="chart-agenti"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Top Clienti (per numero ordini)</div>
+          </div>
+          <div class="table-scroll-wrap"><table>
+            <thead>
+            <tr><th>Cliente</th><th>Località</th><th>Giro</th><th>Ordini</th><th>% sul totale</th></tr>
+          </thead>
+          <tbody id="report-clienti-table"></tbody>
+          </table></div>
+        </div>
+
+        <!-- Clienti acquisiti per agente -->
+        <div class="card" style="margin-top:20px;">
+          <div class="card-header">
+            <div class="card-title">👤 Clienti acquisiti per Agente</div>
+          </div>
+          <div id="report-agenti-clienti" style="padding:0 16px 16px;"></div>
+        </div>
+
+        <!-- Activity Log (solo admin) -->
+        <div class="card" id="activity-log-card" style="margin-top:20px;display:none;">
+          <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+            <div class="card-title">📋 Registro Attività</div>
+            <button class="btn btn-outline btn-sm" onclick="clearActivityLog()">🗑️ Svuota log</button>
+          </div>
+          <div id="activity-log-body" style="padding:0 16px 16px;max-height:400px;overflow-y:auto;"></div>
+        </div>
+      </div>
+
+    </div><!-- /main-content -->
+
+      <!-- ─── PAGE: Impostazioni (Admin) ─── -->
+      <div class="page" id="page-impostazioni">
+        <div class="page-header">
+          <div class="page-title">Impostazioni</div>
+          <div class="page-sub">Calendario giri, tentata vendita e configurazioni</div>
+        </div>
+
+        <!-- Calendario Giri Fissi -->
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header">
+            <div class="card-title">📅 Calendario Giri Fissi</div>
+            <div style="font-size:13px;color:var(--text2);">Configura i giorni di consegna per ogni giro</div>
+          </div>
+          <div id="giri-calendar-list" style="padding:0 16px 16px;"></div>
+        </div>
+
+        <!-- STEF info -->
+        <div class="card" style="margin-bottom:20px;background:var(--blue-light);border:1px solid #b3d4f0;">
+          <div style="padding:16px;display:flex;align-items:flex-start;gap:12px;">
+            <span style="font-size:24px;">🚛</span>
+            <div>
+              <div style="font-weight:600;color:var(--blue);margin-bottom:4px;">Spedizioni STEF</div>
+              <div style="font-size:13px;color:var(--blue);">STEF ritira: <b>Martedì, Mercoledì, Venerdì</b>. Il flag "Spedizione STEF" è disponibile su ogni ordine per indicare che la consegna avviene tramite corriere STEF.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Carichi Tentata Vendita -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🚚 Carichi Tentata Vendita per Autista</div>
+            <div style="font-size:13px;color:var(--text2);">Definisci il carico predefinito per ogni autista</div>
+          </div>
+          <div id="tentata-config-list" style="padding:0 16px 16px;"></div>
+        </div>
+      </div>
+  </div><!-- /app-layout -->
+
+  <!-- Mobile bottom nav -->
+  <div class="mobile-nav" id="mobile-nav">
+    <div class="mobile-nav-items" id="mobile-nav-items"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ MODALS ══════════════════ -->
+
+<!-- Modal: Nuovo/Modifica Ordine -->
+<div class="modal-overlay" id="modal-ordine">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-ordine-title">Nuovo Ordine</div>
+      <button class="modal-close" onclick="closeModal('modal-ordine')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="field form-full">
+          <label>Cliente *</label>
+          <div class="ac-wrap" id="ac-cliente-wrap">
+            <input type="text" class="ac-input" id="ac-cliente-input" placeholder="Cerca cliente…" autocomplete="off" oninput="acFilter('cliente')" onfocus="acOpen('cliente')" onkeydown="acKey(event,'cliente')">
+            <input type="hidden" id="ord-cliente">
+            <div class="ac-dropdown" id="ac-cliente-dd"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Agente commerciale *</label>
+          <select id="ord-agente"></select>
+        </div>
+        <div class="field">
+          <label>Consegnatario</label>
+          <div id="ord-consegnatario-box" style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:8px;">
+            <span>🚚</span><span id="ord-consegnatario-nome">—</span>
+            <span style="font-size:11px;color:var(--text3);margin-left:auto;">auto dal giro</span>
+          </div>
+          <input type="hidden" id="ord-autista-di-giro">
+        </div>
+        <div class="field">
+          <label>Data Consegna *</label>
+          <input type="date" id="ord-data">
+          <div style="display:flex;gap:16px;margin-top:6px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
+              <input type="checkbox" id="ord-data-non-certa" style="width:15px;height:15px;">
+              ⚠️ Data non certa
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
+              <input type="checkbox" id="ord-stef" style="width:15px;height:15px;">
+              🚛 Spedizione STEF
+            </label>
+          </div>
+        </div>
+        <div class="field">
+          <label>Stato</label>
+          <select id="ord-stato">
+            <option value="attesa">In attesa</option>
+            <option value="preparazione">In preparazione</option>
+            <option value="consegnato">Consegnato</option>
+            <option value="annullato">Annullato</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Note fisse cliente (readonly, informative) -->
+      <div id="ord-cliente-note-box" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--blue-light);border:1px solid #b3d4f0;border-radius:8px;font-size:13px;color:var(--blue);">
+        <b>📌 Note cliente:</b> <span id="ord-cliente-note-text"></span>
+      </div>
+
+      <div class="field">
+        <label>Prodotti *</label>
+        <div class="order-lines" id="ord-lines-container"></div>
+        <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addOrderLine()">＋ Aggiungi prodotto</button>
+      </div>
+
+      <div class="field" style="margin-top:12px;">
+        <label>Note ordine</label>
+        <textarea id="ord-note" placeholder="Istruzioni di consegna, orari particolari…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-ordine')">Annulla</button>
+      <button class="btn btn-green" onclick="saveOrder()">💾 Salva Ordine</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Cliente -->
+<div class="modal-overlay" id="modal-cliente">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-cliente-title">Nuovo Cliente</div>
+      <button class="modal-close" onclick="closeModal('modal-cliente')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="field form-full">
+          <label>Ragione Sociale *</label>
+          <input type="text" id="cl-nome" placeholder="es. CASEIFICIO ROSSI SRL">
+        </div>
+        <div class="field">
+          <label>Località</label>
+          <input type="text" id="cl-localita" placeholder="es. BARI">
+        </div>
+        <div class="field">
+          <label>Giro</label>
+          <select id="cl-giro">
+            <option value="">— Non assegnato —</option>
+            <option value="bari nord">Bari Nord / Andria</option>
+            <option value="bari/foggia">Bari / Foggia</option>
+            <option value="murgia">Murgia</option>
+            <option value="taranto">Taranto</option>
+            <option value="lecce">Lecce</option>
+            <option value="lecce est">Lecce Est</option>
+            <option value="valle itria">Valle d'Itria</option>
+            <option value="calabria">Calabria</option>
+            <option value="foggia">Foggia</option>
+            <option value="diretto">Diretto</option>
+            <option value="stef">STEF</option>
+            <option value="variabile">Variabile</option>
+          </select>
+        </div>
+        <div class="field form-full">
+          <label>Agente di default</label>
+          <select id="cl-agente">
+            <option value="">— Nessuno —</option>
+          </select>
+        </div>
+        <div class="field form-full">
+          <label>📌 Note fisse cliente</label>
+          <textarea id="cl-note" placeholder="Es: Consegnare solo il martedì mattina, campanello interno 3…" style="min-height:70px;"></textarea>
+        </div>
+        <div class="field">
+          <label>Partita IVA *</label>
+          <input type="text" id="cl-piva" placeholder="es. 01234567890" maxlength="16">
+        </div>
+        <div class="field">
+          <label>Condizioni di Pagamento</label>
+          <input type="text" id="cl-condpag" placeholder="es. 30gg data fattura, RB 60gg…">
+        </div>
+        <div class="field form-full">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
+            <input type="checkbox" id="cl-efornitore" style="width:16px;height:16px;">
+            <span>🔄 Questo cliente è anche <b>fornitore</b></span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-cliente')">Annulla</button>
+      <button class="btn btn-green" onclick="saveCliente()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Prodotto -->
+<div class="modal-overlay" id="modal-prodotto">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-prodotto-title">Nuovo Prodotto</div>
+      <button class="modal-close" onclick="closeModal('modal-prodotto')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="field">
+          <label>Codice Articolo *</label>
+          <input type="text" id="pr-codice" placeholder="es. CACIO" style="text-transform:uppercase;">
+        </div>
+        <div class="field">
+          <label>Categoria</label>
+          <select id="pr-cat">
+            <option value="FORMAGGI">Formaggi</option>
+            <option value="RICOTTA">Ricotta</option>
+            <option value="CAGLIATA">Cagliata</option>
+            <option value="PANNA UHT">Panna UHT</option>
+            <option value="ALTRO">Altro</option>
+          </select>
+        </div>
+        <div class="field form-full">
+          <label>Descrizione *</label>
+          <input type="text" id="pr-nome" placeholder="es. CACIO PICCANTE">
+        </div>
+        <div class="field">
+          <label>Unità di misura</label>
+          <select id="pr-um">
+            <option value="kg">kg</option>
+            <option value="pz">pz</option>
+            <option value="lt">lt</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Peso</label>
+          <select id="pr-peso">
+            <option value="F">Fisso</option>
+            <option value="V">Variabile</option>
+          </select>
+        </div>
+        <div class="field form-full">
+          <label>Packaging</label>
+          <input type="text" id="pr-packaging" placeholder="es. 1pz=1,5kg circa">
+        </div>
+        <div class="field form-full">
+          <label>📌 Note fisse prodotto</label>
+          <textarea id="pr-note" placeholder="Es: Conservare a 4°C, prodotto stagionale…" style="min-height:60px;"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-prodotto')">Annulla</button>
+      <button class="btn btn-green" onclick="saveProdotto()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Utente -->
+<div class="modal-overlay" id="modal-utente">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-utente-title">Nuovo Utente</div>
+      <button class="modal-close" onclick="closeModal('modal-utente')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="field">
+          <label>Nome *</label>
+          <input type="text" id="ut-nome" placeholder="Francesco">
+        </div>
+        <div class="field">
+          <label>Cognome *</label>
+          <input type="text" id="ut-cognome" placeholder="Rossi">
+        </div>
+        <div class="field">
+          <label>Ruolo nel sistema *</label>
+          <select id="ut-ruolo" onchange="toggleGiriUtente()">
+            <option value="admin">Admin / Ufficio</option>
+            <option value="autista">Autista / Agente</option>
+            <option value="magazzino">Magazzino</option>
+            <option value="direzione">Direzione</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Qualifica</label>
+          <input type="text" id="ut-tipo" placeholder="es. Commerciale, CEO…">
+        </div>
+        <div class="field">
+          <label>Username *</label>
+          <input type="text" id="ut-username" placeholder="mario.rossi" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Password *</label>
+          <input type="password" id="ut-pass" placeholder="••••••" autocomplete="new-password">
+        </div>
+      </div>
+      <!-- Giri assegnati (solo autisti) -->
+      <div id="ut-giri-section" style="display:none;margin-top:8px;">
+        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">🗺️ Giri assegnati</label>
+        <div id="ut-giri-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-utente')">Annulla</button>
+      <button class="btn btn-green" onclick="saveUtente()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Modifica credenziali utente -->
+<div class="modal-overlay" id="modal-credenziali">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-cred-title">Modifica Credenziali</div>
+      <button class="modal-close" onclick="closeModal('modal-credenziali')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Nome Completo</label>
+        <input type="text" id="cred-nome" placeholder="Mario Rossi">
+      </div>
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="cred-username" placeholder="mario.rossi">
+      </div>
+      <div class="field">
+        <label>Nuova Password <span style="color:var(--text3);font-weight:400;">(lascia vuoto per non cambiare)</span></label>
+        <input type="password" id="cred-pass" placeholder="••••••">
+      </div>
+      <div class="field">
+        <label>Conferma Password</label>
+        <input type="password" id="cred-pass2" placeholder="••••••">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-credenziali')">Annulla</button>
+      <button class="btn btn-green" onclick="saveCredenziali()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Dettaglio Ordine (conferma consegna) -->
+<div class="modal-overlay" id="modal-dettaglio">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="det-title">Dettaglio Ordine</div>
+      <button class="modal-close" onclick="closeModal('modal-dettaglio')">✕</button>
+    </div>
+    <div class="modal-body" id="det-body"></div>
+    <div class="modal-footer" id="det-footer"></div>
+  </div>
+</div>
+
+<!-- Modal: Tentata Vendita -->
+<div class="modal-overlay" id="modal-tentata">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-header">
+      <div class="modal-title">🚚 Tentata Vendita</div>
+      <button class="modal-close" onclick="closeModal('modal-tentata')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--accent2-light);border:1px solid #f5d7a0;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--accent2);">
+        <b>Carico predefinito per il tuo mezzo.</b> Modifica le quantità prima di confermare. L'ordine sarà registrato come "tentata vendita".
+      </div>
+      <div class="field">
+        <label>Cliente</label>
+        <div class="ac-wrap" id="ac-tentata-wrap">
+          <input type="text" class="ac-input" id="ac-tentata-input" placeholder="Cerca cliente…" autocomplete="off" oninput="acFilter('tentata')" onfocus="acOpen('tentata')" onkeydown="acKey(event,'tentata')">
+          <input type="hidden" id="tentata-cliente">
+          <div class="ac-dropdown" id="ac-tentata-dd"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Prodotti nel carico</label>
+        <div id="tentata-lines-container" class="order-lines"></div>
+        <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addTentataLine()">＋ Aggiungi prodotto</button>
+      </div>
+      <div class="field">
+        <label>Note</label>
+        <textarea id="tentata-note" placeholder="Es: cliente non trovato, rifornimento scorte…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-tentata')">Annulla</button>
+      <button class="btn btn-green" onclick="saveTentataVendita()">✅ Registra Tentata Vendita</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: PDF Riepilogativo Giornaliero -->
+<div class="modal-overlay" id="modal-pdf-giornaliero">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-header">
+      <div class="modal-title">📄 PDF Riepilogativo Giornaliero</div>
+      <button class="modal-close" onclick="closeModal('modal-pdf-giornaliero')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="field">
+          <label>Data</label>
+          <input type="date" id="pdf-data">
+        </div>
+        <div class="field">
+          <label>Filtro giro</label>
+          <select id="pdf-giro">
+            <option value="">— Tutti i giri —</option>
+            <option value="bari nord">Bari Nord / Andria</option>
+            <option value="bari/foggia">Bari / Foggia</option>
+            <option value="murgia">Murgia</option>
+            <option value="taranto">Taranto</option>
+            <option value="lecce">Lecce</option>
+            <option value="lecce est">Lecce Est</option>
+            <option value="valle itria">Valle d'Itria</option>
+            <option value="calabria">Calabria</option>
+            <option value="foggia">Foggia</option>
+            <option value="diretto">Diretto</option>
+            <option value="stef">STEF</option>
+            <option value="variabile">Variabile</option>
+          </select>
+        </div>
+      </div>
+      <div id="pdf-preview" style="border:1px solid var(--border);border-radius:8px;padding:16px;max-height:350px;overflow-y:auto;font-size:13px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-pdf-giornaliero')">Chiudi</button>
+      <button class="btn" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="updatePDFPreview()">🔄 Aggiorna anteprima</button>
+      <button class="btn btn-green" onclick="stampaPDFGiornaliero()">🖨️ Stampa / Salva PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// DATA STORE
+// ═══════════════════════════════════════════════
+
+// ─── API BASE URL ─────────────────────────────────────────────────
+// In produzione il frontend è servito dallo stesso server Express,
+// quindi BASE_URL è stringa vuota. In sviluppo separato cambia in 'http://localhost:3000'
+const BASE_URL = '';
+
+// ─── STATO RUNTIME ────────────────────────────────────────────────
+let state = {
+  currentUser: null,
+  currentPage: null,
+  editingId: null,
+  token: null,
+
+  // Dati caricati dall'API
+  utenti:    [],
+  clienti:   [],
+  prodotti:  [],
+  ordini:    [],
+  camions:   [],
+  giriCalendario: [],
+  activityLog: [],
+  carichiTentataVendita: [],
+};
+
+// ─── HTTP HELPER ──────────────────────────────────────────────────
+async function api(method, path, body = null) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (state.token) opts.headers['Authorization'] = 'Bearer ' + state.token;
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(BASE_URL + path, opts);
+  if (res.status === 401) { doLogout(); return null; }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Errore API');
+  return data;
+}
+
+// ─── CARICAMENTO DATI INIZIALI ────────────────────────────────────
+async function loadAllData() {
+  try {
+    const [utenti, clienti, prodotti, ordini, camions, giri] = await Promise.all([
+      api('GET', '/api/utenti'),
+      api('GET', '/api/clienti'),
+      api('GET', '/api/prodotti'),
+      api('GET', '/api/ordini'),
+      api('GET', '/api/camions'),
+      api('GET', '/api/giri'),
+    ]);
+    // Normalizza campi: il backend usa snake_case, il frontend usa camelCase
+    state.utenti   = (utenti   ||[]).map(normalizeUtente);
+    state.clienti  = (clienti  ||[]).map(normalizeCliente);
+    state.prodotti = (prodotti ||[]).map(normalizeProdotto);
+    state.ordini   = (ordini   ||[]).map(normalizeOrdine);
+    state.camions  = (camions  ||[]).map(normalizeCamion);
+    state.giriCalendario = (giri||[]).map(g => ({...g, giorni: g.giorni||[]}));
+  } catch(e) {
+    console.error('loadAllData error:', e);
+    showToast('Errore caricamento dati', 'warning');
+  }
+}
+
+// ─── NORMALIZZATORI snake_case → camelCase ─────────────────────────
+function normalizeUtente(u) {
+  return {
+    id: u.id,
+    nome: u.nome||'',
+    cognome: u.cognome||'',
+    username: u.username||'',
+    ruolo: u.ruolo||'',
+    tipoUtente: u.tipo_utente||'',
+    giriConsegna: Array.isArray(u.giri_consegna) ? u.giri_consegna : (u.giri_consegna ? JSON.parse(u.giri_consegna) : []),
+    isAgente: !!u.is_agente,
+    password: '••••', // non esposto
+  };
+}
+
+function normalizeCliente(c) {
+  return {
+    id: c.id,
+    nome: c.nome||'',
+    localita: c.localita||'',
+    giro: c.giro||'',
+    agenteId: c.agente_id||null,
+    autistaDiGiro: c.autista_di_giro||null,
+    note: c.note||'',
+    piva: c.piva||'',
+    condPagamento: c.cond_pagamento||'',
+    eFornitore: !!c.e_fornitore,
+  };
+}
+
+function normalizeProdotto(p) {
+  return {
+    id: p.id,
+    codice: p.codice||'',
+    nome: p.nome||'',
+    categoria: p.categoria||'',
+    um: p.um||'',
+    packaging: p.packaging||'',
+    pesoFisso: !!p.peso_fisso,
+    note: p.note||'',
+  };
+}
+
+function normalizeOrdine(o) {
+  return {
+    id: o.id,
+    clienteId: o.cliente_id,
+    agenteId: o.agente_id||null,
+    autistaDiGiro: o.autista_di_giro||null,
+    insertedBy: o.inserted_by||null,
+    insertedAt: o.inserted_at||null,
+    data: o.data||'',
+    stato: o.stato||'attesa',
+    note: o.note||'',
+    dataNonCerta: !!o.data_non_certa,
+    stef: !!o.stef,
+    linee: (o.linee||[]).map(l => ({
+      prodId: l.prodotto_id,
+      qty: l.qty,
+      pesoEffettivo: l.peso_effettivo||null,
+    })),
+  };
+}
+
+function normalizeCamion(c) {
+  return {
+    id: c.id,
+    targa: c.targa||'',
+    nome: c.nome||'',
+    layout: c.layout||'asym8',
+    autistaInUso: c.autista_in_uso||null,
+    confermato: !!c.confermato,
+    confermatoDa: c.confermato_da||null,
+    confermatoAt: c.confermato_at||null,
+    lastUpdate: c.last_update||null,
+    pedane: (c.pedane||[]).map(p => ({n: p.numero, nota: p.nota||''})),
+  };
+}
+
+
+// ═══════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════
+
+let selectedRole = 'admin';
+
+function selectRole(role, el) {
+  selectedRole = role;
+  document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  const hints = {admin:'marco', autista:'francescoa', magazzino:'gaston', direzione:'francesco'};
+  document.getElementById('login-user').value = hints[role] || 'admin';
+}
+
+async function doLogin() {
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value;
+  if (!username || !password) { showToast('Inserisci username e password', 'warning'); return; }
+
+  const btn = document.querySelector('#screen-login .btn-primary');
+  if (btn) { btn.textContent = 'Accesso...'; btn.disabled = true; }
+
+  try {
+    const data = await fetch(BASE_URL + '/api/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password })
+    }).then(async r => {
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Credenziali errate');
+      return d;
+    });
+
+    state.token = data.token;
+    state.currentUser = normalizeUtente(data.user);
+
+    // Carica tutti i dati
+    await loadAllData();
+
+    document.getElementById('screen-login').style.display = 'none';
+    document.getElementById('screen-app').style.display = 'block';
+    document.getElementById('topbar-username').textContent =
+      (state.currentUser.nome + ' ' + (state.currentUser.cognome||'')).trim();
+    const roleLabels = {admin:'Admin', autista:'Autista', magazzino:'Magazzino', direzione:'Direzione'};
+    document.getElementById('topbar-role').textContent = roleLabels[state.currentUser.ruolo];
+    setupNav();
+    const defaultPages = {admin:'dashboard', autista:'autista', magazzino:'magazzino', direzione:'report'};
+    goTo(defaultPages[state.currentUser.ruolo] || 'dashboard');
+  } catch(e) {
+    showToast(e.message || 'Errore di connessione', 'warning');
+  } finally {
+    if (btn) { btn.textContent = 'Accedi →'; btn.disabled = false; }
+  }
+}
+
+function doLogout() {
+  state.token = null;
+  state.currentUser = null;
+  state.utenti = []; state.clienti = []; state.prodotti = [];
+  state.ordini = []; state.camions = []; state.giriCalendario = [];
+  document.getElementById('screen-app').style.display = 'none';
+  document.getElementById('screen-login').style.display = 'flex';
+}
+
+// ═══════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════
+
+const navConfigs = {
+  admin: [
+    { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
+    { page: 'ordini', icon: '📋', label: 'Ordini' },
+    { page: 'clienti', icon: '🏢', label: 'Clienti' },
+    { page: 'prodotti', icon: '🧀', label: 'Prodotti' },
+    { page: 'utenti', icon: '👥', label: 'Utenti' },
+    { page: 'piano', icon: '🚛', label: 'Piano Carico' },
+    { page: 'report', icon: '📊', label: 'Report' },
+    { page: 'impostazioni', icon: '⚙️', label: 'Impostazioni' },
+  ],
+  autista: [
+    { page: 'autista', icon: '🚚', label: 'Il mio giro' },
+    { page: 'piano', icon: '🚛', label: 'Piano Carico' },
+    { page: 'ordini', icon: '📋', label: 'Tutti gli ordini' },
+  ],
+  magazzino: [
+    { page: 'magazzino', icon: '📦', label: 'Da preparare' },
+    { page: 'piano', icon: '🚛', label: 'Piano Carico' },
+    { page: 'ordini', icon: '📋', label: 'Ordini' },
+  ],
+  direzione: [
+    { page: 'report', icon: '📊', label: 'Report' },
+    { page: 'piano', icon: '🚛', label: 'Piano Carico' },
+    { page: 'ordini', icon: '📋', label: 'Ordini' },
+  ],
+};
+
+function setupNav() {
+  const role = state.currentUser.ruolo;
+  const items = navConfigs[role] || navConfigs.admin;
+
+  const sidebar = document.getElementById('sidebar-nav');
+  sidebar.innerHTML = items.map(i => `
+    <button class="nav-item" id="nav-${i.page}" onclick="goTo('${i.page}')">
+      <span class="nav-icon">${i.icon}</span> ${i.label}
+    </button>
+  `).join('');
+
+  const mobileNav = document.getElementById('mobile-nav-items');
+  mobileNav.innerHTML = items.slice(0,4).map(i => `
+    <button class="mobile-nav-item" id="mnav-${i.page}" onclick="goTo('${i.page}')">
+      <span class="mn-icon">${i.icon}</span>${i.label}
+    </button>
+  `).join('');
+}
+
+function goTo(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(n => n.classList.remove('active'));
+  const el = document.getElementById('page-' + page);
+  if (el) el.classList.add('active');
+  const nav = document.getElementById('nav-' + page);
+  if (nav) nav.classList.add('active');
+  const mnav = document.getElementById('mnav-' + page);
+  if (mnav) mnav.classList.add('active');
+  state.currentPage = page;
+  renderPage(page);
+}
+
+function renderPage(page) {
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'ordini') renderOrdiniTable();
+  if (page === 'clienti') renderClientiTable();
+  if (page === 'prodotti') renderProdottiTable();
+  if (page === 'utenti') renderUtentiTable();
+  if (page === 'autista') renderAutistaView();
+  if (page === 'magazzino') {
+    // Imposta la data di default = oggi se non già impostata
+    const dtInput = document.getElementById('filter-magazzino-data');
+    if (dtInput && !dtInput.value) dtInput.value = today();
+    renderMagazzino();
+  }
+  if (page === 'piano') renderPianoPage();
+  if (page === 'report') renderReport();
+  if (page === 'impostazioni') renderImpostazioni();
+}
+
+// ═══════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════
+
+function getCliente(id) { return state.clienti.find(c => c.id === id) || {nome:'?', localita:'', giro:''}; }
+function getAgente(id) {
+  const u = state.utenti.find(u => u.id === id);
+  if (!u) return {nome:'?', cognome:'', nomeCompleto:'?'};
+  return {...u, nomeCompleto: (u.nome + ' ' + (u.cognome||'')).trim()};
+}
+function getProdotto(id) { return state.prodotti.find(p => p.id === id) || {nome:'?',um:''}; }
+
+function today() { return new Date().toISOString().split('T')[0]; }
+
+function statoBadge(stato) {
+  const map = {
+    attesa: ['badge-orange','In attesa'],
+    preparazione: ['badge-blue','In preparazione'],
+    consegnato: ['badge-green','Consegnato'],
+    annullato: ['badge-red','Annullato'],
+  };
+  const [cls,label] = map[stato] || ['badge-gray', stato];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function lineeResume(linee) {
+  return linee.map(l => {
+    const p = getProdotto(l.prodId);
+    return `${l.qty} ${p.um} ${p.nome.split(' ').slice(0,3).join(' ')}`;
+  }).join(', ');
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const [y,m,dd] = d.split('-');
+  return `${dd}/${m}/${y}`;
+}
+
+// ═══════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════
+
+function renderDashboard() {
+  const t = today();
+  const ordiniOggi = state.ordini.filter(o => o.data === t);
+  const attesa = state.ordini.filter(o => o.stato === 'attesa').length;
+  const consegnati = state.ordini.filter(o => o.stato === 'consegnato').length;
+  const preparare = state.ordini.filter(o => o.stato === 'preparazione').length;
+
+  document.getElementById('stat-oggi').textContent = ordiniOggi.length;
+  document.getElementById('stat-attesa').textContent = attesa;
+  document.getElementById('stat-consegnati').textContent = consegnati;
+  document.getElementById('stat-preparare').textContent = preparare;
+
+  const d = new Date();
+  document.getElementById('dash-date').textContent = d.toLocaleDateString('it-IT', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+
+  const tbody = document.getElementById('dash-orders-table');
+  const recent = [...state.ordini].sort((a,b) => b.id-a.id).slice(0,8);
+  tbody.innerHTML = recent.map(o => `
+    <tr>
+      <td><span style="font-family:'DM Mono',monospace;font-weight:600;">#${o.id}</span></td>
+      <td><b>${getCliente(o.clienteId).nome}</b></td>
+      <td style="color:var(--text2);">${formatDate(o.data)}</td>
+      <td>
+        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : '—'; })()}</div>
+        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">👤 ${getAgente(o.agenteId).nome}</div>` : ''}
+      </td>
+      <td>${statoBadge(o.stato)}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="openEditOrder(${o.id})">✏️</button>
+        <button class="btn btn-outline btn-sm" onclick="openDettaglio(${o.id})">👁️</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════
+// ORDINI TABLE
+// ═══════════════════════════════════════════════
+
+function renderOrdiniTable() {
+  const q = (document.getElementById('search-ordini')?.value || '').toLowerCase();
+  const filterStato = document.getElementById('filter-stato')?.value || '';
+  let list = [...state.ordini].sort((a,b) => b.id-a.id);
+  if (q) list = list.filter(o => getCliente(o.clienteId).nome.toLowerCase().includes(q) || getAgente(o.agenteId).nomeCompleto.toLowerCase().includes(q));
+  if (filterStato) list = list.filter(o => o.stato === filterStato);
+
+  const tbody = document.getElementById('ordini-table');
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div><p>Nessun ordine trovato</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(o => `
+    <tr>
+      <td><span style="font-family:'DM Mono',monospace;font-weight:600;color:var(--accent);">#${o.id}</span></td>
+      <td><b>${getCliente(o.clienteId).nome}</b></td>
+      <td>${formatDate(o.data)}</td>
+      <td>
+        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : '—'; })()}</div>
+        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">👤 ${getAgente(o.agenteId).nome}</div>` : ''}
+      </td>
+      <td class="col-lines" style="font-size:12px;color:var(--text2);max-width:200px;">${lineeResume(o.linee)}</td>
+      <td>${statoBadge(o.stato)}</td>
+      <td class="col-note" style="font-size:13px;color:var(--text2);">${o.note || '—'}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-outline btn-sm" onclick="openEditOrder(${o.id})">✏️</button>
+        <button class="btn btn-outline btn-sm" onclick="openDettaglio(${o.id})">👁️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id})">🗑️</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════
+// CLIENTI
+// ═══════════════════════════════════════════════
+
+function renderClientiTable() {
+  const q = (document.getElementById('search-clienti')?.value || '').toLowerCase();
+  const filterGiro = document.getElementById('filter-giro')?.value || '';
+  let list = state.clienti;
+  if (q) list = list.filter(c => c.nome.toLowerCase().includes(q) || c.localita.toLowerCase().includes(q));
+  if (filterGiro) list = list.filter(c => c.giro === filterGiro);
+
+  const tbody = document.getElementById('clienti-table');
+  tbody.innerHTML = list.map(c => {
+    const nOrdini = state.ordini.filter(o => o.clienteId === c.id).length;
+    const giroColors = {'bari nord':'badge-blue','murgia':'badge-green','taranto':'badge-orange','lecce':'badge-red','valle itria':'badge-gray','calabria':'badge-gray','foggia':'badge-gray','diretto':'badge-green','':`badge-gray`};
+    return `
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="anag-avatar">${c.nome.charAt(0)}</div>
+          <div>
+            <b style="font-size:13px;">${c.nome}</b>
+            ${c.note ? `<div style="font-size:11px;color:var(--blue);margin-top:1px;">📌 ${c.note.substring(0,50)}${c.note.length>50?'…':''}</div>` : ''}
+          </div>
+        </div>
+      </td>
+      <td style="color:var(--text2);">${c.localita}</td>
+      <td>${c.giro ? `<span class="badge ${giroColors[c.giro]||'badge-gray'}">${c.giro}</span>` : '<span style="color:var(--text3)">—</span>'}</td>
+      <td><span style="font-family:'DM Mono',monospace;font-weight:700;">${nOrdini}</span></td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="openEditCliente(${c.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCliente(${c.id})">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openNewCliente() {
+  state.editingId = null;
+  document.getElementById('modal-cliente-title').textContent = 'Nuovo Cliente';
+  document.getElementById('cl-nome').value = '';
+  document.getElementById('cl-localita').value = '';
+  document.getElementById('cl-giro').value = '';
+  document.getElementById('cl-note').value = '';
+  document.getElementById('cl-piva').value = '';
+  document.getElementById('cl-condpag').value = '';
+  document.getElementById('cl-efornitore').checked = false;
+  populateAgenteSelect('cl-agente', null);
+  openModal('modal-cliente');
+}
+
+function openEditCliente(id) {
+  const c = state.clienti.find(x => x.id === id);
+  state.editingId = id;
+  document.getElementById('modal-cliente-title').textContent = 'Modifica Cliente';
+  document.getElementById('cl-nome').value = c.nome;
+  document.getElementById('cl-localita').value = c.localita;
+  document.getElementById('cl-giro').value = c.giro;
+  document.getElementById('cl-note').value = c.note || '';
+  document.getElementById('cl-piva').value = c.piva || '';
+  document.getElementById('cl-condpag').value = c.condPagamento || '';
+  document.getElementById('cl-efornitore').checked = c.eFornitore || false;
+  populateAgenteSelect('cl-agente', c.agenteId);
+  openModal('modal-cliente');
+}
+
+function populateAgenteSelect(selectId, selectedId) {
+  const sel = document.getElementById(selectId);
+  const agenti = state.utenti.filter(u => u.ruolo === 'autista');
+  sel.innerHTML = '<option value="">— Nessuno —</option>' +
+    agenti.map(a => `<option value="${a.id}" ${a.id==selectedId?'selected':''}>${(a.nome+' '+(a.cognome||'')).trim()}</option>`).join('');
+}
+
+async function saveCliente() {
+  const nome  = document.getElementById('cl-nome').value.trim();
+  if (!nome) { showToast('Inserisci il nome del cliente', 'warning'); return; }
+  const body = {
+    nome,
+    localita:       document.getElementById('cl-localita').value.trim(),
+    giro:           document.getElementById('cl-giro').value,
+    agente_id:      parseInt(document.getElementById('cl-agente').value)||null,
+    note:           document.getElementById('cl-note').value.trim(),
+    piva:           document.getElementById('cl-piva').value.trim(),
+    cond_pagamento: document.getElementById('cl-condpag').value.trim(),
+    e_fornitore:    document.getElementById('cl-efornitore').checked,
+  };
+  try {
+    if (state.editingId) {
+      await api('PUT', `/api/clienti/${state.editingId}`, body);
+      const i2 = state.clienti.findIndex(c => c.id === state.editingId);
+      if (i2 !== -1) state.clienti[i2] = normalizeCliente({...body, id: state.editingId, agente_id: body.agente_id});
+    } else {
+      const saved = await api('POST', '/api/clienti', body);
+      state.clienti.push(normalizeCliente({...body, id: saved.id, agente_id: body.agente_id}));
+      state.clienti.sort((a,b) => a.nome.localeCompare(b.nome));
+    }
+    closeModal('modal-cliente');
+    showToast(state.editingId ? 'Cliente aggiornato ✅' : 'Cliente salvato ✅', 'success');
+    state.editingId = null;
+    renderClientiTable();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+async function deleteCliente(id) {
+  id = parseInt(id);
+  if (!await customConfirm('Eliminare questo cliente?')) return;
+  try {
+    await api('DELETE', `/api/clienti/${id}`);
+    state.clienti = state.clienti.filter(x => x.id !== id);
+    showToast('Cliente eliminato');
+    renderClientiTable();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+// ═══════════════════════════════════════════════
+// PRODOTTI
+// ═══════════════════════════════════════════════
+
+function renderProdottiTable() {
+  const q = (document.getElementById('search-prodotti')?.value || '').toLowerCase();
+  const filterCat = document.getElementById('filter-cat-prodotti')?.value || '';
+  let list = state.prodotti;
+  if (q) list = list.filter(p => p.nome.toLowerCase().includes(q) || p.codice.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q));
+  if (filterCat) list = list.filter(p => p.categoria === filterCat);
+
+  const tbody = document.getElementById('prodotti-table');
+  tbody.innerHTML = list.map(p => `
+    <tr>
+      <td><span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);">${p.codice}</span></td>
+      <td><b>${p.nome}</b></td>
+      <td><span class="badge badge-gray">${p.categoria}</span></td>
+      <td style="font-family:'DM Mono',monospace;">${p.um}</td>
+      <td style="font-size:12px;color:var(--text2);">${p.packaging}</td>
+      <td><span class="badge ${p.pesoFisso ? 'badge-blue' : 'badge-orange'}">${p.pesoFisso ? 'Fisso' : 'Variabile'}</span></td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="openEditProdotto(${p.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProdotto(${p.id})">🗑️</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openNewProdotto() {
+  state.editingId = null;
+  document.getElementById('modal-prodotto-title').textContent = 'Nuovo Prodotto';
+  ['pr-codice','pr-nome','pr-packaging','pr-note'].forEach(id => document.getElementById(id).value = '');
+  openModal('modal-prodotto');
+}
+
+function openEditProdotto(id) {
+  const p = state.prodotti.find(x => x.id === id);
+  state.editingId = id;
+  document.getElementById('modal-prodotto-title').textContent = 'Modifica Prodotto';
+  document.getElementById('pr-codice').value = p.codice;
+  document.getElementById('pr-nome').value = p.nome;
+  document.getElementById('pr-cat').value = p.categoria;
+  document.getElementById('pr-um').value = p.um;
+  document.getElementById('pr-peso').value = p.pesoFisso ? 'F' : 'V';
+  document.getElementById('pr-packaging').value = p.packaging;
+  document.getElementById('pr-note').value = p.note || '';
+  openModal('modal-prodotto');
+}
+
+async function saveProdotto() {
+  const codice    = document.getElementById('pr-codice').value.trim().toUpperCase();
+  const nome      = document.getElementById('pr-nome').value.trim();
+  const categoria = document.getElementById('pr-categoria').value;
+  const um        = document.getElementById('pr-um').value.trim();
+  if (!codice||!nome||!categoria||!um) { showToast('Compila tutti i campi obbligatori', 'warning'); return; }
+  const body = {
+    codice, nome, categoria, um,
+    packaging:  document.getElementById('pr-packaging').value.trim(),
+    peso_fisso: document.getElementById('pr-pesofisso').checked,
+    note:       document.getElementById('pr-note').value.trim(),
+  };
+  try {
+    if (state.editingId) {
+      await api('PUT', `/api/prodotti/${state.editingId}`, body);
+      const i2 = state.prodotti.findIndex(p => p.id === state.editingId);
+      if (i2 !== -1) state.prodotti[i2] = normalizeProdotto({...body, id: state.editingId, peso_fisso: body.peso_fisso?1:0});
+    } else {
+      const saved = await api('POST', '/api/prodotti', body);
+      state.prodotti.push(normalizeProdotto({...body, id: saved.id, peso_fisso: body.peso_fisso?1:0}));
+    }
+    closeModal('modal-prodotto');
+    showToast(state.editingId ? 'Prodotto aggiornato ✅' : 'Prodotto salvato ✅', 'success');
+    state.editingId = null;
+    renderProdottiTable();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+async function deleteProdotto(id) {
+  id = parseInt(id);
+  if (!await customConfirm('Eliminare questo prodotto?')) return;
+  try {
+    await api('DELETE', `/api/prodotti/${id}`);
+    state.prodotti = state.prodotti.filter(x => x.id !== id);
+    showToast('Prodotto eliminato');
+    renderProdottiTable();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+// ═══════════════════════════════════════════════
+// UTENTI
+// ═══════════════════════════════════════════════
+
+function renderUtentiTable() {
+  const roleLabels = {admin:'Admin/Ufficio', autista:'Autista/Agente', magazzino:'Magazzino', direzione:'Direzione'};
+  const roleBadges = {admin:'badge-green', autista:'badge-orange', magazzino:'badge-blue', direzione:'badge-gray'};
+  const tbody = document.getElementById('utenti-table');
+  tbody.innerHTML = state.utenti.map(u => {
+    const nomeCompleto = (u.nome + ' ' + (u.cognome||'')).trim();
+    const giriTag = (u.giriAssegnati && u.giriAssegnati.length)
+      ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;">${u.giriAssegnati.join(', ')}</div>` : '';
+    return `
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="anag-avatar">${u.nome.charAt(0)}</div>
+          <div>
+            <b>${nomeCompleto}</b>
+            <div style="font-size:12px;color:var(--text2);">${u.tipoUtente||''}</div>
+          </div>
+        </div>
+      </td>
+      <td style="font-family:'DM Mono',monospace;font-size:13px;">${u.username}</td>
+      <td>
+        <span class="badge ${roleBadges[u.ruolo]}">${roleLabels[u.ruolo]}</span>
+        ${giriTag}
+      </td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-outline btn-sm" onclick="openEditUtente(${u.id})">✏️ Modifica</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUtente(${u.id})">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openCredenziali(id) {
+  const u = state.utenti.find(x => x.id === id);
+  state.editingId = id;
+  document.getElementById('modal-cred-title').textContent = `Modifica — ${u.nome} ${u.cognome||''}`.trim();
+  document.getElementById('cred-nome').value = (u.nome + ' ' + (u.cognome||'')).trim();
+  document.getElementById('cred-username').value = u.username;
+  document.getElementById('cred-pass').value = '';
+  document.getElementById('cred-pass2').value = '';
+  openModal('modal-credenziali');
+}
+
+function saveCredenziali() {
+  const nome = document.getElementById('cred-nome').value.trim();
+  const username = document.getElementById('cred-username').value.trim();
+  const pass = document.getElementById('cred-pass').value;
+  const pass2 = document.getElementById('cred-pass2').value;
+
+  if (!nome || !username) { showToast('Nome e username obbligatori', 'warning'); return; }
+  if (pass && pass !== pass2) { showToast('Le password non coincidono', 'warning'); return; }
+
+  // Check username duplicato
+  const dup = state.utenti.find(u => u.username === username && u.id !== state.editingId);
+  if (dup) { showToast('Username già in uso', 'warning'); return; }
+
+  const u = state.utenti.find(x => x.id === state.editingId);
+  u.nome = nome;
+  u.username = username;
+  if (pass) u.password = pass;
+
+  // Aggiorna topbar se è l'utente corrente
+  if (state.currentUser.id === u.id) {
+    state.currentUser.nome = nome;
+    state.currentUser.username = username;
+    document.getElementById('topbar-username').textContent = nome;
+  }
+
+  showToast('Credenziali aggiornate!', 'success');
+  closeModal('modal-credenziali');
+  renderUtentiTable();
+}
+
+function toggleGiriUtente() {
+  const ruolo = document.getElementById('ut-ruolo').value;
+  const section = document.getElementById('ut-giri-section');
+  section.style.display = ruolo === 'autista' ? 'block' : 'none';
+  if (ruolo === 'autista') renderGiriCheckboxes([]);
+}
+
+function renderGiriCheckboxes(selected) {
+  const allGiri = state.giriCalendario.map(g => g.giro);
+  const container = document.getElementById('ut-giri-checkboxes');
+  container.innerHTML = allGiri.map(g => {
+    const checked = selected.includes(g) ? 'checked' : '';
+    const label = g.charAt(0).toUpperCase() + g.slice(1);
+    return `<label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;background:var(--surface2);padding:4px 10px;border-radius:20px;border:1px solid var(--border);">
+      <input type="checkbox" ${checked} value="${g}" style="accent-color:var(--accent);">
+      ${label}
+    </label>`;
+  }).join('');
+}
+
+function getSelectedGiri() {
+  return Array.from(document.querySelectorAll('#ut-giri-checkboxes input[type=checkbox]:checked')).map(cb => cb.value);
+}
+
+function openNewUtente() {
+  state.editingId = null;
+  document.getElementById('modal-utente-title').textContent = 'Nuovo Utente';
+  ['ut-nome','ut-cognome','ut-tipo','ut-username','ut-pass'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('ut-ruolo').value = 'admin';
+  document.getElementById('ut-giri-section').style.display = 'none';
+  openModal('modal-utente');
+}
+
+function openEditUtente(id) {
+  const u = state.utenti.find(x => x.id === id);
+  state.editingId = id;
+  document.getElementById('modal-utente-title').textContent = 'Modifica Utente';
+  document.getElementById('ut-nome').value = u.nome;
+  document.getElementById('ut-cognome').value = u.cognome || '';
+  document.getElementById('ut-tipo').value = u.tipoUtente || '';
+  document.getElementById('ut-username').value = u.username;
+  document.getElementById('ut-pass').value = '';
+  document.getElementById('ut-ruolo').value = u.ruolo;
+  const isAutista = u.ruolo === 'autista';
+  document.getElementById('ut-giri-section').style.display = isAutista ? 'block' : 'none';
+  if (isAutista) renderGiriCheckboxes(u.giriConsegna || []);
+  openModal('modal-utente');
+}
+
+async function saveUtente() {
+  const nome      = document.getElementById('ut-nome').value.trim();
+  const cognome   = document.getElementById('ut-cognome').value.trim();
+  const username  = document.getElementById('ut-username').value.trim();
+  const password  = document.getElementById('ut-password').value;
+  const ruolo     = document.getElementById('ut-ruolo').value;
+  if (!nome||!username||!ruolo) { showToast('Compila i campi obbligatori', 'warning'); return; }
+  if (!state.editingId && !password) { showToast('Password obbligatoria per nuovo utente', 'warning'); return; }
+
+  const giriConsegna = Array.from(document.querySelectorAll('.giro-check:checked')).map(cb => cb.value);
+  const tipoUtente   = document.getElementById('ut-tipo').value.trim();
+  const isAgente     = document.getElementById('ut-isagente').checked;
+
+  const body = { nome, cognome, username, ruolo, tipo_utente: tipoUtente,
+                 giri_consegna: giriConsegna, is_agente: isAgente };
+  if (password) body.password = password;
+
+  try {
+    if (state.editingId) {
+      await api('PUT', `/api/utenti/${state.editingId}`, body);
+      const i2 = state.utenti.findIndex(u => u.id === state.editingId);
+      if (i2 !== -1) state.utenti[i2] = normalizeUtente({...body, id: state.editingId, is_agente: isAgente?1:0, giri_consegna: giriConsegna});
+    } else {
+      const saved = await api('POST', '/api/utenti', body);
+      state.utenti.push(normalizeUtente({...saved, giri_consegna: giriConsegna}));
+    }
+    closeModal('modal-utente');
+    showToast(state.editingId ? 'Utente aggiornato ✅' : 'Utente salvato ✅', 'success');
+    state.editingId = null;
+    renderUtentiTable();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+// ═══════════════════════════════════════════════
+// ACTIVITY LOG
+// ═══════════════════════════════════════════════
+
+function logActivity(action, detail = '') {
+  // Il backend logga automaticamente le azioni CRUD
+  // Questa funzione è mantenuta per compatibilità
+}
+
+function reassignClientiGiri() {
+  // Riassegna autistaDiGiro ai clienti in base ai giriConsegna degli autisti
+  state.clienti.forEach(c => {
+    const aut = state.utenti.find(u => u.ruolo === 'autista' && (u.giriConsegna||[]).includes(c.giro));
+    c.autistaDiGiro = aut ? aut.id : null;
+  });
+}
+
+async function deleteUtente(id) {
+  id = parseInt(id);
+  if (id === state.currentUser.id) { showToast('Non puoi eliminare te stesso!', 'warning'); return; }
+  const u = state.utenti.find(x => x.id === id);
+  const nome = u ? (u.nome + ' ' + (u.cognome||'')).trim() : 'utente';
+  if (!await customConfirm(`Eliminare ${nome}?`)) return;
+  try {
+    await api('DELETE', `/api/utenti/${id}`);
+    state.utenti = state.utenti.filter(x => x.id !== id);
+    state.clienti.forEach(c => { if (c.agenteId === id) c.agenteId = null; });
+    showToast('Utente eliminato');
+    renderUtentiTable();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+// ═══════════════════════════════════════════════
+// ORDINI MODAL
+// ═══════════════════════════════════════════════
+
+let orderLines = [];
+
+function openNewOrder() {
+  state.editingId = null;
+  orderLines = [{ prodId: null, qty: 1 }];
+  document.getElementById('modal-ordine-title').textContent = 'Nuovo Ordine';
+  document.getElementById('ord-data').value = today();
+  document.getElementById('ord-stato').value = 'attesa';
+  document.getElementById('ord-note').value = '';
+  document.getElementById('ord-data-non-certa').checked = false;
+  document.getElementById('ord-stef').checked = false;
+  acState.cliente = { value: null, query: '', focusIdx: -1 };
+  const defaultAgente = state.currentUser.isAgente ? state.currentUser.id : null;
+  populateOrderSelects(null, defaultAgente);
+  renderOrderLines();
+  openModal('modal-ordine');
+  setTimeout(() => document.getElementById('ac-cliente-input')?.focus(), 100);
+}
+
+function openEditOrder(id) {
+  const o = state.ordini.find(x => x.id === id);
+  state.editingId = id;
+  orderLines = o.linee.map(l => ({...l}));
+  document.getElementById('modal-ordine-title').textContent = `Modifica Ordine #${id}`;
+  document.getElementById('ord-data').value = o.data;
+  document.getElementById('ord-stato').value = o.stato;
+  document.getElementById('ord-note').value = o.note;
+  document.getElementById('ord-data-non-certa').checked = o.dataNonCerta || false;
+  document.getElementById('ord-stef').checked = o.stef || false;
+  acState.cliente = { value: o.clienteId, query: '', focusIdx: -1 };
+  populateOrderSelects(o.clienteId, o.agenteId);
+  if (o.autistaDiGiro) document.getElementById('ord-autista-di-giro').value = o.autistaDiGiro;
+  updateConsegnatarioDisplay(o.clienteId);
+  renderOrderLines();
+  openModal('modal-ordine');
+}
+
+// ═══════════════════════════════════════════════
+// AUTOCOMPLETE ENGINE
+// ═══════════════════════════════════════════════
+
+const acState = {
+  cliente: { value: null, query: '', focusIdx: -1 },
+  // per prodotti nelle righe ordine usiamo un sistema simile ma per riga
+};
+
+function acHighlight(text, query) {
+  if (!query) return text;
+  const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+  return text.replace(re, '<mark>$1</mark>');
+}
+
+function acFilter(type) {
+  if (type === 'cliente') {
+    const q = document.getElementById('ac-cliente-input').value.trim().toLowerCase();
+    acState.cliente.query = q;
+    acState.cliente.value = null;
+    document.getElementById('ord-cliente').value = '';
+    document.getElementById('ac-cliente-input').classList.remove('has-value');
+    acRender('cliente');
+    acOpen('cliente');
+    document.getElementById('ord-cliente-note-box').style.display = 'none';
+  } else if (type === 'tentata') {
+    const q = document.getElementById('ac-tentata-input').value.trim().toLowerCase();
+    if (!acState.tentata) acState.tentata = { value: null, query: '', focusIdx: -1 };
+    acState.tentata.query = q;
+    acState.tentata.value = null;
+    document.getElementById('tentata-cliente').value = '';
+    acRender('tentata');
+    acOpen('tentata');
+  }
+}
+
+function acOpen(type) {
+  if (type === 'cliente') {
+    acRender('cliente');
+    document.getElementById('ac-cliente-dd').classList.add('open');
+    acState.cliente.focusIdx = -1;
+  } else if (type === 'tentata') {
+    acRender('tentata');
+    document.getElementById('ac-tentata-dd').classList.add('open');
+    if (!acState.tentata) acState.tentata = { value: null, query: '', focusIdx: -1 };
+    acState.tentata.focusIdx = -1;
+  }
+}
+
+function acClose(type) {
+  if (type === 'cliente') {
+    document.getElementById('ac-cliente-dd').classList.remove('open');
+  } else if (type === 'tentata') {
+    document.getElementById('ac-tentata-dd').classList.remove('open');
+  }
+}
+
+function acRender(type) {
+  if (type === 'tentata') {
+    if (!acState.tentata) acState.tentata = { value: null, query: '', focusIdx: -1 };
+    const q = acState.tentata.query;
+    const dd = document.getElementById('ac-tentata-dd');
+    if (!dd) return;
+    let clienti = state.clienti;
+    if (q) clienti = clienti.filter(c => c.nome.toLowerCase().includes(q) || c.localita.toLowerCase().includes(q));
+    dd.innerHTML = clienti.slice(0,15).map(c => `
+      <div class="ac-item" data-id="${c.id}" onmousedown="acSelect('tentata',${c.id})">
+        <span>${acHighlight(c.nome, q)}</span>
+        <span class="ac-sub">${c.localita}${c.giro ? ' · ' + c.giro : ''}</span>
+      </div>`).join('') || '<div class="ac-empty">Nessun cliente trovato</div>';
+    return;
+  }
+  if (type !== 'cliente') return;
+  const q = acState.cliente.query;
+  const dd = document.getElementById('ac-cliente-dd');
+
+  const giri = ['bari nord','bari/foggia','murgia','taranto','lecce','lecce est','valle itria','calabria','foggia','diretto','stef','variabile',''];
+  let html = '';
+  let totalShown = 0;
+
+  giri.forEach(g => {
+    let gruppo = state.clienti.filter(c => c.giro === g);
+    if (q) gruppo = gruppo.filter(c =>
+      c.nome.toLowerCase().includes(q) ||
+      c.localita.toLowerCase().includes(q)
+    );
+    if (!gruppo.length) return;
+    html += `<div class="ac-group-label">${g ? g.toUpperCase() : 'NON ASSEGNATO'}</div>`;
+    gruppo.forEach(c => {
+      html += `<div class="ac-item" data-id="${c.id}" onmousedown="acSelect('cliente',${c.id})">
+        <span>${acHighlight(c.nome, q)}</span>
+        <span class="ac-sub">${c.localita}${c.giro ? ' · ' + c.giro : ''}</span>
+      </div>`;
+      totalShown++;
+    });
+  });
+
+  if (!totalShown) html = '<div class="ac-empty">Nessun cliente trovato</div>';
+  dd.innerHTML = html;
+}
+
+function acSelect(type, id) {
+  if (type === 'cliente') {
+    const c = state.clienti.find(x => x.id === id);
+    if (!c) return;
+    acState.cliente.value = id;
+    document.getElementById('ac-cliente-input').value = c.nome;
+    document.getElementById('ac-cliente-input').classList.add('has-value');
+    document.getElementById('ord-cliente').value = id;
+    acClose('cliente');
+
+    // Mostra note fisse cliente se presenti
+    const noteBox = document.getElementById('ord-cliente-note-box');
+    const noteText = document.getElementById('ord-cliente-note-text');
+    if (noteBox && noteText) {
+      if (c.note && c.note.trim()) {
+        noteText.textContent = c.note;
+        noteBox.style.display = 'block';
+      } else {
+        noteBox.style.display = 'none';
+      }
+    } else {
+      document.getElementById('ord-cliente-note-box').style.display = 'none';
+    }
+
+    // Imposta agente di default dal cliente
+    if (c.agenteId) {
+      const selAg = document.getElementById('ord-agente');
+      if (selAg) selAg.value = c.agenteId;
+    }
+    updateConsegnatarioDisplay(id);
+
+    // Pre-imposta data dalla prossima data utile del giro del cliente
+    if (c.giro && !state.editingId) {
+      const nextDate = getNextGiroDate(c.giro);
+      if (nextDate) {
+        document.getElementById('ord-data').value = nextDate;
+      }
+    }
+
+    // Ri-renderizza righe prodotto per aggiornare lo storico del cliente
+    renderOrderLines();
+    // Se c'è solo una riga vuota, apri subito il dropdown con lo storico
+    setTimeout(() => {
+      if (orderLines.length === 1 && !orderLines[0].prodId) {
+        acProdOpen(0);
+      }
+    }, 60);
+  } else if (type === 'tentata') {
+    const c = state.clienti.find(x => x.id === id);
+    if (!c) return;
+    if (!acState.tentata) acState.tentata = { value: null, query: '', focusIdx: -1 };
+    acState.tentata.value = id;
+    document.getElementById('ac-tentata-input').value = c.nome;
+    document.getElementById('tentata-cliente').value = id;
+    acClose('tentata');
+  }
+}
+
+function acKey(e, type) {
+  const dd = document.getElementById(`ac-${type}-dd`);
+  if (!dd) return;
+  const items = dd.querySelectorAll('.ac-item');
+  if (!items.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    acState[type].focusIdx = Math.min(acState[type].focusIdx + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('focused', i === acState[type].focusIdx));
+    items[acState[type].focusIdx]?.scrollIntoView({block:'nearest'});
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    acState[type].focusIdx = Math.max(acState[type].focusIdx - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('focused', i === acState[type].focusIdx));
+    items[acState[type].focusIdx]?.scrollIntoView({block:'nearest'});
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (acState[type].focusIdx >= 0) {
+      const id = parseInt(items[acState[type].focusIdx].dataset.id);
+      acSelect(type, id);
+    }
+  } else if (e.key === 'Escape') {
+    acClose(type);
+  }
+}
+
+// Chiudi dropdown cliccando fuori
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#ac-cliente-wrap')) acClose('cliente');
+  if (!e.target.closest('#ac-tentata-wrap')) acClose('tentata');
+});
+
+// ═══════════════════════════════════════════════
+// AUTOCOMPLETE PER RIGHE PRODOTTO
+// ═══════════════════════════════════════════════
+
+function renderOrderLines() {
+  const container = document.getElementById('ord-lines-container');
+  container.innerHTML = orderLines.map((l, i) => {
+    const p = l.prodId ? getProdotto(l.prodId) : null;
+    return `
+    <div class="order-line" id="ord-line-${i}">
+      <div style="flex:1;">
+        <div class="ac-wrap">
+          <input type="text" class="ac-input${p ? ' has-value' : ''}"
+            id="ac-prod-input-${i}"
+            value="${p ? '['+p.codice+'] '+p.nome : ''}"
+            placeholder="Cerca codice o nome prodotto…"
+            autocomplete="off"
+            oninput="acProdFilter(${i})"
+            onfocus="acProdOpen(${i})"
+            onkeydown="acProdKey(event,${i})">
+          <div class="ac-dropdown" id="ac-prod-dd-${i}"></div>
+        </div>
+        ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">📦 ${p.packaging}</div>` : ''}
+        ${p && p.note ? `<div style="font-size:11px;color:var(--blue);margin-top:2px;">📌 ${p.note}</div>` : ''}
+      </div>
+      <input type="number" class="qty-input" value="${l.qty||1}" min="1"
+        onchange="orderLines[${i}].qty=parseInt(this.value)||1"
+        placeholder="Qtà" style="width:70px;flex-shrink:0;">
+      <button class="line-delete" onclick="removeOrderLine(${i})">✕</button>
+    </div>`;
+  }).join('') || '<div style="padding:12px;color:var(--text3);font-size:13px;">Nessun prodotto aggiunto</div>';
+}
+
+// Single delegated listener for closing prod dropdowns on outside click (set once)
+if (!window._prodDdListenerSet) {
+  window._prodDdListenerSet = true;
+  document.addEventListener('click', function(e) {
+    orderLines.forEach((_, i) => {
+      const wrap = document.getElementById(`ord-line-${i}`);
+      if (wrap && !wrap.contains(e.target)) {
+        const dd = document.getElementById(`ac-prod-dd-${i}`);
+        if (dd) dd.classList.remove('open');
+      }
+    });
+  });
+}
+
+function acProdFilter(i) {
+  const inp = document.getElementById(`ac-prod-input-${i}`);
+  const dd = document.getElementById(`ac-prod-dd-${i}`);
+  if (!inp || !dd) return;
+  const q = inp.value.trim().toLowerCase();
+  orderLines[i].prodId = null;
+  inp.classList.remove('has-value');
+  acProdRender(i, q);
+  dd.classList.add('open');
+}
+
+function acProdOpen(i) {
+  const inp = document.getElementById(`ac-prod-input-${i}`);
+  const dd = document.getElementById(`ac-prod-dd-${i}`);
+  if (!inp || !dd) return;
+  const q = inp.value.trim().toLowerCase();
+  acProdRender(i, q);
+  dd.classList.add('open');
+}
+
+// Ritorna i prodotti ordinati dal cliente, ordinati per frequenza (più ordinato = primo)
+// Esclude i prodotti già selezionati nelle righe correnti
+function getClienteStoricoProdotti(clienteId, escludiProdIds = []) {
+  if (!clienteId) return [];
+
+  // Conta quante volte ogni prodotto è stato ordinato da questo cliente
+  const freq = {};
+  state.ordini
+    .filter(o => o.clienteId === clienteId)
+    .forEach(o => {
+      o.linee.forEach(l => {
+        if (!l.prodId) return;
+        freq[l.prodId] = (freq[l.prodId] || 0) + 1;
+      });
+    });
+
+  return Object.entries(freq)
+    .filter(([id]) => !escludiProdIds.includes(parseInt(id)))
+    .sort(([, a], [, b]) => b - a)           // più frequenti prima
+    .slice(0, 8)                              // max 8 suggeriti
+    .map(([id, count]) => ({ prodotto: getProdotto(parseInt(id)), count }))
+    .filter(x => x.prodotto.id);             // scarta eventuali id non trovati
+}
+
+function acProdRender(i, q) {
+  const dd = document.getElementById(`ac-prod-dd-${i}`);
+  if (!dd) return;
+
+  // Prodotti già selezionati nelle altre righe (per non riproporre duplicati nello storico)
+  const giàScelti = orderLines
+    .filter((l, idx) => idx !== i && l.prodId)
+    .map(l => l.prodId);
+
+  let html = '';
+  let total = 0;
+
+  // ── SEZIONE STORICO CLIENTE (solo senza query, se cliente selezionato) ──
+  const clienteId = acState.cliente.value;
+  if (!q && clienteId) {
+    const storico = getClienteStoricoProdotti(clienteId, giàScelti);
+    if (storico.length) {
+      html += `<div class="ac-group-label" style="background:linear-gradient(90deg,#e8f5e9,var(--surface2));color:var(--accent);">⭐ Prodotti abituali</div>`;
+      storico.forEach(({ prodotto: p, count }) => {
+        html += `<div class="ac-item" data-id="${p.id}" onmousedown="acProdSelect(${i},${p.id})">
+          <span>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">[${p.codice}]</span>
+            ${p.nome}
+            <span class="ac-freq">×${count}</span>
+          </span>
+          <span class="ac-sub">${p.categoria} · ${p.um}${p.packaging ? ' · ' + p.packaging : ''}</span>
+        </div>`;
+        total++;
+      });
+      html += `<div class="ac-group-label" style="font-size:9px;letter-spacing:0.5px;">TUTTI I PRODOTTI</div>`;
+    }
+  }
+
+  // ── SEZIONE TUTTI I PRODOTTI (filtrati per query se presente) ──
+  const cats = ['FORMAGGI','RICOTTA','CAGLIATA','PANNA UHT','ALTRO'];
+  // ID già mostrati nello storico (per non duplicarli)
+  const storicoIds = (!q && clienteId)
+    ? getClienteStoricoProdotti(clienteId, giàScelti).map(x => x.prodotto.id)
+    : [];
+
+  cats.forEach(cat => {
+    let gruppo = state.prodotti.filter(p => p.categoria === cat && !storicoIds.includes(p.id));
+    if (q) gruppo = gruppo.filter(p =>
+      p.codice.toLowerCase().includes(q) ||
+      p.nome.toLowerCase().includes(q)
+    );
+    if (!gruppo.length) return;
+    if (!q) html += `<div class="ac-group-label">${cat}</div>`;
+    else html += `<div class="ac-group-label">${cat}</div>`;
+    gruppo.forEach(p => {
+      html += `<div class="ac-item" data-id="${p.id}" onmousedown="acProdSelect(${i},${p.id})">
+        <span><span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">[${p.codice}]</span> ${acHighlight(p.nome, q)}</span>
+        <span class="ac-sub">${p.categoria} · ${p.um}${p.packaging ? ' · ' + p.packaging : ''}</span>
+      </div>`;
+      total++;
+    });
+  });
+
+  if (!total && !html.includes('ac-item')) html = '<div class="ac-empty">Nessun prodotto trovato</div>';
+  dd.innerHTML = html;
+}
+
+function acProdSelect(i, prodId) {
+  orderLines[i].prodId = prodId;
+  const p = getProdotto(prodId);
+  const inp = document.getElementById(`ac-prod-input-${i}`);
+  if (inp) { inp.value = `[${p.codice}] ${p.nome}`; inp.classList.add('has-value'); }
+  document.getElementById(`ac-prod-dd-${i}`)?.classList.remove('open');
+  // Re-render to show packaging/note
+  renderOrderLines();
+  // Restore value after re-render
+  const inp2 = document.getElementById(`ac-prod-input-${i}`);
+  if (inp2) { inp2.value = `[${p.codice}] ${p.nome}`; inp2.classList.add('has-value'); }
+}
+
+function acProdKey(e, i) {
+  const dd = document.getElementById(`ac-prod-dd-${i}`);
+  const items = dd?.querySelectorAll('.ac-item') || [];
+  let idx = parseInt(dd?.dataset.focus || '-1');
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    idx = Math.min(idx + 1, items.length - 1);
+    dd.dataset.focus = idx;
+    items.forEach((el, j) => el.classList.toggle('focused', j === idx));
+    items[idx]?.scrollIntoView({block:'nearest'});
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    idx = Math.max(idx - 1, 0);
+    dd.dataset.focus = idx;
+    items.forEach((el, j) => el.classList.toggle('focused', j === idx));
+    items[idx]?.scrollIntoView({block:'nearest'});
+  } else if (e.key === 'Enter' && idx >= 0) {
+    e.preventDefault();
+    const id = parseInt(items[idx].dataset.id);
+    acProdSelect(i, id);
+  } else if (e.key === 'Escape') {
+    dd?.classList.remove('open');
+  }
+}
+
+function addOrderLine() {
+  orderLines.push({ prodId: null, qty: 1 });
+  renderOrderLines();
+  // Focus sul nuovo campo
+  setTimeout(() => document.getElementById(`ac-prod-input-${orderLines.length-1}`)?.focus(), 50);
+}
+
+function removeOrderLine(i) {
+  orderLines.splice(i, 1);
+  renderOrderLines();
+}
+
+function getAutistaDiGiro(giro) {
+  return state.utenti.find(u => u.ruolo === 'autista' && (u.giriConsegna||[]).includes(giro)) || null;
+}
+
+function updateConsegnatarioDisplay(clienteId) {
+  const c = clienteId ? getCliente(clienteId) : null;
+  const aut = c ? getAutistaDiGiro(c.giro) : null;
+  const box = document.getElementById('ord-consegnatario-nome');
+  const hidden = document.getElementById('ord-autista-di-giro');
+  if (!box) return;
+  if (aut) {
+    box.textContent = (aut.nome + ' ' + (aut.cognome||'')).trim();
+    box.style.color = 'var(--text1)';
+    if (hidden) hidden.value = aut.id;
+  } else {
+    box.textContent = c ? '— nessun autista per questo giro' : '—';
+    box.style.color = 'var(--text3)';
+    if (hidden) hidden.value = '';
+  }
+}
+
+function populateOrderSelects(clienteId, agenteId) {
+  // Agenti commerciali: tutti con isAgente=true
+  const agenti = state.utenti.filter(u => u.isAgente);
+  const selAgente = document.getElementById('ord-agente');
+  selAgente.innerHTML = '<option value="">— Seleziona agente —</option>' + agenti.map(a =>
+    `<option value="${a.id}" ${a.id==agenteId?'selected':''}>${(a.nome+' '+(a.cognome||'')).trim()}</option>`
+  ).join('');
+
+  // Consegnatario auto dal giro del cliente
+  updateConsegnatarioDisplay(clienteId);
+
+  // Autocomplete cliente
+  const inp = document.getElementById('ac-cliente-input');
+  if (!inp) return;
+  if (clienteId) {
+    const c = getCliente(clienteId);
+    inp.value = c.nome;
+    inp.classList.add('has-value');
+    document.getElementById('ord-cliente').value = clienteId;
+    acState.cliente.value = clienteId;
+    // Pre-seleziona agente del cliente se non già impostato
+    if (!agenteId && c.agenteId) {
+      selAgente.value = c.agenteId;
+    }
+    const noteBox = document.getElementById('ord-cliente-note-box');
+    const noteText = document.getElementById('ord-cliente-note-text');
+    if (noteBox && noteText) {
+      if (c.note && c.note.trim()) {
+        noteText.textContent = c.note;
+        noteBox.style.display = 'block';
+      } else {
+        noteBox.style.display = 'none';
+      }
+    }
+  } else {
+    inp.value = '';
+    inp.classList.remove('has-value');
+    const ordCliente = document.getElementById('ord-cliente');
+    if (ordCliente) ordCliente.value = '';
+    acState.cliente.value = null;
+    document.getElementById('ord-cliente-note-box').style.display = 'none';
+  }
+
+  if (!agenteId && state.currentUser.ruolo === 'autista') {
+    selAgente.value = state.currentUser.id;
+  }
+}
+
+function renderOrderLines() {
+  const container = document.getElementById('ord-lines-container');
+  container.innerHTML = orderLines.map((l, i) => {
+    const p = l.prodId ? getProdotto(l.prodId) : null;
+    return `
+    <div class="order-line" style="flex-wrap:wrap;gap:6px;">
+      <div style="flex:1;min-width:180px;">
+        <select onchange="orderLines[${i}].prodId=parseInt(this.value);renderOrderLines()">
+          <option value="">— Seleziona prodotto —</option>
+          ${state.prodotti.map(prod => `<option value="${prod.id}" ${prod.id==l.prodId?'selected':''}>[${prod.codice}] ${prod.nome}</option>`).join('')}
+        </select>
+        ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">📦 ${p.packaging}</div>` : ''}
+      </div>
+      <input type="number" class="qty-input" value="${l.qty}" min="1" onchange="orderLines[${i}].qty=parseInt(this.value)||1" placeholder="Qtà" style="width:70px;">
+      <input type="number" class="qty-input" value="${l.prezzoVendita||''}" min="0" step="0.01" onchange="orderLines[${i}].prezzoVendita=parseFloat(this.value)||null" placeholder="€/u" style="width:70px;" title="Prezzo di vendita (opzionale)">
+      <button class="line-delete" onclick="removeOrderLine(${i})">✕</button>
+    </div>`;
+  }).join('') || '<div style="padding:12px;color:var(--text3);font-size:13px;">Nessun prodotto aggiunto</div>';
+}
+
+function addOrderLine() {
+  orderLines.push({ prodId: '', qty: 1 });
+  renderOrderLines();
+}
+
+function removeOrderLine(i) {
+  orderLines.splice(i, 1);
+  renderOrderLines();
+}
+
+async function saveOrder() {
+  const clienteId   = parseInt(document.getElementById('ord-cliente').value);
+  const agenteId    = parseInt(document.getElementById('ord-agente').value) || null;
+  const autistaDiGiro = parseInt(document.getElementById('ord-autista-di-giro').value) || null;
+  const data        = document.getElementById('ord-data').value;
+  const stato       = document.getElementById('ord-stato').value;
+  const note        = document.getElementById('ord-note').value.trim();
+  const dataNonCerta= document.getElementById('ord-data-non-certa').checked;
+  const stef        = document.getElementById('ord-stef')?.checked || false;
+
+  if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
+  if (!data)      { showToast('Inserisci la data', 'warning'); return; }
+
+  const linee = [];
+  document.querySelectorAll('.order-line-row').forEach(row => {
+    const prodId = parseInt(row.querySelector('.line-prod')?.value);
+    const qty    = parseFloat(row.querySelector('.line-qty')?.value);
+    if (prodId && qty > 0) linee.push({ prodotto_id: prodId, qty });
+  });
+  if (!linee.length) { showToast('Aggiungi almeno un prodotto', 'warning'); return; }
+
+  const body = { cliente_id: clienteId, agente_id: agenteId, autista_di_giro: autistaDiGiro,
+                 data, stato, note, data_non_certa: dataNonCerta, stef, linee };
+  try {
+    let saved;
+    if (state.editingId) {
+      saved = await api('PUT', `/api/ordini/${state.editingId}`, body);
+    } else {
+      saved = await api('POST', '/api/ordini', body);
+    }
+    // Aggiorna state locale
+    const normalized = normalizeOrdine(saved);
+    if (state.editingId) {
+      const idx2 = state.ordini.findIndex(o => o.id === state.editingId);
+      if (idx2 !== -1) state.ordini[idx2] = normalized;
+      else state.ordini.unshift(normalized);
+    } else {
+      state.ordini.unshift(normalized);
+    }
+    closeModal('modal-order');
+    showToast(state.editingId ? 'Ordine aggiornato ✅' : 'Ordine salvato ✅', 'success');
+    state.editingId = null;
+    renderPage(state.currentPage);
+  } catch(e) {
+    showToast(e.message || 'Errore salvataggio', 'warning');
+  }
+}
+
+async function deleteOrder(id) {
+  id = parseInt(id);
+  const o = state.ordini.find(x => x.id === id);
+  const nome = o ? getCliente(o.clienteId).nome : '?';
+  if (!await customConfirm(`Eliminare ordine #${id} (${nome})?`)) return;
+  try {
+    await api('DELETE', `/api/ordini/${id}`);
+    state.ordini = state.ordini.filter(x => x.id !== id);
+    showToast('Ordine eliminato');
+    renderPage(state.currentPage);
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+// ═══════════════════════════════════════════════
+// DETTAGLIO ORDINE
+// ═══════════════════════════════════════════════
+
+function openDettaglio(id) {
+  const o = state.ordini.find(x => x.id === id);
+  const c = getCliente(o.clienteId);
+  const a = getAgente(o.agenteId);
+  const cons = o.autistaDiGiro ? getAgente(o.autistaDiGiro) : null;
+
+  document.getElementById('det-title').textContent = `Ordine #${o.id} — ${c.nome}`;
+
+  document.getElementById('det-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Cliente</div>
+        <div style="font-weight:600;">${c.nome}</div>
+        <div style="font-size:13px;color:var(--text2);">${c.localita}${c.giro ? ` — giro: ${c.giro}` : ''}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Agente</div>
+        <div style="font-weight:600;">${(a.nome+' '+(a.cognome||'')).trim()}</div>
+        <div style="font-size:13px;color:var(--text2);">${formatDate(o.data)}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:14px;">${statoBadge(o.stato)}</div>
+    <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px;">Prodotti ordinati</div>
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+      ${o.linee.map(l => {
+        const p = getProdotto(l.prodId);
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);font-size:14px;">
+          <div>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-right:8px;">[${p.codice}]</span>
+            <span>${p.nome}</span>
+            ${p.packaging ? `<div style="font-size:11px;color:var(--text3);">📦 ${p.packaging}</div>` : ''}
+          </div>
+          <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--accent);">${l.qty} ${p.um}</span>
+        </div>`;
+      }).join('')}
+    </div>
+    ${o.note ? `<div style="margin-top:14px;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px;color:var(--text2);"><b>Note:</b> ${o.note}</div>` : ''}
+  `;
+
+  const footer = document.getElementById('det-footer');
+  const canConferma = o.stato !== 'consegnato' && o.stato !== 'annullato';
+  footer.innerHTML = `
+    <button class="btn btn-outline" onclick="closeModal('modal-dettaglio')">Chiudi</button>
+    ${canConferma ? `<button class="btn btn-green" onclick="confermaConsegna(${o.id})">✅ Conferma Consegna</button>` : ''}
+    <button class="btn btn-orange" onclick="closeModal('modal-dettaglio');openEditOrder(${o.id})">✏️ Modifica</button>
+  `;
+
+  openModal('modal-dettaglio');
+}
+
+async function confermaConsegna(id) {
+  id = parseInt(id);
+  try {
+    await api('PATCH', `/api/ordini/${id}/stato`, { stato: 'consegnato' });
+    const o = state.ordini.find(x => x.id === id);
+    if (o) o.stato = 'consegnato';
+    showToast('Consegna confermata! ✅', 'success');
+    closeModal('modal-dettaglio');
+    renderPage(state.currentPage);
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+// ═══════════════════════════════════════════════
+// AUTISTA VIEW
+// ═══════════════════════════════════════════════
+
+function renderActivityLog() {
+  const isAdmin = state.currentUser?.ruolo === 'admin';
+  const card = document.getElementById('activity-log-card');
+  if (!card) return;
+  card.style.display = isAdmin ? 'block' : 'none';
+  if (!isAdmin) return;
+
+  const body = document.getElementById('activity-log-body');
+  if (!state.activityLog.length) {
+    body.innerHTML = '<div style="padding:20px;color:var(--text2);font-size:13px;text-align:center;">Nessuna attività registrata</div>';
+    return;
+  }
+
+  const actionIcons = {
+    'Nuovo ordine': '🟢',
+    'Modifica ordine': '✏️',
+    'Eliminazione ordine': '🔴',
+    'Nuovo cliente': '🏢',
+    'Modifica cliente': '✏️',
+    'Eliminazione cliente': '🔴',
+    'Nuovo utente': '👤',
+    'Modifica utente': '✏️',
+  };
+
+  body.innerHTML = state.activityLog.map(log => {
+    const d = new Date(log.ts);
+    const dateStr = d.toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit',year:'numeric'});
+    const timeStr = d.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
+    const icon = actionIcons[log.action] || '📌';
+    const isDelete = log.action.startsWith('Eliminazione');
+    const isNew = log.action.startsWith('Nuovo');
+    const color = isDelete ? 'var(--danger)' : isNew ? 'var(--success)' : 'var(--text1)';
+    return `
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="font-size:18px;line-height:1;margin-top:2px;">${icon}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-weight:600;font-size:13px;color:${color};">${log.action}</span>
+          <span style="font-size:12px;color:var(--text2);">${log.detail}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;">
+          👤 <b>${log.userName}</b> · ${dateStr} ${timeStr}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function clearActivityLog() {
+  if (!await customConfirm('Svuotare il registro attività?', 'Svuota', 'Registro Attività')) return;
+  try {
+    await api('DELETE', '/api/activity');
+    state.activityLog = [];
+    showToast('Registro svuotato');
+    renderReport();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+
+function renderAutistaView() {
+  const t = today();
+  const uid = state.currentUser.id;
+  const ordini = state.ordini.filter(o => o.autistaDiGiro === uid && o.data === t);
+
+  const nome = state.currentUser.nome;
+  document.getElementById('autista-title').textContent = `Ciao, ${nome}! 👋`;
+  document.getElementById('autista-sub').textContent = `Giro di oggi — ${new Date().toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long'})}`;
+
+  const daCons = ordini.filter(o => o.stato !== 'consegnato' && o.stato !== 'annullato').length;
+  const cons = ordini.filter(o => o.stato === 'consegnato').length;
+  document.getElementById('aut-da-consegnare').textContent = daCons;
+  document.getElementById('aut-consegnati').textContent = cons;
+  document.getElementById('aut-totale').textContent = ordini.length;
+
+  const container = document.getElementById('autista-orders');
+  if (!ordini.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🎉</div><p>Nessun ordine assegnato oggi!</p></div>`;
+    return;
+  }
+
+  // Sort: non consegnati prima
+  const sorted = [...ordini].sort((a,b) => {
+    const rank = {attesa:0, preparazione:1, consegnato:2, annullato:3};
+    return (rank[a.stato]||0) - (rank[b.stato]||0);
+  });
+
+  container.innerHTML = sorted.map(o => {
+    const c = getCliente(o.clienteId);
+    const isConsegnato = o.stato === 'consegnato';
+    return `
+    <div class="mobile-order-card" style="${isConsegnato ? 'opacity:0.65;' : ''}">
+      <div class="mob-header">
+        <div>
+          <div class="mob-client">${c.nome}</div>
+          <div style="font-size:12px;color:var(--text2);">📍 ${c.localita}</div>
+        </div>
+        <div style="text-align:right;">
+          ${statoBadge(o.stato)}
+          <div class="mob-time" style="margin-top:4px;">#${o.id}</div>
+        </div>
+      </div>
+      <div class="mob-lines">
+        ${o.linee.map(l => {
+          const p = getProdotto(l.prodId);
+          return `<div class="mob-line"><span>${p.nome}</span><span class="mob-line-qty">${l.qty} ${p.um}</span></div>`;
+        }).join('')}
+      </div>
+      ${o.note ? `<div style="font-size:12px;color:var(--text2);padding:6px 8px;background:var(--surface2);border-radius:6px;margin-bottom:8px;">📝 ${o.note}</div>` : ''}
+      <div class="mob-actions">
+        ${!isConsegnato
+          ? `<button class="btn btn-green" onclick="confermaConsegnaRapida(${o.id})">✅ Consegnato</button>`
+          : `<button class="btn btn-outline" disabled style="opacity:0.5;">✅ Consegnato</button>`
+        }
+        <button class="btn btn-outline" onclick="openDettaglio(${o.id})">👁️ Dettagli</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id})" title="Elimina ordine">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function confermaConsegnaRapida(id) {
+  id = parseInt(id);
+  try {
+    await api('PATCH', `/api/ordini/${id}/stato`, { stato: 'consegnato' });
+    const o = state.ordini.find(x => x.id === id);
+    if (o) o.stato = 'consegnato';
+    showToast('Consegna confermata! ✅', 'success');
+    renderAutistaView();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+// ═══════════════════════════════════════════════
+// PIANO DI CARICO
+// ═══════════════════════════════════════════════
+
+// Layout fedeli ai PDF:
+// asym8 (01,02,03): col sx 3 grandi (rs 2+2+1) + col dx 5 piccole  = 8 pedane
+// sym12 (04):       2 col x 6 righe uniformi                        = 12 pedane
+// ford5 (07):       4 grandi (2x2) + 1 larga in fondo               = 5 pedane
+
+const PIANO_LAYOUTS = {
+  asym8: {
+    cols: 2, rows: 5,
+    slots: [
+      { n:1, c:0, r:0, cs:1, rs:2 },  // sin grande alta  (P1)
+      { n:2, c:0, r:2, cs:1, rs:2 },  // sin grande media (P2)
+      { n:3, c:0, r:4, cs:1, rs:1 },  // sin piccola bassa(P3)
+      { n:4, c:1, r:0, cs:1, rs:1 },  // dx 1
+      { n:5, c:1, r:1, cs:1, rs:1 },  // dx 2
+      { n:6, c:1, r:2, cs:1, rs:1 },  // dx 3
+      { n:7, c:1, r:3, cs:1, rs:1 },  // dx 4
+      { n:8, c:1, r:4, cs:1, rs:1 },  // dx 5
+    ]
+  },
+  sym12: {
+    cols: 2, rows: 6,
+    slots: [
+      { n:1,  c:0, r:0, cs:1, rs:1 }, { n:2,  c:1, r:0, cs:1, rs:1 },
+      { n:3,  c:0, r:1, cs:1, rs:1 }, { n:4,  c:1, r:1, cs:1, rs:1 },
+      { n:5,  c:0, r:2, cs:1, rs:1 }, { n:6,  c:1, r:2, cs:1, rs:1 },
+      { n:7,  c:0, r:3, cs:1, rs:1 }, { n:8,  c:1, r:3, cs:1, rs:1 },
+      { n:9,  c:0, r:4, cs:1, rs:1 }, { n:10, c:1, r:4, cs:1, rs:1 },
+      { n:11, c:0, r:5, cs:1, rs:1 }, { n:12, c:1, r:5, cs:1, rs:1 },
+    ]
+  },
+  ford5: {
+    cols: 2, rows: 3,
+    slots: [
+      { n:1, c:0, r:0, cs:1, rs:1 },  // sin 1
+      { n:2, c:1, r:0, cs:1, rs:1 },  // dx 1
+      { n:3, c:0, r:1, cs:1, rs:1 },  // sin 2
+      { n:4, c:1, r:1, cs:1, rs:1 },  // dx 2
+      { n:5, c:0, r:2, cs:2, rs:1 },  // fondo largo (P5 = 1 larga)
+    ]
+  }
+};
+
+let pianoSelectedCamionId = null;
+
+function renderPianoPage() {
+  const role = state.currentUser.ruolo;
+  const isEditor  = (role === 'autista' || role === 'admin');
+  const isConferma = (role === 'magazzino' || role === 'admin');
+
+  // Tutti vedono tutti i camion
+  const sel = document.getElementById('camion-selector');
+  if (!sel) return;
+
+  sel.innerHTML = state.camions.map(c => {
+    const autistaInUso = c.autistaInUso ? state.utenti.find(u => u.id === c.autistaInUso) : null;
+    const nomeAut = autistaInUso ? autistaInUso.nome : '—';
+    const isSelected = pianoSelectedCamionId === c.id;
+    return `<button
+      class="btn ${isSelected ? 'btn-green' : 'btn-outline'}"
+      style="position:relative;padding:10px 18px 10px 14px;min-width:110px;"
+      onclick="selectCamionePiano(${c.id})">
+      🚛 <b style="font-size:13px;">${c.targa}</b>
+      <span style="display:block;font-size:11px;font-weight:400;color:${isSelected?'rgba(255,255,255,0.75)':'var(--text3)'};">
+        ${c.pedane.length}p · ${nomeAut}
+      </span>
+      ${c.confermato ? '<span style="position:absolute;top:4px;right:6px;">✅</span>' : ''}
+    </button>`;
+  }).join('');
+
+  if (!pianoSelectedCamionId && state.camions.length) {
+    pianoSelectedCamionId = state.camions[0].id;
+  }
+
+  renderPianoBody(isEditor, isConferma);
+}
+
+function selectCamionePiano(id) {
+  pianoSelectedCamionId = id;
+  renderPianoPage();
+}
+
+function renderPianoBody(isEditor, isConferma) {
+  const body = document.getElementById('piano-body');
+  if (!body) return;
+
+  const camion = state.camions.find(c => c.id === pianoSelectedCamionId);
+  if (!camion) { body.innerHTML = ''; return; }
+
+  const layout = PIANO_LAYOUTS[camion.layout] || PIANO_LAYOUTS.asym8;
+  const CELL_W = 152, CELL_H = 78, GAP = 4;
+  const totalW = layout.cols * CELL_W + (layout.cols - 1) * GAP;
+  const totalH = layout.rows * CELL_H + (layout.rows - 1) * GAP;
+
+  // Pedane HTML — posizionamento assoluto fedele al layout
+  const pedaneHtml = layout.slots.map(slot => {
+    const p = camion.pedane[slot.n - 1] || { nota: '' };
+    const nota = p.nota;
+    const filled = nota.trim().length > 0;
+    const w = slot.cs * CELL_W + (slot.cs - 1) * GAP;
+    const h = slot.rs * CELL_H + (slot.rs - 1) * GAP;
+    const x = slot.c * (CELL_W + GAP);
+    const y = slot.r * (CELL_H + GAP);
+
+    if (isEditor) {
+      return `<div class="pedana-card ${filled ? 'has-content' : ''}"
+        style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;
+               box-sizing:border-box;display:flex;flex-direction:column;gap:3px;">
+        <div class="pedana-label">🪵 P${slot.n}</div>
+        <textarea class="pedana-input"
+          id="pedana-txt-${camion.id}-${slot.n}"
+          placeholder="es. 10x Emmental…"
+          style="flex:1;min-height:0;resize:none;font-size:12px;"
+          oninput="livePedanaUpdate(${camion.id},${slot.n-1},this.value);
+                   this.closest('.pedana-card').classList.toggle('has-content',this.value.trim().length>0)"
+        >${nota}</textarea>
+      </div>`;
+    } else {
+      return `<div class="pedana-card ${filled ? 'has-content' : ''}"
+        style="position:absolute;left:${x}px;top:${y}px;width:${w}px;height:${h}px;box-sizing:border-box;">
+        <div class="pedana-label">🪵 P${slot.n}</div>
+        <div class="pedana-readonly ${filled ? '' : 'pedana-empty'} " style="font-size:12px;">
+          ${filled ? nota.split('\n').join('<br>') : 'vuota'}
+        </div>
+      </div>`;
+    }
+  }).join('');
+
+  // Autista in uso — selector per tutti
+  const autisti = state.utenti.filter(u => u.ruolo === 'autista');
+  const autistaSelectHtml = `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;
+                padding:12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);">
+      <span style="font-size:13px;font-weight:600;">👤 Autista al volante oggi:</span>
+      <select id="autista-inuso-sel"
+        style="font-size:13px;padding:7px 10px;border:1.5px solid var(--border);
+               border-radius:8px;background:var(--surface);flex:1;min-width:160px;"
+        onchange="setAutistaInUso(${camion.id}, parseInt(this.value)||null)">
+        <option value="">— non assegnato —</option>
+        ${autisti.map(a =>
+          `<option value="${a.id}" ${camion.autistaInUso===a.id?'selected':''}>
+            ${a.nome} ${a.cognome||''}
+          </option>`
+        ).join('')}
+      </select>
+    </div>`;
+
+  // Badge conferma
+  let confermaHtml = '';
+  if (camion.confermato) {
+    const d = new Date(camion.confermatoAt);
+    confermaHtml = `
+      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;padding:14px 16px;
+                  background:#f0fdf4;border:2px solid var(--accent);border-radius:var(--radius);
+                  flex-wrap:wrap;font-size:13px;">
+        <span style="font-size:22px;">✅</span>
+        <div>
+          <div style="font-weight:600;">Carico confermato da ${camion.confermatoDa}</div>
+          <div style="color:var(--text2);font-size:12px;">
+            ${d.toLocaleDateString('it-IT')} alle ${d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}
+          </div>
+        </div>
+        ${(state.currentUser.ruolo==='magazzino'||state.currentUser.ruolo==='admin')
+          ? `<button class="btn btn-outline btn-sm" style="margin-left:auto;"
+               onclick="annullaConfermaCarico(${camion.id})">↩️ Annulla</button>` : ''}
+      </div>`;
+  }
+
+  // Ordini del giro dell'autista in uso
+  const autistaInUso = camion.autistaInUso ? state.utenti.find(u => u.id === camion.autistaInUso) : null;
+  const nomeAut = autistaInUso ? (autistaInUso.nome + ' ' + (autistaInUso.cognome||'')).trim() : null;
+  const ordiniGiro = autistaInUso
+    ? state.ordini.filter(o => o.autistaDiGiro === autistaInUso.id && o.data === today() && o.stato !== 'annullato')
+    : [];
+
+  body.innerHTML = `
+    <div style="margin-bottom:14px;">
+      <span style="font-size:17px;font-weight:700;">🚛 ${camion.targa}</span>
+      <span style="font-size:13px;color:var(--text2);margin-left:8px;">${camion.nome}</span>
+      <span style="font-size:12px;color:var(--text3);margin-left:8px;">${camion.pedane.length} pedane</span>
+    </div>
+
+    ${autistaSelectHtml}
+
+    <div style="overflow-x:auto;max-width:100%;padding-bottom:8px;">
+      <div style="display:inline-flex;flex-direction:column;align-items:center;">
+        <!-- Cabina SVG -->
+        <svg width="${totalW}" height="50" viewBox="0 0 ${totalW} 50" style="display:block;">
+          <rect x="10" y="2" width="${totalW-20}" height="44" rx="13" ry="13"
+            fill="var(--surface2)" stroke="var(--border)" stroke-width="2"/>
+          <rect x="${totalW/2-30}" y="9" width="60" height="24" rx="4"
+            fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
+          <text x="${totalW/2}" y="25" text-anchor="middle" font-size="9"
+            fill="var(--text3)" font-family="monospace">${camion.targa}</text>
+        </svg>
+        <!-- Vano carico -->
+        <div style="position:relative;width:${totalW}px;height:${totalH}px;
+          border:2.5px solid var(--border);border-radius:0 0 8px 8px;
+          background:var(--bg);overflow:hidden;">
+          ${pedaneHtml}
+        </div>
+      </div>
+    </div>
+
+    ${isEditor ? `
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+        <button class="btn btn-green" onclick="salvaPianoCamion(${camion.id})">💾 Salva piano</button>
+        <button class="btn btn-outline" onclick="resetPianoCamion(${camion.id})">🔄 Reset pedane</button>
+      </div>
+      <div id="piano-save-ok-${camion.id}"
+        style="display:none;font-size:12px;color:var(--accent);margin-top:6px;">
+        ✅ Salvato — visibile al magazzino
+      </div>` : ''}
+
+    ${confermaHtml}
+  `;
+
+  // Sezione conferma carico (magazzino/admin, solo se non già confermato)
+  const confSection  = document.getElementById('piano-conferma-section');
+  const confChecklist = document.getElementById('piano-conferma-checklist');
+  if (confSection) {
+    const mostra = isConferma && !camion.confermato;
+    confSection.style.display = mostra ? 'block' : 'none';
+    if (mostra) {
+      document.querySelector('#piano-conferma-section .btn-green')
+        ?.setAttribute('onclick', `confermaCarico(${camion.id})`);
+      if (confChecklist) {
+        if (!autistaInUso) {
+          confChecklist.innerHTML = `<div style="padding:8px 0;font-size:13px;color:var(--orange);">
+            ⚠️ Nessun autista assegnato a questo camion — selezionane uno sopra prima di confermare.</div>`;
+        } else if (!ordiniGiro.length) {
+          confChecklist.innerHTML = `<div style="font-size:13px;color:var(--text3);padding:8px 0;">
+            Nessun ordine assegnato a <b>${nomeAut}</b> per oggi.</div>`;
+        } else {
+          const daCons = ordiniGiro.filter(o => o.stato !== 'consegnato').length;
+          confChecklist.innerHTML = `
+            <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">
+              Ordini di oggi per <b>${nomeAut}</b>:
+              ${ordiniGiro.length} totali —
+              <span style="color:var(--accent);font-weight:600;">${daCons} da consegnare</span>
+            </div>
+            ${ordiniGiro.map(o => {
+              const cl = state.clienti.find(x => x.id === o.clienteId);
+              const icon = o.stato==='consegnato'?'✅':o.stato==='preparazione'?'🔵':'🟡';
+              return `<div style="display:flex;align-items:center;gap:8px;
+                  padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
+                <span>${icon}</span>
+                <span><b>#${o.id}</b> ${cl?cl.nome:'?'}</span>
+                <span style="margin-left:auto;color:var(--text3);font-size:11px;">${cl?cl.giro:''}</span>
+              </div>`;
+            }).join('')}`;
+        }
+      }
+    }
+  }
+}
+
+async function setAutistaInUso(camionId, autistaId) {
+  const camion = state.camions.find(c => c.id === camionId);
+  if (!camion) return;
+  try {
+    await api('PATCH', `/api/camions/${camionId}/autista`, { autista_in_uso: autistaId||null });
+    camion.autistaInUso = autistaId||null;
+    camion.confermato = false; camion.confermatoDa = null; camion.confermatoAt = null;
+    renderPianoPage();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+function livePedanaUpdate(camionId, idx, valore) {
+  const c = state.camions.find(c => c.id === camionId);
+  if (c) c.pedane[idx].nota = valore;
+}
+
+async function salvaPianoCamion(camionId) {
+  const camion = state.camions.find(c => c.id === camionId);
+  if (!camion) return;
+  // Leggi valori correnti dai textarea
+  camion.pedane.forEach((p, i) => {
+    const inp = document.getElementById(`pedana-txt-${camionId}-${p.n}`);
+    if (inp) p.nota = inp.value;
+  });
+  try {
+    await api('PATCH', `/api/camions/${camionId}/pedane`, {
+      pedane: camion.pedane.map(p => ({ numero: p.n, nota: p.nota }))
+    });
+    camion.confermato = false; camion.confermatoDa = null; camion.confermatoAt = null;
+    const fb = document.getElementById(`piano-save-ok-${camionId}`);
+    if (fb) { fb.style.display = 'block'; setTimeout(() => fb.style.display='none', 3000); }
+    showToast(`Piano ${camion.targa} salvato! 💾`, 'success');
+    renderPianoPage();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+async function resetPianoCamion(camionId) {
+  if (!await customConfirm('Resettare tutte le pedane di questo camion?', 'Reset', 'Piano di Carico')) return;
+  const camion = state.camions.find(c => c.id === camionId);
+  if (!camion) return;
+  camion.pedane.forEach(p => p.nota = '');
+  try {
+    await api('PATCH', `/api/camions/${camionId}/pedane`, {
+      pedane: camion.pedane.map(p => ({ numero: p.n, nota: '' }))
+    });
+    camion.confermato = false; camion.confermatoDa = null; camion.confermatoAt = null;
+    renderPianoPage();
+    showToast('Pedane resettate');
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+async function confermaCarico(camionId) {
+  const camion = state.camions.find(c => c.id === camionId);
+  if (!camion) return;
+  if (!camion.autistaInUso) { showToast("Seleziona prima l'autista al volante!", 'warning'); return; }
+  try {
+    await api('PATCH', `/api/camions/${camionId}/conferma`, { confermato: true });
+    const u = state.currentUser;
+    camion.confermato = true;
+    camion.confermatoDa = (u.nome + ' ' + (u.cognome||'')).trim();
+    camion.confermatoAt = new Date().toISOString();
+    showToast(`✅ Carico ${camion.targa} confermato!`, 'success');
+    renderPianoPage();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+async function annullaConfermaCarico(camionId) {
+  const camion = state.camions.find(c => c.id === camionId);
+  if (!camion) return;
+  try {
+    await api('PATCH', `/api/camions/${camionId}/conferma`, { confermato: false });
+    camion.confermato = false; camion.confermatoDa = null; camion.confermatoAt = null;
+    showToast('Conferma annullata');
+    renderPianoPage();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+// ═══════════════════════════════════════════════
+// MAGAZZINO
+// ═══════════════════════════════════════════════
+
+function renderMagazzino() {
+  const filterData  = document.getElementById('filter-magazzino-data')?.value || today();
+  const filterGiro  = document.getElementById('filter-magazzino-giro')?.value || '';
+  const filterStato = document.getElementById('filter-magazzino-stato')?.value || '';
+
+  // Sottotitolo dinamico
+  const sub = document.getElementById('magazzino-sub');
+  if (sub) {
+    const label = filterData === today() ? 'Oggi' : formatDate(filterData);
+    sub.textContent = `Ordini — ${label}`;
+  }
+
+  let ordini = state.ordini.filter(o => o.data === filterData && o.stato !== 'annullato');
+
+  // Se nessun filtro stato, mostra solo quelli da lavorare (escludi consegnati)
+  if (!filterStato) {
+    ordini = ordini.filter(o => o.stato !== 'consegnato');
+  } else {
+    ordini = ordini.filter(o => o.stato === filterStato);
+  }
+
+  if (filterGiro) {
+    ordini = ordini.filter(o => getCliente(o.clienteId).giro === filterGiro);
+  }
+
+  // Ordina: preparazione prima, poi attesa, poi consegnati
+  const stOrd = { preparazione: 0, attesa: 1, consegnato: 2 };
+  ordini.sort((a, b) => (stOrd[a.stato] ?? 9) - (stOrd[b.stato] ?? 9));
+
+  const container = document.getElementById('magazzino-list');
+
+  if (!ordini.length) {
+    const isOggi = filterData === today();
+    let msg = isOggi ? 'Tutti gli ordini di oggi sono stati preparati! 🎉' : `Nessun ordine per il ${formatDate(filterData)}`;
+    if (filterGiro) msg = `Nessun ordine per il giro <b>${filterGiro}</b> — ${isOggi ? 'oggi' : formatDate(filterData)}`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><p>${msg}</p></div>`;
+    return;
+  }
+
+  container.innerHTML = ordini.map((o, i) => {
+    const c = getCliente(o.clienteId);
+    const a = getAgente(o.agenteId);
+    const inPrep = o.stato === 'preparazione';
+    const isCons = o.stato === 'consegnato';
+    const stef = o.stef ? `<span class="badge" style="background:var(--blue-light);color:var(--blue);font-size:10px;margin-left:4px;">🚛 STEF</span>` : '';
+    const dataNonCerta = o.dataNonCerta ? `<span class="badge" style="background:var(--accent2-light);color:var(--accent2);font-size:10px;margin-left:4px;">⚠️ Data non certa</span>` : '';
+
+    // Checklist lines when in preparation
+    const checkLines = inPrep ? o.linee.map((l, li) => {
+      const p = getProdotto(l.prodId);
+      const checked = l.preparato ? 'checked' : '';
+      const pesoInput = !p.pesoFisso
+        ? `<input type="number" step="0.1" min="0" placeholder="kg eff." value="${l.pesoEffettivo||''}"
+             style="width:80px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;"
+             onchange="setLinePesoEffettivo(${o.id},${li},this.value)">`
+        : `<span style="font-size:12px;color:var(--text3);">(fisso)</span>`;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);">
+        <input type="checkbox" ${checked} onchange="toggleLineaPreparata(${o.id},${li},this.checked)"
+          style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
+        <span style="flex:1;font-size:13px;${l.preparato?'text-decoration:line-through;color:var(--text3);':''}">${l.qty}× [${p.codice}] ${p.nome}</span>
+        ${pesoInput}
+      </div>`;
+    }).join('') : '';
+
+    return `
+    <div class="warehouse-card" style="${isCons ? 'opacity:0.6;' : ''}">
+      <div class="wh-num">${String(i+1).padStart(2,'0')}</div>
+      <div class="wh-info" style="flex:1;">
+        <div class="wh-client">${c.nome} ${stef} ${dataNonCerta}</div>
+        <div class="wh-detail">
+          ${c.giro ? `<span class="badge badge-blue" style="font-size:10px;margin-right:6px;">${c.giro}</span>` : ''}
+          Agente: ${a.nomeCompleto}${cons ? ` · 🚚 ${cons.nomeCompleto}` : ''}
+        </div>
+        ${inPrep
+          ? `<div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;">${checkLines}</div>`
+          : `<div class="wh-detail" style="margin-top:4px;">${o.linee.map(l => `${l.qty}× [${getProdotto(l.prodId).codice}] ${getProdotto(l.prodId).nome.split(' ').slice(0,2).join(' ')}`).join(', ')}</div>`
+        }
+        ${o.note ? `<div style="font-size:12px;color:var(--text2);margin-top:4px;">📝 ${o.note}</div>` : ''}
+      </div>
+      <div class="wh-status">
+        ${statoBadge(o.stato)}
+        ${isCons
+          ? `<span style="font-size:12px;color:var(--accent);margin-top:4px;">✅ Completato</span>`
+          : !inPrep
+            ? `<button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="setOrdinePrepara(${o.id})">📦 Preso in carico</button>`
+            : `<button class="btn btn-green btn-sm" onclick="confermaConsegna(${o.id})">✅ Pronto</button>`
+        }
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function setOrdinePrepara(id) {
+  state.ordini.find(o => o.id === id).stato = 'preparazione';
+  showToast('Ordine preso in carico!', 'success');
+  renderMagazzino();
+}
+
+// Checklist magazzino: spunta riga
+function toggleLineaPreparata(ordineId, lineIdx, val) {
+  const o = state.ordini.find(x => x.id === ordineId);
+  if (o) { o.linee[lineIdx].preparato = val; }
+}
+
+// Checklist magazzino: peso effettivo variabile
+function setLinePesoEffettivo(ordineId, lineIdx, val) {
+  const o = state.ordini.find(x => x.id === ordineId);
+  if (o) { o.linee[lineIdx].pesoEffettivo = parseFloat(val) || null; }
+}
+
+// ═══════════════════════════════════════════════
+// REPORT
+// ═══════════════════════════════════════════════
+
+async function renderReport() {
+  // Carica activity log fresco
+  if (state.currentUser?.ruolo === 'admin' || state.currentUser?.ruolo === 'direzione') {
+    try {
+      const logs = await api('GET', '/api/activity');
+      state.activityLog = (logs||[]).map(l => ({
+        ts: l.ts, userId: l.user_id, userName: l.user_name, action: l.action, detail: l.detail
+      }));
+    } catch(e) { /* ignora */ }
+  }
+  // Weekly bar chart
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    const count = state.ordini.filter(o => o.data === dateStr).length;
+    days.push({ label: d.toLocaleDateString('it-IT', {weekday:'short'}), count });
+  }
+  const maxDay = Math.max(...days.map(d => d.count), 1);
+  document.getElementById('chart-week').innerHTML = days.map(d => `
+    <div class="bar-wrap">
+      <div class="bar-val">${d.count||''}</div>
+      <div class="bar" style="height:${Math.max((d.count/maxDay)*110,2)}px;" title="${d.count} ordini"></div>
+      <div class="bar-label">${d.label}</div>
+    </div>
+  `).join('');
+
+  // Agenti chart
+  const agenti = state.utenti.filter(u => u.ruolo === 'autista');
+  const agChart = document.getElementById('chart-agenti');
+  const total = state.ordini.length || 1;
+  agChart.innerHTML = agenti.map(a => {
+    const n = state.ordini.filter(o => o.agenteId === a.id || o.autistaDiGiro === a.id).length;
+    const pct = Math.round(n / total * 100);
+    return `
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+          <span>${(a.nome+' '+(a.cognome||'')).trim()}</span>
+          <span style="font-family:'DM Mono',monospace;font-weight:600;">${n} ordini</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      </div>`;
+  }).join('');
+
+  // Top clienti
+  const cliData = state.clienti.map(c => ({
+    ...c,
+    n: state.ordini.filter(o => o.clienteId === c.id).length
+  })).sort((a,b) => b.n - a.n);
+
+  document.getElementById('report-clienti-table').innerHTML = cliData.map(c => `
+    <tr>
+      <td><b style="font-size:13px;">${c.nome}</b></td>
+      <td style="color:var(--text2);font-size:13px;">${c.localita}</td>
+      <td>${c.giro ? `<span class="badge badge-blue">${c.giro}</span>` : '—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-weight:700;">${c.n}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+            <div style="height:100%;width:${Math.round(c.n/total*100)}%;background:var(--accent);border-radius:3px;"></div>
+          </div>
+          <span style="font-size:12px;font-family:'DM Mono',monospace;color:var(--text3);">${Math.round(c.n/total*100)}%</span>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+
+  // Clienti acquisiti per agente
+  const agCliEl = document.getElementById('report-agenti-clienti');
+  if (agCliEl) {
+    agCliEl.innerHTML = agenti.map(a => {
+      const cliAgente = state.clienti.filter(c => c.agenteId === a.id);
+      return `
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:600;font-size:14px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--border);">
+            👤 ${(a.nome+' '+(a.cognome||'')).trim()} <span style="font-weight:400;color:var(--text2);font-size:13px;">(${cliAgente.length} clienti)</span>
+          </div>
+          ${cliAgente.length ? cliAgente.map(c => `
+            <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;">
+              <span class="badge badge-blue" style="font-size:10px;">${c.giro||'—'}</span>
+              <span>${c.nome}</span>
+              <span style="color:var(--text3);">${c.localita}</span>
+            </div>`).join('') : '<div style="font-size:13px;color:var(--text3);padding:4px 0;">Nessun cliente assegnato</div>'}
+        </div>`;
+    }).join('');
+  }
+  // Activity log (solo admin)
+  renderActivityLog();
+}
+
+// ═══════════════════════════════════════════════
+// CALENDARIO GIRI FISSI
+// ═══════════════════════════════════════════════
+
+const GIORNI_NOMI = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+
+function getNextGiroDate(giroName) {
+  const conf = state.giriCalendario.find(g => g.giro === giroName);
+  if (!conf || !conf.giorni.length) return null;
+  const oggi = new Date();
+  for (let delta = 0; delta <= 7; delta++) {
+    const d = new Date(oggi);
+    d.setDate(oggi.getDate() + delta);
+    if (conf.giorni.includes(d.getDay())) {
+      return d.toISOString().split('T')[0];
+    }
+  }
+  return null;
+}
+
+function renderImpostazioni() {
+  // Calendario giri
+  const el = document.getElementById('giri-calendar-list');
+  if (!el) return;
+  el.innerHTML = state.giriCalendario.map((g, gi) => {
+    const checkboxes = [1,2,3,4,5,6,0].map(d => `
+      <label style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;">
+        <input type="checkbox" ${g.giorni.includes(d)?'checked':''} 
+          onchange="toggleGiroGiorno(${gi},${d},this.checked)"
+          style="accent-color:var(--accent);">
+        <span style="font-size:11px;font-weight:500;">${GIORNI_NOMI[d]}</span>
+      </label>`).join('');
+    const prossima = getNextGiroDate(g.giro);
+    const prossimaLabel = prossima ? ` <span style="font-size:11px;color:var(--accent);">→ prossima: ${formatDate(prossima)}</span>` : '';
+    return `
+      <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);">
+        <div style="min-width:110px;font-weight:600;font-size:13px;text-transform:capitalize;">${g.giro} ${prossimaLabel}</div>
+        <div style="display:flex;gap:12px;">${checkboxes}</div>
+      </div>`;
+  }).join('');
+
+  // Carichi tentata vendita
+  const tEl = document.getElementById('tentata-config-list');
+  if (!tEl) return;
+  const autisti = state.utenti.filter(u => u.ruolo === 'autista');
+  tEl.innerHTML = autisti.map(a => {
+    const carico = state.carichiTentataVendita.find(c => c.userId === a.id) || { userId: a.id, linee: [] };
+    const lineeHtml = carico.linee.map((l, li) => {
+      const p = getProdotto(l.prodId);
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px;">
+        <span style="flex:1;">[${p.codice}] ${p.nome}</span>
+        <input type="number" value="${l.qty}" min="1" style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:12px;"
+          onchange="updateCaricoTentata(${a.id},${li},'qty',parseInt(this.value)||1)">
+        <button onclick="removeCaricoTentataLine(${a.id},${li})" style="background:none;border:none;cursor:pointer;color:var(--danger);">✕</button>
+      </div>`;
+    }).join('');
+    return `
+      <div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px;">
+        <div style="font-weight:600;margin-bottom:8px;">🚚 ${(a.nome+' '+(a.cognome||'')).trim()}</div>
+        ${lineeHtml || '<div style="font-size:13px;color:var(--text3);margin-bottom:8px;">Nessun prodotto nel carico predefinito</div>'}
+        <select onchange="addCaricoTentataLine(${a.id},parseInt(this.value));this.value=''" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:5px;margin-top:4px;">
+          <option value="">＋ Aggiungi prodotto…</option>
+          ${state.prodotti.map(p => `<option value="${p.id}">[${p.codice}] ${p.nome}</option>`).join('')}
+        </select>
+      </div>`;
+  }).join('');
+}
+
+function toggleGiroGiorno(gi, d, checked) {
+  const g = state.giriCalendario[gi];
+  if (checked) { if (!g.giorni.includes(d)) g.giorni.push(d); }
+  else { g.giorni = g.giorni.filter(x => x !== d); }
+  renderImpostazioni();
+}
+
+function addCaricoTentataLine(userId, prodId) {
+  if (!prodId) return;
+  let carico = state.carichiTentataVendita.find(c => c.userId === userId);
+  if (!carico) { carico = { userId, linee: [] }; state.carichiTentataVendita.push(carico); }
+  const existing = carico.linee.find(l => l.prodId === prodId);
+  if (existing) { existing.qty++; } else { carico.linee.push({ prodId, qty: 1 }); }
+  renderImpostazioni();
+}
+
+function removeCaricoTentataLine(userId, li) {
+  const carico = state.carichiTentataVendita.find(c => c.userId === userId);
+  if (carico) { carico.linee.splice(li, 1); renderImpostazioni(); }
+}
+
+function updateCaricoTentata(userId, li, field, val) {
+  const carico = state.carichiTentataVendita.find(c => c.userId === userId);
+  if (carico) carico.linee[li][field] = val;
+}
+
+// ═══════════════════════════════════════════════
+// TENTATA VENDITA (AUTISTA)
+// ═══════════════════════════════════════════════
+
+let tentataLines = [];
+
+function openTentataVendita() {
+  const userId = state.currentUser.id;
+  const carico = state.carichiTentataVendita.find(c => c.userId === userId);
+  tentataLines = carico ? carico.linee.map(l => ({...l})) : [];
+  acState.tentata = { value: null, query: '', focusIdx: -1 };
+  document.getElementById('ac-tentata-input').value = '';
+  document.getElementById('tentata-cliente').value = '';
+  document.getElementById('tentata-note').value = '';
+  renderTentataLines();
+  openModal('modal-tentata');
+}
+
+function renderTentataLines() {
+  const container = document.getElementById('tentata-lines-container');
+  container.innerHTML = tentataLines.map((l, i) => {
+    const p = getProdotto(l.prodId);
+    return `<div class="order-line">
+      <div style="flex:1;font-size:13px;">[${p.codice}] ${p.nome}</div>
+      <input type="number" class="qty-input" value="${l.qty}" min="1" onchange="tentataLines[${i}].qty=parseInt(this.value)||1" placeholder="Qtà">
+      <button class="line-delete" onclick="tentataLines.splice(${i},1);renderTentataLines()">✕</button>
+    </div>`;
+  }).join('') || '<div style="padding:8px;font-size:13px;color:var(--text3);">Nessun prodotto</div>';
+}
+
+function addTentataLine() {
+  tentataLines.push({ prodId: state.prodotti[0]?.id || null, qty: 1 });
+  renderTentataLines();
+}
+
+async function saveTentataVendita() {
+  const clienteId = parseInt(document.getElementById('tentata-cliente').value);
+  const note = document.getElementById('tentata-note').value.trim();
+  const validLines = tentataLines.filter(l => l.prodId);
+  if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
+  if (!validLines.length) { showToast('Aggiungi almeno un prodotto', 'warning'); return; }
+
+  const body = {
+    cliente_id: clienteId,
+    agente_id: state.currentUser.id,
+    data: today(),
+    stato: 'consegnato',
+    note: note ? `[TENTATA VENDITA] ${note}` : '[TENTATA VENDITA]',
+    linee: validLines.map(l => ({ prodotto_id: l.prodId, qty: l.qty })),
+  };
+  try {
+    const saved = await api('POST', '/api/ordini', body);
+    state.ordini.unshift(normalizeOrdine(saved));
+    closeModal('modal-tentata');
+    showToast('Tentata vendita registrata!', 'success');
+    renderAutistaView();
+  } catch(e) { showToast(e.message, 'warning'); }
+}
+
+// Aggiungo tentata all'acState e al sistema AC
+acState.tentata = { value: null, query: '', focusIdx: -1 };
+
+// ═══════════════════════════════════════════════
+// PDF RIEPILOGATIVO GIORNALIERO
+// ═══════════════════════════════════════════════
+
+function openPDFGiornaliero() {
+  document.getElementById('pdf-data').value = today();
+  document.getElementById('pdf-giro').value = '';
+  updatePDFPreview();
+  openModal('modal-pdf-giornaliero');
+}
+
+function updatePDFPreview() {
+  const data = document.getElementById('pdf-data').value || today();
+  const giro = document.getElementById('pdf-giro').value;
+  let ordini = state.ordini.filter(o => o.data === data && o.stato !== 'annullato');
+  if (giro) ordini = ordini.filter(o => getCliente(o.clienteId).giro === giro);
+
+  const preview = document.getElementById('pdf-preview');
+  if (!ordini.length) {
+    preview.innerHTML = '<div style="text-align:center;color:var(--text3);padding:20px;">Nessun ordine per questa data/filtro</div>';
+    return;
+  }
+
+  let totalRighe = 0;
+  const body = ordini.map((o, idx) => {
+    const c = getCliente(o.clienteId);
+    const a = getAgente(o.agenteId);
+    const flags = [o.stef ? '🚛 STEF' : '', o.dataNonCerta ? '⚠️' : '', o.tentataVendita ? '🚚 TV' : ''].filter(Boolean).join(' ');
+    totalRighe += o.linee.length;
+    return `<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #ddd;">
+      <div style="display:flex;justify-content:space-between;">
+        <b style="font-size:14px;">${String(idx+1).padStart(2,'0')}. ${c.nome}</b>
+        <span style="font-size:12px;color:#666;">${c.giro||''} ${flags}</span>
+      </div>
+      <div style="font-size:12px;color:#444;margin:2px 0;">${c.localita} · Agente: ${(a.nome+' '+(a.cognome||'')).trim()}</div>
+      <table style="width:100%;font-size:12px;margin-top:4px;border-collapse:collapse;">
+        <thead><tr style="background:#f5f5f5;"><th style="padding:3px 6px;text-align:left;">Prodotto</th><th style="padding:3px 6px;text-align:right;">Qtà</th><th style="padding:3px 6px;text-align:right;">€/u</th></tr></thead>
+        <tbody>
+          ${o.linee.map(l => {
+            const p = getProdotto(l.prodId);
+            return `<tr><td style="padding:2px 6px;">[${p.codice}] ${p.nome}</td><td style="padding:2px 6px;text-align:right;">${l.qty} ${p.um}</td><td style="padding:2px 6px;text-align:right;">${l.prezzoVendita ? `€${l.prezzoVendita.toFixed(2)}` : '—'}</td></tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      ${o.note ? `<div style="font-size:11px;color:#888;margin-top:4px;">📝 ${o.note}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  preview.innerHTML = `
+    <div style="font-weight:700;font-size:16px;text-align:center;margin-bottom:12px;border-bottom:2px solid #333;padding-bottom:8px;">
+      📄 NORBALAT — Riepilogo Ordini ${formatDate(data)} ${giro ? `· ${giro.toUpperCase()}` : ''}
+    </div>
+    ${body}
+    <div style="text-align:right;font-size:12px;color:#666;margin-top:8px;padding-top:8px;border-top:1px solid #ddd;">
+      Totale ordini: <b>${ordini.length}</b> · Totale righe: <b>${totalRighe}</b>
+    </div>`;
+}
+
+function stampaPDFGiornaliero() {
+  updatePDFPreview();
+  const data = document.getElementById('pdf-data').value || today();
+  const giro = document.getElementById('pdf-giro').value;
+  const content = document.getElementById('pdf-preview').innerHTML;
+
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Norbalat — Ordini ${data}</title>
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 13px; color: #1a1814; padding: 20px; max-width: 800px; margin: 0 auto; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 4px 8px; border: 1px solid #ddd; }
+      th { background: #f5f5f5; }
+      @media print { body { padding: 0; } }
+    </style>
+  </head><body>${content}
+<!-- Modal: Conferma generica -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <div class="modal-title" id="confirm-title">Conferma</div>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-message" style="font-size:14px;color:var(--text1);margin:0;line-height:1.5;"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="resolveConfirm(false)">Annulla</button>
+      <button class="btn btn-danger" id="confirm-ok-btn" onclick="resolveConfirm(true)">Elimina</button>
+    </div>
+  </div>
+</div>
+
+</body></html>`);
+  win.document.close();
+  win.print();
+}
+
+// ═══════════════════════════════════════════════
+// MODAL HELPERS
+// ═══════════════════════════════════════════════
+
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// ── Custom confirm (window.confirm è bloccato negli iframe) ──
+let _confirmResolve = null;
+
+function customConfirm(message, okLabel = 'Elimina', title = 'Conferma') {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('confirm-message').textContent = message;
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-ok-btn').textContent = okLabel;
+    document.getElementById('modal-confirm').classList.add('open');
+  });
+}
+
+function resolveConfirm(result) {
+  document.getElementById('modal-confirm').classList.remove('open');
+  if (_confirmResolve) { _confirmResolve(result); _confirmResolve = null; }
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === this) closeModal(this.id);
+  });
+});
+
+// ═══════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════
+
+function showToast(msg, type = '') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(20px)'; toast.style.transition = '0.3s'; setTimeout(() => toast.remove(), 300); }, 2500);
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+
+// Set today's date as default
+document.addEventListener('DOMContentLoaded', () => {
+  const dateInput = document.getElementById('ord-data');
+  if (dateInput) dateInput.value = today();
+});
+</script>
+</body>
+</html>
