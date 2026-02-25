@@ -2488,7 +2488,7 @@ function acFilter(type) {
     acState.cliente.query = q;
     acState.cliente.value = null;
     document.getElementById('ord-cliente').value = '';
-    document.getElementById('ac-cliente-input').classList.remove('has-value');
+    document.getElementById('ac-cliente-input')?.classList.remove('has-value');
     acRender('cliente');
     acOpen('cliente');
     document.getElementById('ord-cliente-note-box').style.display = 'none';
