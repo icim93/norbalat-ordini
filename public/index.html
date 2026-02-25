@@ -3640,7 +3640,7 @@ function renderMagazzino() {
         <div class="wh-client">${c.nome} ${stef} ${dataNonCerta}</div>
         <div class="wh-detail">
           ${c.giro ? `<span class="badge badge-blue" style="font-size:10px;margin-right:6px;">${c.giro}</span>` : ''}
-          Agente: ${a.nomeCompleto}${cons ? ` · 🚚 ${cons.nomeCompleto}` : ''}
+          Agente: ${a.nomeCompleto}${o.autistaDiGiro ? ` · 🚚 ${getAgente(o.autistaDiGiro).nomeCompleto}` : ''}
         </div>
         ${inPrep
           ? `<div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;">${checkLines}</div>`
