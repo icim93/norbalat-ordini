@@ -2975,13 +2975,17 @@ async function saveOrder() {
   if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
   if (!data)      { showToast('Inserisci la data', 'warning'); return; }
 
-  const linee = [];
-  document.querySelectorAll('.order-line-row').forEach(row => {
-    const prodId = parseInt(row.querySelector('.line-prod')?.value);
-    const qty    = parseFloat(row.querySelector('.line-qty')?.value);
-    if (prodId && qty > 0) linee.push({ prodotto_id: prodId, qty });
-  });
-  if (!linee.length) { showToast('Aggiungi almeno un prodotto', 'warning'); return; }
+  const linee = orderLines
+    .filter(l => l.prodId && Number(l.qty) > 0)
+    .map(l => ({
+      prodotto_id: l.prodId,
+      qty: l.qty
+    }));
+  
+  if (!linee.length) {
+    showToast('Aggiungi almeno un prodotto', 'warning');
+    return;
+  }
 
   const body = { cliente_id: clienteId, agente_id: agenteId, autista_di_giro: autistaDiGiro,
                  data, stato, note, data_non_certa: dataNonCerta, stef, linee };
