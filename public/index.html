@@ -1744,7 +1744,7 @@ function normalizeOrdine(o) {
     autistaDiGiro: o.autista_di_giro||null,
     insertedBy: o.inserted_by||null,
     insertedAt: o.inserted_at||null,
-    data: o.data||'',
+    data: (o.data||'').substring(0,10),
     stato: o.stato||'attesa',
     note: o.note||'',
     dataNonCerta: !!o.data_non_certa,
@@ -4005,22 +4005,6 @@ function stampaPDFGiornaliero() {
       @media print { body { padding: 0; } }
     </style>
   </head><body>${content}
-<!-- Modal: Conferma generica -->
-<div class="modal-overlay" id="modal-confirm">
-  <div class="modal" style="max-width:380px;">
-    <div class="modal-header">
-      <div class="modal-title" id="confirm-title">Conferma</div>
-    </div>
-    <div class="modal-body">
-      <p id="confirm-message" style="font-size:14px;color:var(--text1);margin:0;line-height:1.5;"></p>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="resolveConfirm(false)">Annulla</button>
-      <button class="btn btn-danger" id="confirm-ok-btn" onclick="resolveConfirm(true)">Elimina</button>
-    </div>
-  </div>
-</div>
-
 </body></html>`);
   win.document.close();
   win.print();
@@ -4088,5 +4072,23 @@ document.addEventListener('DOMContentLoaded', () => {
   if (dateInput) dateInput.value = today();
 });
 </script>
+
+
+<!-- Modal: Conferma generica -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <div class="modal-title" id="confirm-title">Conferma</div>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-message" style="font-size:14px;color:var(--text1);margin:0;line-height:1.5;"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="resolveConfirm(false)">Annulla</button>
+      <button class="btn btn-danger" id="confirm-ok-btn" onclick="resolveConfirm(true)">Elimina</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
