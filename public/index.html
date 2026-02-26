@@ -552,6 +552,32 @@
     gap: 10px;
     padding: 0;
   }
+  /* Piano carico migliorato */
+  .piano-camion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--surface2);
+    border-radius: 10px 10px 0 0;
+    border: 1.5px solid var(--border);
+    border-bottom: none;
+    cursor: pointer;
+  }
+  .piano-camion-header.confermato { background: #e8f5e9; border-color: var(--accent); }
+  .piano-camion-nome { font-weight: 700; font-size: 15px; }
+  .piano-camion-info { font-size: 12px; color: var(--text2); }
+  .piano-pedane-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 8px;
+    padding: 14px;
+    border: 1.5px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    background: var(--surface1);
+    margin-bottom: 16px;
+  }
   .pedana-card {
     background: var(--surface);
     border: 1.5px solid var(--border);
@@ -592,6 +618,7 @@
     white-space: pre-wrap;
   }
   .pedana-empty { color: var(--text3); font-style: italic; font-size: 12px; }
+  .row-selected { background: var(--accent-light) !important; }
 
   @media (max-width: 768px) {
     /* Layout */
@@ -957,6 +984,8 @@
                 <option value="diretto">Diretto</option>
               </select>
               <button class="btn btn-green" onclick="openNewCliente()">＋ Nuovo Cliente</button>
+              <button class="btn btn-outline" onclick="document.getElementById('import-clienti-file').click()" title="Importa/aggiorna clienti da Excel">📥 Excel</button>
+              <input type="file" id="import-clienti-file" accept=".xlsx,.xls" style="display:none" onchange="importClientiExcel(this)">
             </div>
           </div>
           <div class="table-scroll-wrap"><table>
@@ -1368,7 +1397,16 @@
           <textarea id="cl-note" placeholder="Es: Consegnare solo il martedì mattina, campanello interno 3…" style="min-height:70px;"></textarea>
         </div>
         <div class="field">
-          <label>Partita IVA *</label>
+          <label>Classificazione</label>
+          <select id="cl-classificazione">
+            <option value="">— Non specificata —</option>
+            <option value="Caseificio">🧀 Caseificio</option>
+            <option value="Alimentari">🏪 Alimentari</option>
+            <option value="Rivenditori">🔄 Rivenditori</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Partita IVA</label>
           <input type="text" id="cl-piva" placeholder="es. 01234567890" maxlength="16">
         </div>
         <div class="field">
@@ -1718,6 +1756,7 @@ function normalizeCliente(c) {
     autistaDiGiro: c.autista_di_giro||null,
     note: c.note||'',
     piva: c.piva||'',
+    classificazione: c.classificazione||'',
     condPagamento: c.cond_pagamento||'',
     eFornitore: !!c.e_fornitore,
   };
@@ -1753,6 +1792,8 @@ function normalizeOrdine(o) {
       prodId: l.prodotto_id,
       qty: l.qty,
       pesoEffettivo: l.peso_effettivo||null,
+      isPedana: !!l.is_pedana,
+      notaRiga: l.nota_riga||'',
     })),
   };
 }
@@ -1946,6 +1987,7 @@ function statoBadge(stato) {
 
 function lineeResume(linee) {
   return linee.map(l => {
+    const pedana = l.isPedana ? ' <b style="color:var(--accent)">🪵PDN</b>' : '';
     const p = getProdotto(l.prodId);
     return `${l.qty} ${p.um} ${p.nome.split(' ').slice(0,3).join(' ')}`;
   }).join(', ');
@@ -2007,13 +2049,36 @@ function renderOrdiniTable() {
   if (q) list = list.filter(o => getCliente(o.clienteId).nome.toLowerCase().includes(q) || getAgente(o.agenteId).nomeCompleto.toLowerCase().includes(q));
   if (filterStato) list = list.filter(o => o.stato === filterStato);
 
+  // Toolbar bulk
+  const toolbar = document.getElementById('bulk-toolbar');
+  if (toolbar) {
+    if (selectedOrders.size > 0) {
+      toolbar.style.display = 'flex';
+      const lbl = toolbar.querySelector('#bulk-count');
+      if (lbl) lbl.textContent = `${selectedOrders.size} selezionat${selectedOrders.size===1?'o':'i'}`;
+    } else {
+      toolbar.style.display = 'none';
+    }
+  }
+
   const tbody = document.getElementById('ordini-table');
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div><p>Nessun ordine trovato</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📋</div><p>Nessun ordine trovato</p></div></td></tr>`;
     return;
   }
-  tbody.innerHTML = list.map(o => `
-    <tr>
+  const allIds = list.map(o => o.id);
+  const allSelected = allIds.length > 0 && allIds.every(id => selectedOrders.has(id));
+  const thCheck = document.getElementById('th-select-all');
+  if (thCheck) thCheck.checked = allSelected;
+
+  tbody.innerHTML = list.map(o => {
+    const checked = selectedOrders.has(o.id) ? 'checked' : '';
+    return `
+    <tr class="${selectedOrders.has(o.id) ? 'row-selected' : ''}">
+      <td style="width:36px;padding:8px 6px;">
+        <input type="checkbox" ${checked} onchange="toggleSelectOrder(${o.id},this.checked)"
+          style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+      </td>
       <td><span style="font-family:'DM Mono',monospace;font-weight:600;color:var(--accent);">#${o.id}</span></td>
       <td><b>${getCliente(o.clienteId).nome}</b></td>
       <td>${formatDate(o.data)}</td>
@@ -2029,8 +2094,43 @@ function renderOrdiniTable() {
         <button class="btn btn-outline btn-sm" onclick="openDettaglio(${o.id})">👁️</button>
         <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id})">🗑️</button>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
+}
+
+function toggleSelectOrder(id, checked) {
+  if (checked) selectedOrders.add(id);
+  else selectedOrders.delete(id);
+  renderOrdiniTable();
+}
+
+function selectAllOrders(checked) {
+  const q = (document.getElementById('search-ordini')?.value || '').toLowerCase();
+  const filterStato = document.getElementById('filter-stato')?.value || '';
+  let list = [...state.ordini];
+  if (q) list = list.filter(o => getCliente(o.clienteId).nome.toLowerCase().includes(q));
+  if (filterStato) list = list.filter(o => o.stato === filterStato);
+  if (checked) list.forEach(o => selectedOrders.add(o.id));
+  else selectedOrders.clear();
+  renderOrdiniTable();
+}
+
+async function deleteSelectedOrders() {
+  if (!selectedOrders.size) return;
+  const n = selectedOrders.size;
+  if (!await customConfirm(`Eliminare ${n} ordine${n>1?'i':''}?`, 'Elimina tutti', 'Eliminazione multipla')) return;
+  const ids = [...selectedOrders];
+  let ok = 0;
+  for (const id of ids) {
+    try {
+      await api('DELETE', `/api/ordini/${id}`);
+      state.ordini = state.ordini.filter(x => x.id !== id);
+      selectedOrders.delete(id);
+      ok++;
+    } catch(e) { /* ignora singolo errore */ }
+  }
+  showToast(`${ok} ordine${ok>1?'i':''} eliminat${ok>1?'i':'o'} ✅`, 'success');
+  renderOrdiniTable();
 }
 
 // ═══════════════════════════════════════════════
@@ -2056,6 +2156,7 @@ function renderClientiTable() {
           <div>
             <b style="font-size:13px;">${c.nome}</b>
             ${c.note ? `<div style="font-size:11px;color:var(--blue);margin-top:1px;">📌 ${c.note.substring(0,50)}${c.note.length>50?'…':''}</div>` : ''}
+            ${c.classificazione ? `<div style="font-size:10px;color:var(--text3);margin-top:1px;">${c.classificazione === 'Caseificio' ? '🧀' : c.classificazione === 'Alimentari' ? '🏪' : '🔄'} ${c.classificazione}${c.eFornitore?' · 🔁 Fornitore':''}</div>` : (c.eFornitore ? '<div style="font-size:10px;color:var(--text3);margin-top:1px;">🔁 Fornitore</div>' : '')}
           </div>
         </div>
       </td>
@@ -2078,6 +2179,7 @@ function openNewCliente() {
   document.getElementById('cl-giro').value = '';
   document.getElementById('cl-note').value = '';
   document.getElementById('cl-piva').value = '';
+  document.getElementById('cl-classificazione').value = '';
   document.getElementById('cl-condpag').value = '';
   document.getElementById('cl-efornitore').checked = false;
   populateAgenteSelect('cl-agente', null);
@@ -2093,6 +2195,7 @@ function openEditCliente(id) {
   document.getElementById('cl-giro').value = c.giro;
   document.getElementById('cl-note').value = c.note || '';
   document.getElementById('cl-piva').value = c.piva || '';
+  document.getElementById('cl-classificazione').value = c.classificazione || '';
   document.getElementById('cl-condpag').value = c.condPagamento || '';
   document.getElementById('cl-efornitore').checked = c.eFornitore || false;
   populateAgenteSelect('cl-agente', c.agenteId);
@@ -2116,6 +2219,7 @@ async function saveCliente() {
     agente_id:      parseInt(document.getElementById('cl-agente').value)||null,
     note:           document.getElementById('cl-note').value.trim(),
     piva:           document.getElementById('cl-piva').value.trim(),
+    classificazione: document.getElementById('cl-classificazione').value,
     cond_pagamento: document.getElementById('cl-condpag').value.trim(),
     e_fornitore:    document.getElementById('cl-efornitore').checked,
   };
@@ -2431,6 +2535,7 @@ async function deleteUtente(id) {
 // ═══════════════════════════════════════════════
 
 let orderLines = [];
+let selectedOrders = new Set();
 
 function openNewOrder() {
   state.editingId = null;
@@ -2452,7 +2557,13 @@ function openNewOrder() {
 function openEditOrder(id) {
   const o = state.ordini.find(x => x.id === id);
   state.editingId = id;
-  orderLines = o.linee.map(l => ({...l}));
+  orderLines = o.linee.map(l => ({
+    prodId: l.prodId,
+    qty: l.qty,
+    isPedana: !!l.isPedana,
+    notaRiga: l.notaRiga||'',
+    pesoEffettivo: l.pesoEffettivo||null,
+  }));
   document.getElementById('modal-ordine-title').textContent = `Modifica Ordine #${id}`;
   document.getElementById('ord-data').value = o.data;
   document.getElementById('ord-stato').value = o.stato;
@@ -2667,10 +2778,11 @@ function renderOrderLines() {
   const container = document.getElementById('ord-lines-container');
   container.innerHTML = orderLines.map((l, i) => {
     const p = l.prodId ? getProdotto(l.prodId) : null;
+    const isPedana = !!l.isPedana;
     return `
-    <div class="order-line" id="ord-line-${i}">
-      <div style="flex:1;">
-        <div class="ac-wrap">
+    <div class="order-line" id="ord-line-${i}" style="flex-wrap:wrap;gap:6px;">
+      <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
+        <div class="ac-wrap" style="flex:1;min-width:0;">
           <input type="text" class="ac-input${p ? ' has-value' : ''}"
             id="ac-prod-input-${i}"
             value="${p ? '['+p.codice+'] '+p.nome : ''}"
@@ -2681,13 +2793,25 @@ function renderOrderLines() {
             onkeydown="acProdKey(event,${i})">
           <div class="ac-dropdown" id="ac-prod-dd-${i}"></div>
         </div>
-        ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">📦 ${p.packaging}</div>` : ''}
-        ${p && p.note ? `<div style="font-size:11px;color:var(--blue);margin-top:2px;">📌 ${p.note}</div>` : ''}
+        <input type="number" class="qty-input" value="${l.qty||1}" min="1"
+          onchange="orderLines[${i}].qty=parseInt(this.value)||1"
+          placeholder="Qtà" style="width:62px;flex-shrink:0;">
+        <button title="${isPedana ? '🪵 Pedana intera' : '📦 Pezzo/collo'}"
+          onclick="orderLines[${i}].isPedana=!orderLines[${i}].isPedana;renderOrderLines()"
+          style="flex-shrink:0;width:36px;height:36px;border-radius:8px;border:1.5px solid ${isPedana ? 'var(--accent)' : 'var(--border)'};background:${isPedana ? 'var(--accent-light)' : 'var(--surface2)'};cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;"
+          title="${isPedana ? 'Pedana intera — clicca per tornare a pezzo' : 'Pezzo/collo — clicca per pedana intera'}">
+          ${isPedana ? '🪵' : '📦'}
+        </button>
+        <button class="line-delete" onclick="removeOrderLine(${i})" style="flex-shrink:0;">✕</button>
       </div>
-      <input type="number" class="qty-input" value="${l.qty||1}" min="1"
-        onchange="orderLines[${i}].qty=parseInt(this.value)||1"
-        placeholder="Qtà" style="width:70px;flex-shrink:0;">
-      <button class="line-delete" onclick="removeOrderLine(${i})">✕</button>
+      ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);width:100%;padding-left:2px;">📦 ${p.packaging}${isPedana ? ' <b style="color:var(--accent);">· PEDANA INTERA</b>' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;width:100%;padding-left:2px;">🪵 PEDANA INTERA</div>` : '')}
+      ${p && p.note ? `<div style="font-size:11px;color:var(--blue);width:100%;padding-left:2px;">📌 ${p.note}</div>` : ''}
+      <div style="width:100%;padding-left:2px;">
+        <input type="text" value="${l.notaRiga||''}"
+          placeholder="📝 Nota riga (es. nuovo lotto, data scadenza…)"
+          oninput="orderLines[${i}].notaRiga=this.value"
+          style="width:100%;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);">
+      </div>
     </div>`;
   }).join('') || '<div style="padding:12px;color:var(--text3);font-size:13px;">Nessun prodotto aggiunto</div>';
 }
@@ -2979,7 +3103,9 @@ async function saveOrder() {
     .filter(l => l.prodId && Number(l.qty) > 0)
     .map(l => ({
       prodotto_id: l.prodId,
-      qty: l.qty
+      qty: l.qty,
+      is_pedana: !!l.isPedana,
+      nota_riga: l.notaRiga||''
     }));
   
   if (!linee.length) {
@@ -3407,10 +3533,12 @@ function renderPianoBody(isEditor, isConferma) {
     : [];
 
   body.innerHTML = `
-    <div style="margin-bottom:14px;">
-      <span style="font-size:17px;font-weight:700;">🚛 ${camion.targa}</span>
-      <span style="font-size:13px;color:var(--text2);margin-left:8px;">${camion.nome}</span>
-      <span style="font-size:12px;color:var(--text3);margin-left:8px;">${camion.pedane.length} pedane</span>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;padding:14px 16px;background:var(--surface2);border-radius:var(--radius);border:1.5px solid var(--border);">
+      <div>
+        <div style="font-size:17px;font-weight:700;">🚛 ${camion.targa} <span style="font-size:13px;font-weight:400;color:var(--text2);">${camion.nome}</span></div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px;">${camion.pedane.length} pedane · ${ordiniGiro.length ? ordiniGiro.length+' ordini oggi' : 'Nessun ordine assegnato oggi'}</div>
+      </div>
+      ${ordiniGiro.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;">${ordiniGiro.slice(0,4).map(o=>`<span class="badge badge-blue" style="font-size:11px;">${getCliente(o.clienteId).nome.split(' ').slice(0,2).join(' ')}</span>`).join('')}${ordiniGiro.length>4?`<span class="badge" style="font-size:11px;">+${ordiniGiro.length-4}</span>`:''}</div>` : ''}
     </div>
 
     ${autistaSelectHtml}
@@ -3970,7 +4098,9 @@ function updatePDFPreview() {
         <tbody>
           ${o.linee.map(l => {
             const p = getProdotto(l.prodId);
-            return `<tr><td style="padding:2px 6px;">[${p.codice}] ${p.nome}</td><td style="padding:2px 6px;text-align:right;">${l.qty} ${p.um}</td><td style="padding:2px 6px;text-align:right;">${l.prezzoVendita ? `€${l.prezzoVendita.toFixed(2)}` : '—'}</td></tr>`;
+            const pedanaTag = l.isPedana ? ' <b style="color:#2e7d32;">[PDN]</b>' : '';
+            const notaTag = l.notaRiga ? `<br><span style="color:#888;font-size:11px;">📝 ${l.notaRiga}</span>` : '';
+            return `<tr><td style="padding:2px 6px;">[${p.codice}] ${p.nome}${pedanaTag}${notaTag}</td><td style="padding:2px 6px;text-align:right;">${l.qty} ${p.um}</td><td style="padding:2px 6px;text-align:right;">${l.prezzoVendita ? `€${l.prezzoVendita.toFixed(2)}` : '—'}</td></tr>`;
           }).join('')}
         </tbody>
       </table>
@@ -4071,6 +4201,86 @@ document.addEventListener('DOMContentLoaded', () => {
   const dateInput = document.getElementById('ord-data');
   if (dateInput) dateInput.value = today();
 });
+
+// ═══════════════════════════════════════════════
+// IMPORT EXCEL CLIENTI (SheetJS)
+// ═══════════════════════════════════════════════
+async function importClientiExcel(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  // Carica SheetJS dinamicamente se non presente
+  if (!window.XLSX) {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  const data = await file.arrayBuffer();
+  const wb = XLSX.read(data);
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+  // Headers attesi: intestazione, Partitaiva, Localita, giro, Lun, Mar, Mer, Gio, Ven, fornitore, Caseificio, Alimentari, Rivenditori
+  if (rows.length < 2) { showToast('File vuoto o non valido', 'warning'); return; }
+
+  const giroMap = {
+    'andria': 'bari nord', 'bari nord': 'bari nord',
+    'bari/foggia': 'bari/foggia', 'bari': 'bari/foggia',
+    'calabria': 'calabria', 'lecce': 'lecce', 'lecce est': 'lecce est',
+    'murgia': 'murgia', 'stef': 'stef', 'taranto': 'taranto',
+    "valle d'itria": 'valle itria', 'valle itria': 'valle itria',
+    'variabile': 'variabile', 'diretto': 'diretto', 'foggia': 'foggia'
+  };
+
+  let ok = 0, err = 0, skip = 0;
+  const total = rows.slice(1).filter(r => r[0]).length;
+  showToast(`📥 Importazione ${total} clienti…`);
+
+  for (const row of rows.slice(1)) {
+    const nome = (row[0]||'').toString().trim();
+    if (!nome) continue;
+
+    // Partita IVA: numero → stringa con zero iniziale se necessario
+    let piva = '';
+    if (row[1]) {
+      piva = row[1].toString().trim();
+      // Se numerico e manca lo 0 iniziale (11 cifre), aggiungilo
+      if (/^\d+$/.test(piva) && piva.length === 10) piva = '0' + piva;
+    }
+
+    const localita = (row[2]||'').toString().trim();
+    const giroRaw  = (row[3]||'').toString().trim().toLowerCase();
+    const giro     = giroMap[giroRaw] || giroRaw;
+    const eFornitore = !!(row[9] && row[9].toString().trim());
+    const classe = row[10] ? 'Caseificio' : row[11] ? 'Alimentari' : row[12] ? 'Rivenditori' : '';
+
+    const payload = { nome, localita, giro, piva, e_fornitore: eFornitore, classificazione: classe, note: '', cond_pagamento: '' };
+
+    // Cerca cliente esistente per nome
+    const existing = state.clienti.find(c => c.nome.toLowerCase() === nome.toLowerCase());
+    try {
+      let saved;
+      if (existing) {
+        saved = await api('PUT', `/api/clienti/${existing.id}`, payload);
+        const idx = state.clienti.findIndex(c => c.id === existing.id);
+        if (idx >= 0) state.clienti[idx] = { ...state.clienti[idx], ...payload, id: existing.id };
+        skip++;
+      } else {
+        saved = await api('POST', '/api/clienti', payload);
+        state.clienti.push({ id: saved.id, ...payload, eFornitore, classificazione: classe });
+        ok++;
+      }
+    } catch(e) { err++; }
+  }
+
+  showToast(`✅ Import completato: ${ok} nuovi, ${skip} aggiornati${err ? ', '+err+' errori' : ''}`, 'success');
+  renderClientiTable();
+}
 </script>
 
 
