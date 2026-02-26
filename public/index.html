@@ -1628,37 +1628,85 @@
 
 <!-- Modal: PDF Riepilogativo Giornaliero -->
 <div class="modal-overlay" id="modal-pdf-giornaliero">
-  <div class="modal" style="max-width:700px;">
+  <div class="modal" style="max-width:760px;">
     <div class="modal-header">
-      <div class="modal-title">📄 PDF Riepilogativo Giornaliero</div>
+      <div class="modal-title">📄 Report Giornaliero</div>
       <button class="modal-close" onclick="closeModal('modal-pdf-giornaliero')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-row">
-        <div class="field">
+      <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
+        <div class="field" style="min-width:140px;">
           <label>Data</label>
-          <input type="date" id="pdf-data">
+          <input type="date" id="pdf-data" onchange="updatePDFPreview()">
         </div>
-        <div class="field">
-          <label>Filtro giro</label>
-          <select id="pdf-giro">
-            <option value="">— Tutti i giri —</option>
-            <option value="bari nord">Bari Nord / Andria</option>
-            <option value="bari/foggia">Bari / Foggia</option>
-            <option value="murgia">Murgia</option>
-            <option value="taranto">Taranto</option>
-            <option value="lecce">Lecce</option>
-            <option value="lecce est">Lecce Est</option>
-            <option value="valle itria">Valle d'Itria</option>
-            <option value="calabria">Calabria</option>
-            <option value="foggia">Foggia</option>
-            <option value="diretto">Diretto</option>
-            <option value="stef">STEF</option>
-            <option value="variabile">Variabile</option>
-          </select>
+        <div class="field" style="flex:1;min-width:200px;">
+          <label>Filtra per giro (lascia vuoto = tutti)</label>
+          <div style="border:1px solid var(--border);border-radius:8px;padding:6px 8px;max-height:120px;overflow-y:auto;background:var(--surface);">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="bari nord" onchange="updatePDFPreview()" class="pdf-giro-cb" style="width:14px;height:14px;accent-color:var(--accent);">
+                Bari Nord / Andria
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="bari/foggia" onchange="updatePDFPreview()" class="pdf-giro-cb" style="width:14px;height:14px;accent-color:var(--accent);">
+                Bari / Foggia
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="murgia" onchange="updatePDFPreview()" class="pdf-giro-cb" style="width:14px;height:14px;accent-color:var(--accent);">
+                Murgia
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="taranto" onchange="updatePDFPreview()" class="pdf-giro-cb" style="width:14px;height:14px;accent-color:var(--accent);">
+                Taranto
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="lecce" onchange="updatePDFPreview()" class="pdf-giro-cb" style="width:14px;height:14px;accent-color:var(--accent);">
+                Lecce
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="lecce est" onchange="updatePDFPreview()" class="pdf-giro-cb" style="width:14px;height:14px;accent-color:var(--accent);">
+                Lecce Est
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="valle itria" onchange="updatePDFPreview()" class="pdf-giro-cb" style="width:14px;height:14px;accent-color:var(--accent);">
+                Valle d'Itria
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="calabria" onchange="updatePDFPreview()" class="pdf-giro-cb" style="width:14px;height:14px;accent-color:var(--accent);">
+                Calabria
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="foggia" onchange="updatePDFPreview()" class="pdf-giro-cb" style="width:14px;height:14px;accent-color:var(--accent);">
+                Foggia
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="diretto" onchange="updatePDFPreview()" class="pdf-giro-cb" style="width:14px;height:14px;accent-color:var(--accent);">
+                Diretto
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="stef" onchange="updatePDFPreview()" class="pdf-giro-cb" style="width:14px;height:14px;accent-color:var(--accent);">
+                STEF
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:13px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <input type="checkbox" value="variabile" onchange="updatePDFPreview()" class="pdf-giro-cb" style="width:14px;height:14px;accent-color:var(--accent);">
+                Variabile
+              </label>
+          </div>
+        </div>
+        <div class="field" style="min-width:180px;">
+          <label>Tipo report</label>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
+              <input type="radio" name="pdf-tipo" value="magazzino" checked onchange="updatePDFPreview()" style="accent-color:var(--accent);">
+              <span>📦 Magazzino <span style="font-size:11px;color:var(--text3);">(pezzi da preparare)</span></span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
+              <input type="radio" name="pdf-tipo" value="fatturazione" onchange="updatePDFPreview()" style="accent-color:var(--accent);">
+              <span>💶 Fatturazione <span style="font-size:11px;color:var(--text3);">(pesi effettivi)</span></span>
+            </label>
+          </div>
         </div>
       </div>
-      <div id="pdf-preview" style="border:1px solid var(--border);border-radius:8px;padding:16px;max-height:350px;overflow-y:auto;font-size:13px;"></div>
+      <div id="pdf-preview" style="border:1px solid var(--border);border-radius:8px;padding:16px;max-height:360px;overflow-y:auto;font-size:13px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-pdf-giornaliero')">Chiudi</button>
@@ -1801,6 +1849,7 @@ function normalizeOrdine(o) {
       pesoEffettivo: l.peso_effettivo||null,
       isPedana: !!l.is_pedana,
       notaRiga: l.nota_riga||'',
+      unitaMisura: l.unita_misura||'pezzi',
     })),
   };
 }
@@ -2569,6 +2618,7 @@ function openEditOrder(id) {
     qty: l.qty,
     isPedana: !!l.isPedana,
     notaRiga: l.notaRiga||'',
+    unitaMisura: l.unitaMisura||'pezzi',
     pesoEffettivo: l.pesoEffettivo||null,
   }));
   document.getElementById('modal-ordine-title').textContent = `Modifica Ordine #${id}`;
@@ -2786,6 +2836,7 @@ function renderOrderLines() {
   container.innerHTML = orderLines.map((l, i) => {
     const p = l.prodId ? getProdotto(l.prodId) : null;
     const isPedana = !!l.isPedana;
+    const unitVal = l.unitaMisura || 'pezzi';
     return `
     <div class="order-line" id="ord-line-${i}">
       <div style="display:flex;align-items:center;gap:6px;">
@@ -2803,8 +2854,14 @@ function renderOrderLines() {
         </div>
         <input type="number" class="qty-input" value="${l.qty||1}" min="1"
           onchange="orderLines[${i}].qty=parseInt(this.value)||1"
-          placeholder="Qtà" style="width:64px;flex-shrink:0;">
-        <button onclick="orderLines[${i}].isPedana=!orderLines[${i}].isPedana;renderOrderLines()"
+          placeholder="Qtà" style="width:56px;flex-shrink:0;">
+        <input type="text" value="${unitVal}"
+          oninput="orderLines[${i}].unitaMisura=this.value.trim()||'pezzi'"
+          placeholder="um"
+          title="Unità di misura (es. pezzi, lt, kg, cartoni…)"
+          style="width:56px;flex-shrink:0;font-size:12px;padding:6px 6px;border:1px solid var(--border);border-radius:6px;background:${isPedana?'var(--accent-light)':'var(--surface2)'};color:var(--text2);text-align:center;"
+          ${isPedana ? 'disabled' : ''}>
+        <button onclick="orderLines[${i}].isPedana=!orderLines[${i}].isPedana;if(orderLines[${i}].isPedana)orderLines[${i}].unitaMisura='pedana';else orderLines[${i}].unitaMisura='pezzi';renderOrderLines()"
           title="${isPedana ? 'Pedana intera — clicca per tornare a pezzo' : 'Pezzo/collo — clicca per pedana intera'}"
           style="flex-shrink:0;width:36px;height:36px;border-radius:8px;border:1.5px solid ${isPedana ? 'var(--accent)' : 'var(--border)'};background:${isPedana ? 'var(--accent-light)' : 'var(--surface2)'};cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">
           ${isPedana ? '🪵' : '📦'}
@@ -3091,7 +3148,8 @@ async function saveOrder() {
       prodotto_id: l.prodId,
       qty: l.qty,
       is_pedana: !!l.isPedana,
-      nota_riga: l.notaRiga||''
+      nota_riga: l.notaRiga||'',
+      unita_misura: l.unitaMisura||'pezzi'
     }));
   
   if (!linee.length) {
@@ -4050,16 +4108,25 @@ acState.tentata = { value: null, query: '', focusIdx: -1 };
 
 function openPDFGiornaliero() {
   document.getElementById('pdf-data').value = today();
-  document.getElementById('pdf-giro').value = '';
+  document.querySelectorAll('.pdf-giro-cb').forEach(cb => cb.checked = false);
+  const mag = document.querySelector('input[name="pdf-tipo"][value="magazzino"]');
+  if (mag) mag.checked = true;
   updatePDFPreview();
   openModal('modal-pdf-giornaliero');
 }
 
+function getPDFGiriFiltro() {
+  const cbs = document.querySelectorAll('.pdf-giro-cb:checked');
+  return cbs.length ? [...cbs].map(cb => cb.value) : null; // null = tutti
+}
+
 function updatePDFPreview() {
   const data = document.getElementById('pdf-data').value || today();
-  const giroFilter = document.getElementById('pdf-giro').value;
+  const giriSel = getPDFGiriFiltro();
+  const tipo = document.querySelector('input[name="pdf-tipo"]:checked')?.value || 'magazzino';
+
   let ordini = state.ordini.filter(o => o.data === data && o.stato !== 'annullato');
-  if (giroFilter) ordini = ordini.filter(o => getCliente(o.clienteId).giro === giroFilter);
+  if (giriSel) ordini = ordini.filter(o => giriSel.includes(getCliente(o.clienteId).giro));
 
   const preview = document.getElementById('pdf-preview');
   if (!ordini.length) {
@@ -4076,45 +4143,67 @@ function updatePDFPreview() {
   });
   const giri = Object.keys(giriMap).sort();
 
-  // Funzione per generare HTML ordini di un giro
-  function ordineHtml(o) {
+  function autistaGiro(giroNome) {
+    const au = state.utenti.find(u =>
+      u.ruolo === 'autista' && (u.giriConsegna||[]).some(g => g.toLowerCase() === giroNome.toLowerCase())
+    );
+    return au ? (au.nome + ' ' + (au.cognome||'')).trim() : '';
+  }
+
+  // ── REPORT MAGAZZINO: nome prodotto + qtà + unità ──
+  function ordineHtmlMag(o) {
     const cl = getCliente(o.clienteId);
     const linee = o.linee.map(l => {
       const p = getProdotto(l.prodId);
-      const pedana = l.isPedana ? ' <b>[PDN]</b>' : '';
+      const um = l.isPedana ? 'pedana' : (l.unitaMisura || 'pezzi');
+      const qty = l.qty || 1;
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
-      return `<div style="display:flex;justify-content:space-between;padding:1px 0;font-size:12px;">
-        <span>[${p.codice}] ${p.nome}${pedana}${nota}</span>
-        <span style="white-space:nowrap;margin-left:8px;font-weight:600;">${l.qty} ${p.um}${l.prezzoVendita ? ' — €'+parseFloat(l.prezzoVendita).toFixed(2) : ''}</span>
+      return `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;border-bottom:1px dotted #eee;">
+        <span>${p.nome}${nota}</span>
+        <span style="white-space:nowrap;margin-left:8px;font-weight:700;">${qty} ${um}</span>
       </div>`;
     }).join('');
-    const flags = [o.stef ? '🚛 STEF' : '', o.dataNonCerta ? '⚠️ data incerta' : ''].filter(Boolean).join(' · ');
-    return `<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #e0e0e0;">
-      <div style="font-weight:700;font-size:13px;text-decoration:underline;">${cl.nome}</div>
-      ${flags ? `<div style="font-size:10px;color:#888;margin-bottom:2px;">${flags}</div>` : ''}
+    const flags = [o.stef ? '🚛 STEF' : '', o.dataNonCerta ? '⚠️' : ''].filter(Boolean).join(' ');
+    return `<div style="margin-bottom:10px;padding-bottom:6px;">
+      <div style="font-weight:700;font-size:13px;text-decoration:underline;">${cl.nome}${flags ? ' <span style="font-weight:400;font-size:11px;">'+flags+'</span>' : ''}</div>
+      ${o.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">📝 ${o.note}</div>` : ''}
       ${linee || '<div style="font-size:11px;color:#aaa;">nessun prodotto</div>'}
-      ${o.note ? `<div style="font-size:11px;color:#666;margin-top:2px;">📝 ${o.note}</div>` : ''}
     </div>`;
   }
 
-  // Layout 2 colonne (o più se ci sono più giri)
+  // ── REPORT FATTURAZIONE: nome prodotto + peso effettivo ──
+  function ordineHtmlFatt(o) {
+    const cl = getCliente(o.clienteId);
+    const linee = o.linee.map(l => {
+      const p = getProdotto(l.prodId);
+      const um = l.isPedana ? 'pedana' : (l.unitaMisura || 'pezzi');
+      const qty = l.qty || 1;
+      const peso = l.pesoEffettivo ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>` : `<span style="color:#bbb;">${qty} ${um} — peso da inserire</span>`;
+      const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
+      return `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;border-bottom:1px dotted #eee;">
+        <span>${p.nome}${nota}</span>
+        <span style="white-space:nowrap;margin-left:8px;">${peso}</span>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:10px;padding-bottom:6px;">
+      <div style="font-weight:700;font-size:13px;text-decoration:underline;">${cl.nome}</div>
+      ${o.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">📝 ${o.note}</div>` : ''}
+      ${linee || '<div style="font-size:11px;color:#aaa;">nessun prodotto</div>'}
+    </div>`;
+  }
+
+  const ordineHtml = tipo === 'fatturazione' ? ordineHtmlFatt : ordineHtmlMag;
+  const titoloTipo = tipo === 'fatturazione' ? 'Report Fatturazione' : 'Report Magazzino';
+
   const cols = Math.min(giri.length, 3);
   const colWidth = cols === 1 ? '100%' : cols === 2 ? '50%' : '33.33%';
-
-  // Trova autista per ogni giro
-  function autistaGiro(giroNome) {
-    const autista = state.utenti.find(u =>
-      u.ruolo === 'autista' && (u.giriConsegna||[]).some(g => g.toLowerCase() === giroNome.toLowerCase())
-    );
-    return autista ? (autista.nome + ' ' + (autista.cognome||'')).trim() : '';
-  }
 
   const columnsHtml = giri.map(g => {
     const aut = autistaGiro(g);
     const ordiniGiro = giriMap[g];
-    return `<div style="width:${colWidth};padding:0 8px;box-sizing:border-box;vertical-align:top;display:inline-block;">
-      <div style="background:#f5f5f5;padding:6px 10px;margin-bottom:10px;border-radius:4px;border-left:3px solid #2e7d32;">
-        <div style="font-weight:700;font-size:14px;text-transform:uppercase;">${g}</div>
+    return `<div style="width:${colWidth};padding:0 6px;box-sizing:border-box;vertical-align:top;display:inline-block;">
+      <div style="background:#f0f4f0;padding:6px 10px;margin-bottom:8px;border-radius:4px;border-left:3px solid #2e7d32;">
+        <div style="font-weight:700;font-size:13px;text-transform:uppercase;">${g}</div>
         ${aut ? `<div style="font-size:11px;color:#555;">👤 ${aut}</div>` : ''}
         <div style="font-size:11px;color:#777;">${ordiniGiro.length} ordine${ordiniGiro.length!==1?'i':''}</div>
       </div>
@@ -4126,31 +4215,27 @@ function updatePDFPreview() {
   const totLinee = ordini.reduce((s,o) => s + o.linee.length, 0);
 
   preview.innerHTML = `
-    <div style="font-weight:700;font-size:16px;text-align:center;margin-bottom:14px;border-bottom:2px solid #333;padding-bottom:8px;">
-      NORBALAT — Riepilogo Ordini ${formatDate(data)}${giroFilter ? ' · ' + giroFilter.toUpperCase() : ''}
+    <div style="font-weight:700;font-size:15px;text-align:center;margin-bottom:12px;border-bottom:2px solid #333;padding-bottom:6px;">
+      NORBALAT — ${titoloTipo} ${formatDate(data)}${giriSel ? ' · ' + giriSel.map(g=>g.toUpperCase()).join(', ') : ''}
     </div>
     <div style="font-size:0;">${columnsHtml}</div>
-    <div style="text-align:right;font-size:11px;color:#666;margin-top:12px;padding-top:8px;border-top:1px solid #ddd;">
-      Totale ordini: <b>${totOrdini}</b> · Totale righe prodotto: <b>${totLinee}</b> · Stampato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}
+    <div style="text-align:right;font-size:11px;color:#666;margin-top:10px;padding-top:8px;border-top:1px solid #ddd;">
+      Ordini: <b>${totOrdini}</b> · Righe prodotto: <b>${totLinee}</b> · Stampato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}
     </div>`;
 }
 
 function stampaPDFGiornaliero() {
   updatePDFPreview();
   const data = document.getElementById('pdf-data').value || today();
-  const giro = document.getElementById('pdf-giro').value;
+  const tipo = document.querySelector('input[name="pdf-tipo"]:checked')?.value || 'magazzino';
   const content = document.getElementById('pdf-preview').innerHTML;
-
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <title>Norbalat — Ordini ${data}</title>
+    <title>Norbalat — ${tipo === 'fatturazione' ? 'Fatturazione' : 'Magazzino'} ${data}</title>
     <style>
       * { box-sizing: border-box; }
-      body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1814; padding: 16px; margin: 0; }
-      @media print {
-        body { padding: 8px; }
-        @page { margin: 10mm; size: A4 landscape; }
-      }
+      body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1814; padding: 14px; margin: 0; }
+      @media print { body { padding: 6px; } @page { margin: 8mm; size: A4 landscape; } }
     </style>
   </head><body>${content}</body></html>`);
   win.document.close();

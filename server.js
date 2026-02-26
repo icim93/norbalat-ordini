@@ -146,6 +146,7 @@ async function createSchema() {
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS classificazione TEXT DEFAULT '';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS is_pedana      BOOLEAN DEFAULT FALSE;
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS nota_riga      TEXT DEFAULT '';
+    ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS unita_misura   TEXT DEFAULT 'pezzi';
   `);
   console.log('✅ Schema OK');
 }
@@ -646,7 +647,7 @@ app.get('/api/ordini', authMiddleware, async (req, res) => {
       const ids = rows.map(r => r.id);
       const { rows: linee } = await q(
         `SELECT ol.ordine_id, ol.prodotto_id, ol.qty, ol.peso_effettivo,
-                ol.is_pedana, ol.nota_riga,
+                ol.is_pedana, ol.nota_riga, ol.unita_misura,
                 p.codice, p.nome as prodotto_nome, p.um, p.packaging
          FROM ordine_linee ol JOIN prodotti p ON ol.prodotto_id = p.id
          WHERE ol.ordine_id = ANY($1) ORDER BY ol.ordine_id, ol.id`, [ids]);
@@ -687,8 +688,8 @@ app.post('/api/ordini', authMiddleware, async (req, res) => {
     const oid = r.rows[0].id;
     for (const l of linee) {
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,qty,is_pedana,nota_riga) VALUES ($1,$2,$3,$4,$5)`,
-        [oid, l.prodotto_id, l.qty, !!l.is_pedana, l.nota_riga||'']
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,qty,is_pedana,nota_riga,unita_misura) VALUES ($1,$2,$3,$4,$5,$6)`,
+        [oid, l.prodotto_id, l.qty, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi']
       );
     }
     await client.query('COMMIT');
