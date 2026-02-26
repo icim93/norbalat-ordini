@@ -521,6 +521,122 @@
   .bar-label { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; }
   .bar-val { font-size: 10px; color: var(--accent); font-weight: 600; font-family: 'DM Mono', monospace; }
 
+  /* ── CATALOGO ORDINE ── */
+  .catalogo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .cat-card {
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    background: var(--surface);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    position: relative;
+  }
+  .cat-card.in-cart {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+  .cat-card-nome {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    margin-bottom: 4px;
+    color: var(--text1);
+  }
+  .cat-card-info {
+    font-size: 11px;
+    color: var(--text3);
+    margin-bottom: 8px;
+  }
+  .cat-card-controls {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .cat-qty-btn {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text1);
+    flex-shrink: 0;
+    transition: background 0.1s;
+  }
+  .cat-qty-btn:hover { background: var(--accent-light); border-color: var(--accent); }
+  .cat-qty-input {
+    width: 44px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 2px;
+    background: var(--surface2);
+    color: var(--text1);
+  }
+  .cat-um-select {
+    font-size: 11px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 4px;
+    background: var(--surface2);
+    color: var(--text1);
+    cursor: pointer;
+    flex: 1;
+    min-width: 0;
+  }
+  .cat-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 12px 0 6px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+  .cat-cart-summary {
+    background: var(--accent-light);
+    border: 1.5px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .modality-toggle {
+    display: flex;
+    gap: 8px;
+  }
+  .modality-btn {
+    flex: 1;
+    padding: 14px 12px;
+    border-radius: var(--radius-sm);
+    border: 2px solid var(--border);
+    background: var(--surface2);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .modality-btn.active {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+  .modality-btn .mod-icon { font-size: 28px; display: block; margin-bottom: 6px; }
+  .modality-btn .mod-label { font-size: 13px; font-weight: 700; color: var(--text1); }
+  .modality-btn .mod-desc { font-size: 11px; color: var(--text3); margin-top: 3px; }
+
+  /* ── FINE CATALOGO ── */
   /* ── TOAST ── */
   .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
   .toast {
@@ -1338,6 +1454,31 @@
               <div id="profilo-feedback" style="display:none;margin-top:10px;font-size:13px;"></div>
             </div>
           </div>
+
+          <!-- Card preferenze visualizzazione -->
+          <div class="card" style="margin-top:20px;">
+            <div class="card-header">
+              <div class="card-title">🖥️ Preferenze visualizzazione</div>
+            </div>
+            <div style="padding:16px 20px 20px;">
+              <div style="font-size:13px;color:var(--text2);margin-bottom:14px;">
+                Scegli come vuoi inserire i nuovi ordini. La preferenza viene salvata sul dispositivo.
+              </div>
+              <div class="modality-toggle" id="modality-toggle">
+                <button class="modality-btn" id="mod-btn-classico" onclick="setModalitaOrdine('classico')">
+                  <span class="mod-icon">📋</span>
+                  <span class="mod-label">Modalità classica</span>
+                  <span class="mod-desc">Cerca prodotto, aggiungi riga per riga</span>
+                </button>
+                <button class="modality-btn" id="mod-btn-catalogo" onclick="setModalitaOrdine('catalogo')">
+                  <span class="mod-icon">🛒</span>
+                  <span class="mod-label">Modalità catalogo</span>
+                  <span class="mod-desc">Griglia prodotti, aggiungi al carrello</span>
+                </button>
+              </div>
+              <div id="modality-feedback" style="margin-top:10px;font-size:12px;color:var(--accent);display:none;"></div>
+            </div>
+          </div>
         </div>
       </div>
   </div><!-- /app-layout -->
@@ -1423,6 +1564,85 @@
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-ordine')">Annulla</button>
       <button class="btn btn-green" onclick="saveOrder()">💾 Salva Ordine</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Nuovo Ordine — MODALITÀ CATALOGO -->
+<div class="modal-overlay" id="modal-catalogo">
+  <div class="modal" style="max-width:820px;">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-catalogo-title">Nuovo Ordine — Catalogo</div>
+      <button class="modal-close" onclick="closeModal('modal-catalogo')">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:12px;">
+
+      <!-- Riga cliente + data + agente -->
+      <div class="form-row" style="margin-bottom:10px;">
+        <div class="field form-full">
+          <label>Cliente *</label>
+          <div class="ac-wrap" id="ac-cat-cliente-wrap">
+            <input type="text" class="ac-input" id="ac-cat-cliente-input"
+              placeholder="Cerca cliente…" autocomplete="off"
+              oninput="acFilter('cat-cliente')"
+              onfocus="acOpen('cat-cliente')"
+              onkeydown="acKey(event,'cat-cliente')">
+            <input type="hidden" id="cat-cliente">
+            <div class="ac-dropdown" id="ac-cat-cliente-dd"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Agente *</label>
+          <select id="cat-agente"></select>
+        </div>
+        <div class="field">
+          <label>Data Consegna *</label>
+          <input type="date" id="cat-data">
+        </div>
+        <div class="field" style="display:flex;align-items:flex-end;gap:12px;padding-bottom:2px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
+            <input type="checkbox" id="cat-stef" style="width:15px;height:15px;">🚛 STEF
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
+            <input type="checkbox" id="cat-data-non-certa" style="width:15px;height:15px;">⚠️ Data incerta
+          </label>
+        </div>
+      </div>
+
+      <!-- Note cliente -->
+      <div id="cat-cliente-note-box" style="display:none;margin-bottom:10px;padding:8px 12px;background:var(--blue-light);border:1px solid #b3d4f0;border-radius:8px;font-size:13px;color:var(--blue);">
+        <b>📌 Note cliente:</b> <span id="cat-cliente-note-text"></span>
+      </div>
+
+      <!-- Riepilogo carrello -->
+      <div id="cat-cart-bar" style="display:none;margin-bottom:10px;">
+        <div class="cat-cart-summary">
+          <span>🛒</span>
+          <span id="cat-cart-count" style="font-weight:700;"></span>
+          <span style="color:var(--text2);">prodotti nel carrello</span>
+          <button class="btn btn-outline btn-sm" onclick="resetCatalogo()" style="margin-left:auto;">🗑️ Svuota</button>
+        </div>
+      </div>
+
+      <!-- Ricerca prodotto -->
+      <div style="margin-bottom:10px;">
+        <input type="text" id="cat-search" placeholder="🔍 Cerca prodotto…"
+          oninput="renderCatalogo()"
+          style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);">
+      </div>
+
+      <!-- Griglia catalogo -->
+      <div id="cat-grid" style="max-height:380px;overflow-y:auto;padding-right:4px;"></div>
+
+      <!-- Note ordine -->
+      <div class="field" style="margin-top:12px;">
+        <label>Note ordine</label>
+        <textarea id="cat-note" placeholder="Istruzioni di consegna, orari particolari…" style="min-height:56px;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-catalogo')">Annulla</button>
+      <button class="btn btn-green" onclick="saveCatalogoOrder()">💾 Conferma ordine</button>
     </div>
   </div>
 </div>
@@ -2742,6 +2962,16 @@ function acFilter(type) {
     document.getElementById('tentata-cliente').value = '';
     acRender('tentata');
     acOpen('tentata');
+  } else if (type === 'cat-cliente') {
+    const q = document.getElementById('ac-cat-cliente-input').value.trim().toLowerCase();
+    if (!acState['cat-cliente']) acState['cat-cliente'] = { value: null, query: '', focusIdx: -1 };
+    acState['cat-cliente'].query = q;
+    acState['cat-cliente'].value = null;
+    document.getElementById('cat-cliente').value = '';
+    document.getElementById('ac-cat-cliente-input')?.classList.remove('has-value');
+    acRender('cat-cliente');
+    acOpen('cat-cliente');
+    document.getElementById('cat-cliente-note-box').style.display = 'none';
   }
 }
 
@@ -2755,6 +2985,11 @@ function acOpen(type) {
     document.getElementById('ac-tentata-dd').classList.add('open');
     if (!acState.tentata) acState.tentata = { value: null, query: '', focusIdx: -1 };
     acState.tentata.focusIdx = -1;
+  } else if (type === 'cat-cliente') {
+    acRender('cat-cliente');
+    document.getElementById('ac-cat-cliente-dd').classList.add('open');
+    if (!acState['cat-cliente']) acState['cat-cliente'] = { value: null, query: '', focusIdx: -1 };
+    acState['cat-cliente'].focusIdx = -1;
   }
 }
 
@@ -2763,10 +2998,37 @@ function acClose(type) {
     document.getElementById('ac-cliente-dd').classList.remove('open');
   } else if (type === 'tentata') {
     document.getElementById('ac-tentata-dd').classList.remove('open');
+  } else if (type === 'cat-cliente') {
+    document.getElementById('ac-cat-cliente-dd').classList.remove('open');
   }
 }
 
 function acRender(type) {
+  if (type === 'cat-cliente') {
+    if (!acState['cat-cliente']) acState['cat-cliente'] = { value: null, query: '', focusIdx: -1 };
+    const q = acState['cat-cliente'].query;
+    const dd = document.getElementById('ac-cat-cliente-dd');
+    if (!dd) return;
+    const giri = ['bari nord','bari/foggia','murgia','taranto','lecce','lecce est','valle itria','calabria','foggia','diretto','stef','variabile',''];
+    let html = '';
+    let totalShown = 0;
+    giri.forEach(g => {
+      let gruppo = state.clienti.filter(c => c.giro === g);
+      if (q) gruppo = gruppo.filter(c => c.nome.toLowerCase().includes(q) || c.localita.toLowerCase().includes(q));
+      if (!gruppo.length) return;
+      html += `<div class="ac-group-label">${g ? g.toUpperCase() : 'NON ASSEGNATO'}</div>`;
+      gruppo.forEach(cl => {
+        html += `<div class="ac-item" data-id="${cl.id}" onmousedown="acSelect('cat-cliente',${cl.id})">
+          <span>${acHighlight(cl.nome, q)}</span>
+          <span class="ac-sub">${cl.localita}${cl.giro ? ' · ' + cl.giro : ''}</span>
+        </div>`;
+        totalShown++;
+      });
+    });
+    if (!totalShown) html = '<div class="ac-empty">Nessun cliente trovato</div>';
+    dd.innerHTML = html;
+    return;
+  }
   if (type === 'tentata') {
     if (!acState.tentata) acState.tentata = { value: null, query: '', focusIdx: -1 };
     const q = acState.tentata.query;
@@ -2865,6 +3127,34 @@ function acSelect(type, id) {
     document.getElementById('ac-tentata-input').value = c.nome;
     document.getElementById('tentata-cliente').value = id;
     acClose('tentata');
+  } else if (type === 'cat-cliente') {
+    const cl = state.clienti.find(x => x.id === id);
+    if (!cl) return;
+    if (!acState['cat-cliente']) acState['cat-cliente'] = { value: null, query: '', focusIdx: -1 };
+    acState['cat-cliente'].value = id;
+    const inp = document.getElementById('ac-cat-cliente-input');
+    if (inp) { inp.value = cl.nome; inp.classList.add('has-value'); }
+    document.getElementById('cat-cliente').value = id;
+    acClose('cat-cliente');
+    // Note cliente
+    const nb = document.getElementById('cat-cliente-note-box');
+    const nt = document.getElementById('cat-cliente-note-text');
+    if (nb && nt) {
+      if (cl.note && cl.note.trim()) { nt.textContent = cl.note; nb.style.display = 'block'; }
+      else nb.style.display = 'none';
+    }
+    // Agente default
+    if (cl.agenteId) {
+      const sel = document.getElementById('cat-agente');
+      if (sel) sel.value = cl.agenteId;
+    }
+    // Data dal giro
+    if (cl.giro && !state.editingId) {
+      const nd = getNextGiroDate(cl.giro);
+      if (nd) document.getElementById('cat-data').value = nd;
+    }
+    // Aggiorna catalogo con storico cliente
+    renderCatalogo();
   }
 }
 
@@ -2899,6 +3189,7 @@ function acKey(e, type) {
 document.addEventListener('click', function(e) {
   if (!e.target.closest('#ac-cliente-wrap')) acClose('cliente');
   if (!e.target.closest('#ac-tentata-wrap')) acClose('tentata');
+  if (!e.target.closest('#ac-cat-cliente-wrap')) acClose('cat-cliente');
 });
 
 // ═══════════════════════════════════════════════
@@ -4230,6 +4521,11 @@ function renderProfilo() {
   const fb = document.getElementById('profilo-feedback');
   fb.style.display = 'none';
   fb.textContent = '';
+
+  // Modalità ordine
+  const mod = getModalitaOrdine();
+  document.getElementById('mod-btn-classico')?.classList.toggle('active', mod === 'classico');
+  document.getElementById('mod-btn-catalogo')?.classList.toggle('active', mod === 'catalogo');
 }
 
 async function saveProfilo() {
@@ -4321,6 +4617,250 @@ function showFeedback(el, msg, type) {
     el.style.background = 'var(--accent2-light)';
     el.style.color = 'var(--accent2)';
     el.style.border = '1px solid var(--accent2)';
+  }
+}
+
+// ═══════════════════════════════════════════════
+// MODALITÀ ORDINE (preferenza utente)
+// ═══════════════════════════════════════════════
+
+function getModalitaOrdine() {
+  const key = 'modalita_ordine_' + (state.currentUser?.id || 'default');
+  return localStorage.getItem(key) || 'classico';
+}
+
+function setModalitaOrdine(val) {
+  const key = 'modalita_ordine_' + (state.currentUser?.id || 'default');
+  localStorage.setItem(key, val);
+  // Aggiorna UI pulsanti
+  document.getElementById('mod-btn-classico')?.classList.toggle('active', val === 'classico');
+  document.getElementById('mod-btn-catalogo')?.classList.toggle('active', val === 'catalogo');
+  const fb = document.getElementById('modality-feedback');
+  if (fb) {
+    fb.textContent = val === 'catalogo'
+      ? '✅ Modalità catalogo attiva — il prossimo Nuovo Ordine si aprirà come catalogo.'
+      : '✅ Modalità classica attiva.';
+    fb.style.display = 'block';
+    setTimeout(() => fb.style.display = 'none', 3000);
+  }
+}
+
+// Override openNewOrder per smistare verso la modalità scelta
+const _openNewOrderClassico = openNewOrder;
+openNewOrder = function() {
+  if (getModalitaOrdine() === 'catalogo') {
+    openNewOrderCatalogo();
+  } else {
+    _openNewOrderClassico();
+  }
+};
+
+// ═══════════════════════════════════════════════
+// MODALITÀ CATALOGO
+// ═══════════════════════════════════════════════
+
+// Carrello: { prodId -> { qty, um } }
+let catalogoCart = {};
+
+function openNewOrderCatalogo() {
+  state.editingId = null;
+  catalogoCart = {};
+
+  document.getElementById('modal-catalogo-title').textContent = 'Nuovo Ordine';
+  document.getElementById('cat-data').value = today();
+  document.getElementById('cat-stef').checked = false;
+  document.getElementById('cat-data-non-certa').checked = false;
+  document.getElementById('cat-note').value = '';
+  document.getElementById('cat-search').value = '';
+  document.getElementById('cat-cliente-note-box').style.display = 'none';
+
+  // Autocomplete cliente
+  acState['cat-cliente'] = { value: null, query: '', focusIdx: -1 };
+  const inp = document.getElementById('ac-cat-cliente-input');
+  if (inp) { inp.value = ''; inp.classList.remove('has-value'); }
+  document.getElementById('cat-cliente').value = '';
+
+  // Agente default
+  const agenti = state.utenti.filter(u => u.isAgente);
+  const selAg = document.getElementById('cat-agente');
+  selAg.innerHTML = '<option value="">— Seleziona agente —</option>' +
+    agenti.map(a => `<option value="${a.id}" ${a.id===state.currentUser.id&&state.currentUser.isAgente?'selected':''}>${(a.nome+' '+(a.cognome||'')).trim()}</option>`).join('');
+
+  renderCatalogo();
+  updateCartBar();
+  openModal('modal-catalogo');
+  setTimeout(() => document.getElementById('ac-cat-cliente-input')?.focus(), 100);
+}
+
+function renderCatalogo() {
+  const q = (document.getElementById('cat-search')?.value || '').toLowerCase();
+  const cats = ['FORMAGGI','RICOTTA','CAGLIATA','PANNA UHT','ALTRO'];
+  const clienteId = acState['cat-cliente']?.value || null;
+  const grid = document.getElementById('cat-grid');
+  if (!grid) return;
+
+  // Prodotti abituali del cliente (senza duplicati nelle categorie normali)
+  let storicoIds = [];
+  let storicoHtml = '';
+  if (!q && clienteId) {
+    const storico = getClienteStoricoProdotti(clienteId, []);
+    storicoIds = storico.map(x => x.prodotto.id);
+    if (storico.length) {
+      storicoHtml = `<div class="cat-section-title">⭐ Prodotti abituali</div>
+      <div class="catalogo-grid">
+        ${storico.map(({prodotto:p}) => catalogoCardHtml(p)).join('')}
+      </div>`;
+    }
+  }
+
+  // Categorie
+  let catsHtml = cats.map(cat => {
+    let prods = state.prodotti.filter(p =>
+      p.categoria === cat && !storicoIds.includes(p.id)
+    );
+    if (q) prods = prods.filter(p =>
+      p.nome.toLowerCase().includes(q) || p.codice.toLowerCase().includes(q)
+    );
+    if (!prods.length) return '';
+    return `<div class="cat-section-title">${cat}</div>
+    <div class="catalogo-grid">
+      ${prods.map(p => catalogoCardHtml(p)).join('')}
+    </div>`;
+  }).join('');
+
+  if (!storicoHtml && !catsHtml) {
+    grid.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);">Nessun prodotto trovato</div>';
+    return;
+  }
+  grid.innerHTML = storicoHtml + catsHtml;
+}
+
+function catalogoCardHtml(p) {
+  const item = catalogoCart[p.id];
+  const inCart = !!item;
+  const qty = item ? item.qty : 1;
+  const um = item ? item.um : getDefaultUM(p);
+  const umOpts = ['Pezzi','Cartoni','Litri','Kg','Pedana'];
+
+  return `<div class="cat-card ${inCart ? 'in-cart' : ''}" id="cat-card-${p.id}">
+    <div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);margin-bottom:2px;">[${p.codice}]</div>
+    <div class="cat-card-nome">${p.nome}</div>
+    <div class="cat-card-info">${p.packaging || p.categoria}</div>
+    <div class="cat-card-controls">
+      <button class="cat-qty-btn" onclick="catQtyChange(${p.id},-1)">−</button>
+      <input class="cat-qty-input" type="number" min="1" value="${qty}"
+        onchange="catQtySet(${p.id}, parseInt(this.value)||1)"
+        style="color:${inCart?'var(--accent)':'var(--text1)'};">
+      <select class="cat-um-select" onchange="catUmSet(${p.id}, this.value)"
+        style="border-color:${inCart?'var(--accent)':'var(--border)'};">
+        ${umOpts.map(u => `<option value="${u}" ${u===um?'selected':''}>${umPlurale(u,qty)}</option>`).join('')}
+      </select>
+      <button class="cat-qty-btn" onclick="catQtyChange(${p.id},1)"
+        style="${inCart?'background:var(--accent);color:#fff;border-color:var(--accent);':''}">+</button>
+    </div>
+    ${p.note ? `<div style="font-size:10px;color:var(--blue);margin-top:4px;">📌 ${p.note}</div>` : ''}
+  </div>`;
+}
+
+function catQtyChange(prodId, delta) {
+  const item = catalogoCart[prodId];
+  const curQty = item ? item.qty : 0;
+  const newQty = curQty + delta;
+  if (newQty <= 0) {
+    delete catalogoCart[prodId];
+  } else {
+    const p = getProdotto(prodId);
+    catalogoCart[prodId] = { qty: newQty, um: item ? item.um : getDefaultUM(p) };
+  }
+  refreshCatCard(prodId);
+  updateCartBar();
+}
+
+function catQtySet(prodId, qty) {
+  if (qty <= 0) {
+    delete catalogoCart[prodId];
+  } else {
+    const p = getProdotto(prodId);
+    const prev = catalogoCart[prodId];
+    catalogoCart[prodId] = { qty, um: prev ? prev.um : getDefaultUM(p) };
+  }
+  refreshCatCard(prodId);
+  updateCartBar();
+}
+
+function catUmSet(prodId, um) {
+  const p = getProdotto(prodId);
+  const prev = catalogoCart[prodId];
+  if (prev) {
+    prev.um = um;
+  } else {
+    catalogoCart[prodId] = { qty: 1, um };
+  }
+  refreshCatCard(prodId);
+  updateCartBar();
+}
+
+function refreshCatCard(prodId) {
+  const card = document.getElementById(`cat-card-${prodId}`);
+  if (!card) return;
+  const p = getProdotto(prodId);
+  card.outerHTML = catalogoCardHtml(p);
+}
+
+function updateCartBar() {
+  const n = Object.keys(catalogoCart).length;
+  const bar = document.getElementById('cat-cart-bar');
+  const count = document.getElementById('cat-cart-count');
+  if (bar) bar.style.display = n > 0 ? 'block' : 'none';
+  if (count) count.textContent = n;
+}
+
+function resetCatalogo() {
+  catalogoCart = {};
+  renderCatalogo();
+  updateCartBar();
+}
+
+async function saveCatalogoOrder() {
+  const clienteId = parseInt(document.getElementById('cat-cliente').value);
+  const agenteId  = parseInt(document.getElementById('cat-agente').value) || null;
+  const data      = document.getElementById('cat-data').value;
+  const note      = document.getElementById('cat-note').value.trim();
+  const stef      = document.getElementById('cat-stef').checked;
+  const dataNonCerta = document.getElementById('cat-data-non-certa').checked;
+
+  if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
+  if (!data)      { showToast('Inserisci la data', 'warning'); return; }
+
+  const linee = Object.entries(catalogoCart)
+    .filter(([,v]) => v.qty > 0)
+    .map(([prodId, v]) => ({
+      prodotto_id: parseInt(prodId),
+      qty: v.qty,
+      unita_misura: v.um,
+      is_pedana: v.um === 'Pedana',
+      nota_riga: '',
+    }));
+
+  if (!linee.length) { showToast('Aggiungi almeno un prodotto al carrello', 'warning'); return; }
+
+  // Calcola consegnatario
+  const cl = getCliente(clienteId);
+  const aut = cl ? getAutistaDiGiro(cl.giro) : null;
+
+  const body = {
+    cliente_id: clienteId, agente_id: agenteId,
+    autista_di_giro: aut ? aut.id : null,
+    data, stato: 'attesa', note, data_non_certa: dataNonCerta, stef, linee,
+  };
+  try {
+    const saved = await api('POST', '/api/ordini', body);
+    state.ordini.unshift(normalizeOrdine(saved));
+    closeModal('modal-catalogo');
+    showToast('Ordine salvato ✅', 'success');
+    renderPage(state.currentPage);
+  } catch(e) {
+    showToast(e.message || 'Errore salvataggio', 'warning');
   }
 }
 
