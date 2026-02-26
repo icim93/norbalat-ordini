@@ -644,13 +644,12 @@ app.get('/api/ordini', authMiddleware, async (req, res) => {
     // Carica linee per tutti gli ordini in un'unica query
     if (rows.length) {
       const ids = rows.map(r => r.id);
-      const placeholders = ids.map((_,i) => `$${i+1}`).join(',');
       const { rows: linee } = await q(
         `SELECT ol.ordine_id, ol.prodotto_id, ol.qty, ol.peso_effettivo,
                 ol.is_pedana, ol.nota_riga,
                 p.codice, p.nome as prodotto_nome, p.um, p.packaging
          FROM ordine_linee ol JOIN prodotti p ON ol.prodotto_id = p.id
-         WHERE ol.ordine_id IN (${placeholders}) ORDER BY ol.ordine_id, ol.id`, ids);
+         WHERE ol.ordine_id = ANY($1) ORDER BY ol.ordine_id, ol.id`, [ids]);
       const lineeMap = {};
       linee.forEach(l => {
         if (!lineeMap[l.ordine_id]) lineeMap[l.ordine_id] = [];
