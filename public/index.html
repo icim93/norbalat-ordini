@@ -428,7 +428,7 @@
   textarea:focus { border-color: var(--accent); }
 
   /* Order lines in modal */
-  .order-lines { border: 1.5px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; margin-top: 8px; }
+  .order-lines { border: 1.5px solid var(--border); border-radius: var(--radius-sm); overflow: visible; margin-top: 8px; }
   .order-line { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
   .order-line:last-child { border-bottom: none; }
   .order-line-add { padding: 8px 12px; border-top: 1px solid var(--border); }
@@ -774,6 +774,7 @@
     position: absolute;
     top: calc(100% + 4px);
     left: 0; right: 0;
+    z-index: 1000;
     background: var(--surface);
     border: 1.5px solid var(--accent);
     border-radius: var(--radius-sm);
