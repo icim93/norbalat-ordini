@@ -2831,12 +2831,32 @@ document.addEventListener('click', function(e) {
 // AUTOCOMPLETE PER RIGHE PRODOTTO
 // ═══════════════════════════════════════════════
 
+function getDefaultUM(prodotto) {
+  if (!prodotto) return 'Pezzi';
+  const cat = (prodotto.categoria || '').toUpperCase();
+  if (cat.includes('PANNA')) return 'Cartoni';
+  return 'Pezzi';
+}
+
+function umPlurale(um, qty) {
+  const q = parseInt(qty) || 1;
+  const map = {
+    'Pezzi':   q === 1 ? 'Pezzo'    : 'Pezzi',
+    'Cartoni': q === 1 ? 'Cartone'  : 'Cartoni',
+    'Litri':   'Litri',
+    'Kg':      'Kg',
+    'Pedana':  q === 1 ? 'Pedana'   : 'Pedane',
+  };
+  return map[um] || um;
+}
+
 function renderOrderLines() {
   const container = document.getElementById('ord-lines-container');
   container.innerHTML = orderLines.map((l, i) => {
     const p = l.prodId ? getProdotto(l.prodId) : null;
-    const isPedana = !!l.isPedana;
-    const unitVal = l.unitaMisura || 'pezzi';
+    const umOpts = ['Pezzi','Cartoni','Litri','Kg','Pedana'];
+    const curUM = l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi');
+    const isPedana = curUM === 'Pedana';
     return `
     <div class="order-line" id="ord-line-${i}">
       <div style="display:flex;align-items:center;gap:6px;">
@@ -2853,19 +2873,13 @@ function renderOrderLines() {
           <div class="ac-dropdown" id="ac-prod-dd-${i}"></div>
         </div>
         <input type="number" class="qty-input" value="${l.qty||1}" min="1"
-          onchange="orderLines[${i}].qty=parseInt(this.value)||1"
+          onchange="orderLines[${i}].qty=parseInt(this.value)||1;renderOrderLines()"
           placeholder="Qtà" style="width:56px;flex-shrink:0;">
-        <input type="text" value="${unitVal}"
-          oninput="orderLines[${i}].unitaMisura=this.value.trim()||'pezzi'"
-          placeholder="um"
-          title="Unità di misura (es. pezzi, lt, kg, cartoni…)"
-          style="width:56px;flex-shrink:0;font-size:12px;padding:6px 6px;border:1px solid var(--border);border-radius:6px;background:${isPedana?'var(--accent-light)':'var(--surface2)'};color:var(--text2);text-align:center;"
-          ${isPedana ? 'disabled' : ''}>
-        <button onclick="orderLines[${i}].isPedana=!orderLines[${i}].isPedana;if(orderLines[${i}].isPedana)orderLines[${i}].unitaMisura='pedana';else orderLines[${i}].unitaMisura='pezzi';renderOrderLines()"
-          title="${isPedana ? 'Pedana intera — clicca per tornare a pezzo' : 'Pezzo/collo — clicca per pedana intera'}"
-          style="flex-shrink:0;width:36px;height:36px;border-radius:8px;border:1.5px solid ${isPedana ? 'var(--accent)' : 'var(--border)'};background:${isPedana ? 'var(--accent-light)' : 'var(--surface2)'};cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;">
-          ${isPedana ? '🪵' : '📦'}
-        </button>
+        <select
+          onchange="orderLines[${i}].unitaMisura=this.value;orderLines[${i}].isPedana=(this.value==='Pedana');orderLines[${i}]._umPersonalizzata=true;renderOrderLines()"
+          style="flex-shrink:0;font-size:12px;padding:5px 6px;border:1.5px solid ${isPedana ? 'var(--accent)' : 'var(--border)'};border-radius:6px;background:${isPedana ? 'var(--accent-light)' : 'var(--surface2)'};color:var(--text1);cursor:pointer;max-width:92px;">
+          ${umOpts.map(u => `<option value="${u}" ${u===curUM?'selected':''}>${umPlurale(u, l.qty||1)}</option>`).join('')}
+        </select>
         <button class="line-delete" onclick="removeOrderLine(${i})" style="flex-shrink:0;width:32px;height:32px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:16px;color:var(--text3);display:flex;align-items:center;justify-content:center;" title="Rimuovi">✕</button>
       </div>
       ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">📦 ${p.packaging}${isPedana ? ' · <b style=color:var(--accent)>PEDANA INTERA</b>' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">🪵 PEDANA INTERA</div>` : '')}
@@ -2877,6 +2891,7 @@ function renderOrderLines() {
     </div>`;
   }).join('') || '<div style="padding:12px;color:var(--text3);font-size:13px;">Nessun prodotto aggiunto</div>';
 }
+
 
 // Single delegated listener for closing prod dropdowns on outside click (set once)
 if (!window._prodDdListenerSet) {
@@ -3001,12 +3016,15 @@ function acProdRender(i, q) {
 function acProdSelect(i, prodId) {
   orderLines[i].prodId = prodId;
   const p = getProdotto(prodId);
+  // Imposta UM di default in base alla categoria, solo se non già personalizzata dall'utente
+  if (!orderLines[i]._umPersonalizzata) {
+    orderLines[i].unitaMisura = getDefaultUM(p);
+    orderLines[i].isPedana = false;
+  }
   const inp = document.getElementById(`ac-prod-input-${i}`);
   if (inp) { inp.value = `[${p.codice}] ${p.nome}`; inp.classList.add('has-value'); }
   document.getElementById(`ac-prod-dd-${i}`)?.classList.remove('open');
-  // Re-render to show packaging/note
   renderOrderLines();
-  // Restore value after re-render
   const inp2 = document.getElementById(`ac-prod-input-${i}`);
   if (inp2) { inp2.value = `[${p.codice}] ${p.nome}`; inp2.classList.add('has-value'); }
 }
@@ -4155,7 +4173,7 @@ function updatePDFPreview() {
     const cl = getCliente(o.clienteId);
     const linee = o.linee.map(l => {
       const p = getProdotto(l.prodId);
-      const um = l.isPedana ? 'pedana' : (l.unitaMisura || 'pezzi');
+      const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
       const qty = l.qty || 1;
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
       return `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;border-bottom:1px dotted #eee;">
@@ -4176,7 +4194,7 @@ function updatePDFPreview() {
     const cl = getCliente(o.clienteId);
     const linee = o.linee.map(l => {
       const p = getProdotto(l.prodId);
-      const um = l.isPedana ? 'pedana' : (l.unitaMisura || 'pezzi');
+      const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
       const qty = l.qty || 1;
       const peso = l.pesoEffettivo ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>` : `<span style="color:#bbb;">${qty} ${um} — peso da inserire</span>`;
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
