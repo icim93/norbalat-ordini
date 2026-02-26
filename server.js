@@ -648,7 +648,7 @@ app.get('/api/ordini', authMiddleware, async (req, res) => {
       const { rows: linee } = await q(
         `SELECT ol.ordine_id, ol.prodotto_id, ol.qty, ol.peso_effettivo,
                 ol.is_pedana, ol.nota_riga,
-                p.codice, p.nome as prodotto_nome, p.um, p.packaging, p.prezzo_vendita
+                p.codice, p.nome as prodotto_nome, p.um, p.packaging
          FROM ordine_linee ol JOIN prodotti p ON ol.prodotto_id = p.id
          WHERE ol.ordine_id IN (${placeholders}) ORDER BY ol.ordine_id, ol.id`, ids);
       const lineeMap = {};
