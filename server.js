@@ -59,7 +59,8 @@ async function createSchema() {
       note             TEXT DEFAULT '',
       piva             TEXT DEFAULT '',
       cond_pagamento   TEXT DEFAULT '',
-      e_fornitore      BOOLEAN DEFAULT FALSE
+      e_fornitore      BOOLEAN DEFAULT FALSE,
+      classificazione  TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS prodotti (
@@ -94,7 +95,9 @@ async function createSchema() {
       ordine_id       INTEGER NOT NULL REFERENCES ordini(id) ON DELETE CASCADE,
       prodotto_id     INTEGER NOT NULL REFERENCES prodotti(id),
       qty             NUMERIC NOT NULL DEFAULT 1,
-      peso_effettivo  NUMERIC
+      peso_effettivo  NUMERIC,
+      is_pedana       BOOLEAN DEFAULT FALSE,
+      nota_riga       TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS camions (
@@ -138,6 +141,11 @@ async function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_ordini_cliente ON ordini(cliente_id);
     CREATE INDEX IF NOT EXISTS idx_linee_ordine   ON ordine_linee(ordine_id);
     CREATE INDEX IF NOT EXISTS idx_activity_ts    ON activity_log(ts);
+
+    -- Migrazioni safe per DB esistenti
+    ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS classificazione TEXT DEFAULT '';
+    ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS is_pedana      BOOLEAN DEFAULT FALSE;
+    ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS nota_riga      TEXT DEFAULT '';
   `);
   console.log('✅ Schema OK');
 }
@@ -496,12 +504,12 @@ app.get('/api/clienti', authMiddleware, async (req, res) => {
 app.post('/api/clienti', authMiddleware, async (req, res) => {
   try {
     const { nome, localita='', giro='', agente_id=null, autista_di_giro=null,
-            note='', piva='', cond_pagamento='', e_fornitore=false } = req.body;
+            note='', piva='', cond_pagamento='', e_fornitore=false, classificazione='' } = req.body;
     if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
     const r = await q(
-      `INSERT INTO clienti (nome,localita,giro,agente_id,autista_di_giro,note,piva,cond_pagamento,e_fornitore)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-      [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, cond_pagamento, e_fornitore]
+      `INSERT INTO clienti (nome,localita,giro,agente_id,autista_di_giro,note,piva,cond_pagamento,e_fornitore,classificazione)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, cond_pagamento, e_fornitore, classificazione]
     );
     const u = req.user;
     await logDB(u.id, `${u.nome} ${u.cognome||''}`.trim(), 'Nuovo cliente', nome);
@@ -513,12 +521,12 @@ app.put('/api/clienti/:id', authMiddleware, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { nome, localita='', giro='', agente_id=null, autista_di_giro=null,
-            note='', piva='', cond_pagamento='', e_fornitore=false } = req.body;
+            note='', piva='', cond_pagamento='', e_fornitore=false, classificazione='' } = req.body;
     if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
     await q(
       `UPDATE clienti SET nome=$1,localita=$2,giro=$3,agente_id=$4,autista_di_giro=$5,
-       note=$6,piva=$7,cond_pagamento=$8,e_fornitore=$9 WHERE id=$10`,
-      [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, cond_pagamento, e_fornitore, id]
+       note=$6,piva=$7,cond_pagamento=$8,e_fornitore=$9,classificazione=$10 WHERE id=$11`,
+      [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, cond_pagamento, e_fornitore, classificazione, id]
     );
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -661,8 +669,8 @@ app.post('/api/ordini', authMiddleware, async (req, res) => {
     const oid = r.rows[0].id;
     for (const l of linee) {
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,qty) VALUES ($1,$2,$3)`,
-        [oid, l.prodotto_id, l.qty]
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,qty,is_pedana,nota_riga) VALUES ($1,$2,$3,$4,$5)`,
+        [oid, l.prodotto_id, l.qty, !!l.is_pedana, l.nota_riga||'']
       );
     }
     await client.query('COMMIT');
