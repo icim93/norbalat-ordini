@@ -1271,6 +1271,75 @@
           <div id="tentata-config-list" style="padding:0 16px 16px;"></div>
         </div>
       </div>
+
+      <!-- ─── PAGE: Il mio profilo ─── -->
+      <div class="page" id="page-profilo">
+        <div class="page-header">
+          <div class="page-title">Il mio profilo</div>
+          <div class="page-sub" id="profilo-sub">Gestisci le tue informazioni personali</div>
+        </div>
+
+        <div style="max-width:560px;">
+          <!-- Avatar + info -->
+          <div class="card" style="margin-bottom:20px;">
+            <div style="padding:24px;display:flex;align-items:center;gap:20px;">
+              <div id="profilo-avatar" style="width:72px;height:72px;border-radius:50%;background:var(--accent);color:#fff;font-size:28px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;"></div>
+              <div>
+                <div id="profilo-nome-display" style="font-size:20px;font-weight:700;"></div>
+                <div id="profilo-username-display" style="font-size:13px;color:var(--text2);margin-top:2px;font-family:'DM Mono',monospace;"></div>
+                <div id="profilo-ruolo-display" style="margin-top:6px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Form modifica -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">✏️ Modifica informazioni</div>
+            </div>
+            <div style="padding:16px 20px 20px;">
+              <div class="form-row">
+                <div class="field">
+                  <label>Nome *</label>
+                  <input type="text" id="profilo-nome" placeholder="Il tuo nome">
+                </div>
+                <div class="field">
+                  <label>Cognome</label>
+                  <input type="text" id="profilo-cognome" placeholder="Il tuo cognome">
+                </div>
+                <div class="field form-full">
+                  <label>Username *</label>
+                  <input type="text" id="profilo-username" placeholder="username" autocomplete="off">
+                </div>
+              </div>
+
+              <div style="border-top:1px solid var(--border);margin:16px 0 14px;"></div>
+              <div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:12px;">🔒 Cambia password</div>
+              <div class="form-row">
+                <div class="field form-full">
+                  <label>Password attuale *</label>
+                  <input type="password" id="profilo-pass-old" placeholder="••••••" autocomplete="current-password">
+                </div>
+                <div class="field">
+                  <label>Nuova password</label>
+                  <input type="password" id="profilo-pass-new" placeholder="••••••" autocomplete="new-password">
+                </div>
+                <div class="field">
+                  <label>Conferma nuova password</label>
+                  <input type="password" id="profilo-pass-new2" placeholder="••••••" autocomplete="new-password">
+                </div>
+              </div>
+              <div id="profilo-pass-hint" style="font-size:12px;color:var(--text3);margin-top:-6px;margin-bottom:12px;">Lascia vuoto se non vuoi cambiare la password.</div>
+
+              <div style="display:flex;gap:10px;margin-top:8px;">
+                <button class="btn btn-green" onclick="saveProfilo()">💾 Salva modifiche</button>
+                <button class="btn btn-outline" onclick="renderProfilo()">↩️ Annulla</button>
+              </div>
+              <div id="profilo-feedback" style="display:none;margin-top:10px;font-size:13px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
   </div><!-- /app-layout -->
 
   <!-- Mobile bottom nav -->
@@ -1948,21 +2017,25 @@ const navConfigs = {
     { page: 'piano', icon: '🚛', label: 'Piano Carico' },
     { page: 'report', icon: '📊', label: 'Report' },
     { page: 'impostazioni', icon: '⚙️', label: 'Impostazioni' },
+    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
   autista: [
     { page: 'autista', icon: '🚚', label: 'Il mio giro' },
     { page: 'piano', icon: '🚛', label: 'Piano Carico' },
     { page: 'ordini', icon: '📋', label: 'Tutti gli ordini' },
+    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
   magazzino: [
     { page: 'magazzino', icon: '📦', label: 'Da preparare' },
     { page: 'piano', icon: '🚛', label: 'Piano Carico' },
     { page: 'ordini', icon: '📋', label: 'Ordini' },
+    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
   direzione: [
     { page: 'report', icon: '📊', label: 'Report' },
     { page: 'piano', icon: '🚛', label: 'Piano Carico' },
     { page: 'ordini', icon: '📋', label: 'Ordini' },
+    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
 };
 
@@ -2014,6 +2087,7 @@ function renderPage(page) {
   if (page === 'piano') renderPianoPage();
   if (page === 'report') renderReport();
   if (page === 'impostazioni') renderImpostazioni();
+  if (page === 'profilo') renderProfilo();
 }
 
 // ═══════════════════════════════════════════════
@@ -4123,6 +4197,132 @@ acState.tentata = { value: null, query: '', focusIdx: -1 };
 // ═══════════════════════════════════════════════
 // PDF RIEPILOGATIVO GIORNALIERO
 // ═══════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════
+// IL MIO PROFILO
+// ═══════════════════════════════════════════════
+
+function renderProfilo() {
+  const u = state.currentUser;
+  if (!u) return;
+
+  const nomeCompleto = (u.nome + ' ' + (u.cognome||'')).trim();
+  const iniziali = (u.nome.charAt(0) + (u.cognome ? u.cognome.charAt(0) : '')).toUpperCase();
+  const roleLabels = { admin:'Admin / Ufficio', autista:'Autista / Agente', magazzino:'Magazzino', direzione:'Direzione' };
+  const roleBadges = { admin:'badge-green', autista:'badge-orange', magazzino:'badge-blue', direzione:'badge-gray' };
+
+  // Avatar e intestazione
+  document.getElementById('profilo-avatar').textContent = iniziali;
+  document.getElementById('profilo-nome-display').textContent = nomeCompleto;
+  document.getElementById('profilo-username-display').textContent = '@' + u.username;
+  document.getElementById('profilo-ruolo-display').innerHTML =
+    `<span class="badge ${roleBadges[u.ruolo]||'badge-gray'}">${roleLabels[u.ruolo]||u.ruolo}</span>`;
+  document.getElementById('profilo-sub').textContent = `Ciao ${u.nome}! Qui puoi aggiornare le tue informazioni.`;
+
+  // Form
+  document.getElementById('profilo-nome').value = u.nome || '';
+  document.getElementById('profilo-cognome').value = u.cognome || '';
+  document.getElementById('profilo-username').value = u.username || '';
+  document.getElementById('profilo-pass-old').value = '';
+  document.getElementById('profilo-pass-new').value = '';
+  document.getElementById('profilo-pass-new2').value = '';
+
+  const fb = document.getElementById('profilo-feedback');
+  fb.style.display = 'none';
+  fb.textContent = '';
+}
+
+async function saveProfilo() {
+  const nome     = document.getElementById('profilo-nome').value.trim();
+  const cognome  = document.getElementById('profilo-cognome').value.trim();
+  const username = document.getElementById('profilo-username').value.trim();
+  const passOld  = document.getElementById('profilo-pass-old').value;
+  const passNew  = document.getElementById('profilo-pass-new').value;
+  const passNew2 = document.getElementById('profilo-pass-new2').value;
+  const fb = document.getElementById('profilo-feedback');
+
+  // Validazioni base
+  if (!nome || !username) {
+    showFeedback(fb, '⚠️ Nome e username sono obbligatori.', 'warning');
+    return;
+  }
+  if (!passOld) {
+    showFeedback(fb, '⚠️ Inserisci la password attuale per confermare le modifiche.', 'warning');
+    return;
+  }
+  if (passNew && passNew !== passNew2) {
+    showFeedback(fb, '⚠️ Le nuove password non coincidono.', 'warning');
+    return;
+  }
+  if (passNew && passNew.length < 4) {
+    showFeedback(fb, '⚠️ La nuova password deve avere almeno 4 caratteri.', 'warning');
+    return;
+  }
+
+  // Check username duplicato (escludendo se stesso)
+  const dup = state.utenti.find(u => u.username === username && u.id !== state.currentUser.id);
+  if (dup) {
+    showFeedback(fb, '⚠️ Username già in uso da un altro utente.', 'warning');
+    return;
+  }
+
+  const body = {
+    nome, cognome, username,
+    current_password: passOld,
+  };
+  if (passNew) body.password = passNew;
+
+  try {
+    const saved = await api('PATCH', `/api/utenti/${state.currentUser.id}/profilo`, body);
+
+    // Aggiorna state locale
+    state.currentUser.nome = nome;
+    state.currentUser.cognome = cognome;
+    state.currentUser.username = username;
+
+    const idx = state.utenti.findIndex(u => u.id === state.currentUser.id);
+    if (idx >= 0) {
+      state.utenti[idx].nome = nome;
+      state.utenti[idx].cognome = cognome;
+      state.utenti[idx].username = username;
+    }
+
+    // Aggiorna topbar
+    document.getElementById('topbar-username').textContent = (nome + ' ' + cognome).trim();
+
+    showFeedback(fb, '✅ Profilo aggiornato con successo!', 'success');
+    showToast('Profilo aggiornato ✅', 'success');
+
+    // Pulisci campi password
+    document.getElementById('profilo-pass-old').value = '';
+    document.getElementById('profilo-pass-new').value = '';
+    document.getElementById('profilo-pass-new2').value = '';
+
+    // Aggiorna display
+    renderProfilo();
+  } catch(e) {
+    const msg = e.message || 'Errore salvataggio';
+    const isWrongPass = msg.toLowerCase().includes('password') || msg.toLowerCase().includes('credenziali');
+    showFeedback(fb, `⚠️ ${isWrongPass ? 'Password attuale errata.' : msg}`, 'warning');
+  }
+}
+
+function showFeedback(el, msg, type) {
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.style.padding = '10px 12px';
+  el.style.borderRadius = '8px';
+  el.style.fontWeight = '500';
+  if (type === 'success') {
+    el.style.background = 'var(--accent-light)';
+    el.style.color = 'var(--accent)';
+    el.style.border = '1px solid var(--accent)';
+  } else {
+    el.style.background = 'var(--accent2-light)';
+    el.style.color = 'var(--accent2)';
+    el.style.border = '1px solid var(--accent2)';
+  }
+}
 
 function openPDFGiornaliero() {
   document.getElementById('pdf-data').value = today();

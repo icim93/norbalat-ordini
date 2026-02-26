@@ -479,6 +479,45 @@ app.put('/api/utenti/:id', authMiddleware, requireRole('admin'), async (req, res
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// PATCH /api/utenti/:id/profilo — ogni utente può modificare il proprio profilo
+app.patch('/api/utenti/:id/profilo', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    // Solo l'utente stesso o un admin può modificare il profilo
+    if (req.user.id !== id && req.user.ruolo !== 'admin') {
+      return res.status(403).json({ error: 'Non autorizzato' });
+    }
+    const { nome, cognome='', username, password, current_password } = req.body;
+    if (!nome || !username) return res.status(400).json({ error: 'Nome e username obbligatori' });
+
+    // Verifica password attuale (skip se admin modifica altro utente)
+    if (req.user.id === id) {
+      if (!current_password) return res.status(400).json({ error: 'Password attuale obbligatoria' });
+      const { rows: [user] } = await q('SELECT password FROM utenti WHERE id=$1', [id]);
+      if (!user) return res.status(404).json({ error: 'Utente non trovato' });
+      const bcrypt = require('bcrypt');
+      const ok = await bcrypt.compare(current_password, user.password);
+      if (!ok) return res.status(400).json({ error: 'Password attuale errata' });
+    }
+
+    // Check username univoco
+    const { rows: dup } = await q('SELECT id FROM utenti WHERE username=$1 AND id!=$2', [username, id]);
+    if (dup.length) return res.status(400).json({ error: 'Username già in uso' });
+
+    if (password) {
+      const bcrypt = require('bcrypt');
+      const hash = await bcrypt.hash(password, 10);
+      await q('UPDATE utenti SET nome=$1,cognome=$2,username=$3,password=$4 WHERE id=$5',
+        [nome, cognome, username, hash, id]);
+    } else {
+      await q('UPDATE utenti SET nome=$1,cognome=$2,username=$3 WHERE id=$4',
+        [nome, cognome, username, id]);
+    }
+    res.json({ ok: true, nome, cognome, username });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
 app.delete('/api/utenti/:id', authMiddleware, requireRole('admin'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
