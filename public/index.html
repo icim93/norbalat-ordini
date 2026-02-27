@@ -2665,13 +2665,13 @@ function openEditProdotto(id) {
 async function saveProdotto() {
   const codice    = document.getElementById('pr-codice').value.trim().toUpperCase();
   const nome      = document.getElementById('pr-nome').value.trim();
-  const categoria = document.getElementById('pr-categoria').value;
+  const categoria = document.getElementById('pr-cat').value;
   const um        = document.getElementById('pr-um').value.trim();
   if (!codice||!nome||!categoria||!um) { showToast('Compila tutti i campi obbligatori', 'warning'); return; }
   const body = {
     codice, nome, categoria, um,
     packaging:  document.getElementById('pr-packaging').value.trim(),
-    peso_fisso: document.getElementById('pr-pesofisso').checked,
+    peso_fisso: (document.getElementById('pr-peso').value === 'F'),
     note:       document.getElementById('pr-note').value.trim(),
   };
   try {
