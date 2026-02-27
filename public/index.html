@@ -2923,7 +2923,7 @@ function openNewOrder() {
   populateOrderSelects(null, defaultAgente);
   renderOrderLines();
   openModal('modal-ordine');
-  setTimeout(() => document.getElementById('ac-cliente-input')?.focus(), 100);
+  // focus rimosso: apriva automaticamente il dropdown cliente
 }
 
 function openEditOrder(id) {
@@ -4722,7 +4722,7 @@ function openNewOrderCatalogo() {
   catRenderCategorie();
   updateCartBar();
   openModal('modal-catalogo');
-  setTimeout(() => document.getElementById('ac-cat-cliente-input')?.focus(), 100);
+  // focus rimosso: apriva automaticamente il dropdown cliente
 }
 
 // ── Navigazione schermate ──
@@ -5157,12 +5157,8 @@ function resolveConfirm(result) {
   if (_confirmResolve) { _confirmResolve(result); _confirmResolve = null; }
 }
 
-// Close modal on overlay click
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', function(e) {
-    if (e.target === this) closeModal(this.id);
-  });
-});
+// Modal si chiude SOLO con la X, non cliccando fuori
+// (rimosso il listener sull'overlay per evitare chiusure accidentali)
 
 // ═══════════════════════════════════════════════
 // TOAST
