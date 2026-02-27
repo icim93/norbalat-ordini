@@ -736,12 +736,125 @@
   .pedana-empty { color: var(--text3); font-style: italic; font-size: 12px; }
   .row-selected { background: var(--accent-light) !important; }
 
-  @media (max-width: 768px) {
+    /* ── HAMBURGER + DRAWER ── */
+  .hamburger-btn {
+    display: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px 10px;
+    border-radius: 8px;
+    color: var(--text1);
+    font-size: 22px;
+    line-height: 1;
+    transition: background 0.15s;
+    align-items: center;
+    justify-content: center;
+  }
+  .hamburger-btn:hover { background: var(--surface2); }
+
+  .drawer-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 500;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .drawer-overlay.open { display: block; }
+
+  .drawer {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 280px;
+    background: var(--surface);
+    z-index: 501;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(.4,0,.2,1);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 4px 0 32px rgba(0,0,0,0.18);
+    overflow: hidden;
+  }
+  .drawer.open { transform: translateX(0); }
+
+  .drawer-header {
+    padding: 18px 16px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    background: var(--accent);
+  }
+  .drawer-brand { font-size: 16px; font-weight: 700; color: #fff; }
+  .drawer-close {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    color: #fff;
+    padding: 4px 9px;
+    border-radius: 6px;
+    line-height: 1;
+  }
+
+  .drawer-user {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--accent-light);
+  }
+  .drawer-user-name { font-size: 14px; font-weight: 700; color: var(--accent); }
+  .drawer-user-role { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+  .drawer-nav {
+    flex: 1;
+    padding: 8px;
+    overflow-y: auto;
+  }
+  .drawer-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 13px 14px;
+    border-radius: 10px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text1);
+    font-family: inherit;
+    text-align: left;
+    transition: background 0.12s;
+    margin-bottom: 2px;
+  }
+  .drawer-nav-item:hover { background: var(--surface2); }
+  .drawer-nav-item.active {
+    background: var(--accent-light);
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .drawer-nav-icon { font-size: 20px; width: 26px; text-align: center; flex-shrink: 0; }
+
+  .drawer-footer {
+    padding: 14px 16px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+@media (max-width: 768px) {
     /* Layout */
     .sidebar { display: none; }
-    .main { padding: 16px 12px; }
-    .topbar { padding: 0 12px; }
+    .mobile-nav { display: none !important; }
+    .hamburger-btn { display: flex; }
+    .main { padding: 16px 12px 24px; }
+    .topbar { padding: 0 8px; }
     .topbar-username { display: none; }
+    .topbar-role { display: none; }
 
     /* Grids */
     .report-grid { grid-template-columns: 1fr; }
@@ -977,7 +1090,16 @@
 <div id="screen-app">
   <!-- Top bar -->
   <div class="topbar">
-    <div class="topbar-brand">🧀 Norbalat Ordini</div>
+    <div style="display:flex;align-items:center;gap:2px;">
+      <button class="hamburger-btn" id="hamburger-btn" onclick="openDrawer()" aria-label="Menu">
+        <span style="display:flex;flex-direction:column;gap:4px;pointer-events:none;">
+          <span style="display:block;width:20px;height:2px;background:currentColor;border-radius:2px;"></span>
+          <span style="display:block;width:20px;height:2px;background:currentColor;border-radius:2px;"></span>
+          <span style="display:block;width:20px;height:2px;background:currentColor;border-radius:2px;"></span>
+        </span>
+      </button>
+      <div class="topbar-brand">🧀 Norbalat Ordini</div>
+    </div>
     <div class="topbar-user">
       <span id="topbar-username" style="font-size:14px;font-weight:500;"></span>
       <span id="topbar-role" class="topbar-role"></span>
@@ -1486,6 +1608,25 @@
   <!-- Mobile bottom nav -->
   <div class="mobile-nav" id="mobile-nav">
     <div class="mobile-nav-items" id="mobile-nav-items"></div>
+  </div>
+</div>
+
+<!-- ══════ DRAWER MOBILE ══════ -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div class="drawer-brand">🧀 Norbalat Ordini</div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-user">
+    <div class="drawer-user-name" id="drawer-username"></div>
+    <div class="drawer-user-role" id="drawer-role"></div>
+  </div>
+  <nav class="drawer-nav" id="drawer-nav"></nav>
+  <div class="drawer-footer">
+    <button class="btn btn-outline" style="width:100%;justify-content:center;" onclick="closeDrawer();doLogout()">
+      🚪 Esci
+    </button>
   </div>
 </div>
 
@@ -2284,7 +2425,10 @@ const navConfigs = {
 function setupNav() {
   const role = state.currentUser.ruolo;
   const items = navConfigs[role] || navConfigs.admin;
+  const u = state.currentUser;
+  const roleLabels = {admin:'Admin / Ufficio', autista:'Autista / Agente', magazzino:'Magazzino', direzione:'Direzione'};
 
+  // Sidebar desktop
   const sidebar = document.getElementById('sidebar-nav');
   sidebar.innerHTML = items.map(i => `
     <button class="nav-item" id="nav-${i.page}" onclick="goTo('${i.page}')">
@@ -2292,23 +2436,54 @@ function setupNav() {
     </button>
   `).join('');
 
+  // Drawer mobile — tutte le voci
+  const drawerNav = document.getElementById('drawer-nav');
+  if (drawerNav) {
+    drawerNav.innerHTML = items.map(i => `
+      <button class="drawer-nav-item" id="dnav-${i.page}" onclick="goTo('${i.page}');closeDrawer()">
+        <span class="drawer-nav-icon">${i.icon}</span>${i.label}
+      </button>
+    `).join('');
+  }
+  const dn = document.getElementById('drawer-username');
+  const dr = document.getElementById('drawer-role');
+  if (dn) dn.textContent = (u.nome + ' ' + (u.cognome||'')).trim();
+  if (dr) dr.textContent = roleLabels[u.ruolo] || u.ruolo;
+
+  // Bottom nav (nascosto su mobile via CSS)
   const mobileNav = document.getElementById('mobile-nav-items');
-  mobileNav.innerHTML = items.slice(0,4).map(i => `
-    <button class="mobile-nav-item" id="mnav-${i.page}" onclick="goTo('${i.page}')">
-      <span class="mn-icon">${i.icon}</span>${i.label}
-    </button>
-  `).join('');
+  if (mobileNav) {
+    mobileNav.innerHTML = items.slice(0,4).map(i => `
+      <button class="mobile-nav-item" id="mnav-${i.page}" onclick="goTo('${i.page}')">
+        <span class="mn-icon">${i.icon}</span>${i.label}
+      </button>
+    `).join('');
+  }
+}
+
+function openDrawer() {
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.body.style.overflow = '';
 }
 
 function goTo(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.nav-item, .mobile-nav-item, .drawer-nav-item').forEach(n => n.classList.remove('active'));
   const el = document.getElementById('page-' + page);
   if (el) el.classList.add('active');
   const nav = document.getElementById('nav-' + page);
   if (nav) nav.classList.add('active');
   const mnav = document.getElementById('mnav-' + page);
   if (mnav) mnav.classList.add('active');
+  const dnav = document.getElementById('dnav-' + page);
+  if (dnav) dnav.classList.add('active');
   state.currentPage = page;
   renderPage(page);
 }
