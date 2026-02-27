@@ -646,7 +646,7 @@
   /* ── TOAST ── */
   .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
   .toast {
-    background: var(--text);
+    background: var(--text1);
     color: white;
     padding: 12px 18px;
     border-radius: var(--radius-sm);
@@ -1226,7 +1226,7 @@
               <div style="display:flex;align-items:center;gap:6px;">
                 <label style="font-size:13px;font-weight:600;color:var(--text2);">📅</label>
                 <input type="date" id="filter-magazzino-data" onchange="renderMagazzino()"
-                  style="padding:8px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-family:inherit;cursor:pointer;">
+                  style="padding:8px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text1);font-family:inherit;cursor:pointer;">
               </div>
               <select id="filter-magazzino-stato" onchange="renderMagazzino()" style="width:auto;padding:8px 14px;font-size:13px;">
                 <option value="">Tutti gli stati</option>
@@ -1797,8 +1797,15 @@
         </div>
         <div class="field">
           <label>Password *</label>
-          <input type="password" id="ut-pass" placeholder="••••••" autocomplete="new-password">
+          <input type="password" id="ut-password" placeholder="••••••" autocomplete="new-password">
         </div>
+      </div>
+      <!-- Checkbox isAgente -->
+      <div class="field form-full" style="margin-top:4px;">
+        <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;">
+          <input type="checkbox" id="ut-isagente" style="width:16px;height:16px;accent-color:var(--accent);">
+          È un agente commerciale (può essere assegnato agli ordini)
+        </label>
       </div>
       <!-- Giri assegnati (solo autisti) -->
       <div id="ut-giri-section" style="display:none;margin-top:8px;">
@@ -2819,7 +2826,9 @@ function openEditUtente(id) {
   document.getElementById('ut-cognome').value = u.cognome || '';
   document.getElementById('ut-tipo').value = u.tipoUtente || '';
   document.getElementById('ut-username').value = u.username;
-  document.getElementById('ut-pass').value = '';
+  document.getElementById('ut-password').value = '';
+  const isagenteEl = document.getElementById('ut-isagente');
+  if (isagenteEl) isagenteEl.checked = !!u.isAgente;
   document.getElementById('ut-ruolo').value = u.ruolo;
   const isAutista = u.ruolo === 'autista';
   document.getElementById('ut-giri-section').style.display = isAutista ? 'block' : 'none';
@@ -3664,12 +3673,12 @@ async function confermaConsegna(id) {
 
 function renderActivityLog() {
   const isAdmin = state.currentUser?.ruolo === 'admin';
-  const card = document.getElementById('activity-log-card');
+  const card = document.getElementById('card-activity-log');
   if (!card) return;
   card.style.display = isAdmin ? 'block' : 'none';
   if (!isAdmin) return;
 
-  const body = document.getElementById('activity-log-body');
+  const body = document.getElementById('activity-log-list');
   if (!state.activityLog.length) {
     body.innerHTML = '<div style="padding:20px;color:var(--text2);font-size:13px;text-align:center;">Nessuna attività registrata</div>';
     return;
@@ -4290,7 +4299,7 @@ function renderImpostazioni() {
   }).join('');
 
   // Carichi tentata vendita
-  const tEl = document.getElementById('tentata-config-list');
+  const tEl = document.getElementById('tentata-list');
   if (!tEl) return;
   const autisti = state.utenti.filter(u => u.ruolo === 'autista');
   tEl.innerHTML = autisti.map(a => {
