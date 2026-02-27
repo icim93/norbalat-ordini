@@ -3919,8 +3919,7 @@ function renderPianoBody(isEditor, isConferma) {
         <div class="pedana-label">
           <span>P${slot.n}</span><span class="pedana-status">${filled?'● occupata':'vuota'}</span>
         </div>
-        <div class="pedana-readonly ${filled?'':'pedana-empty'}">${filled?nota.replace(/
-/g,'<br>'):'—'}</div>
+        <div class="pedana-readonly ${filled?'':'pedana-empty'}">${filled?nota.replace(/\n/g,'<br>'):'—'}</div>
       </div>`;
     }
   }).join('');
