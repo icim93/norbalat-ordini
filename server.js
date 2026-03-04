@@ -159,6 +159,7 @@ async function createSchema() {
       ordine_id       INTEGER NOT NULL REFERENCES ordini(id) ON DELETE CASCADE,
       prodotto_id     INTEGER NOT NULL REFERENCES prodotti(id),
       qty             NUMERIC NOT NULL DEFAULT 1,
+      prezzo_unitario NUMERIC,
       peso_effettivo  NUMERIC,
       is_pedana       BOOLEAN DEFAULT FALSE,
       nota_riga       TEXT DEFAULT ''
@@ -212,12 +213,27 @@ async function createSchema() {
       ts          TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS listini (
+      id          SERIAL PRIMARY KEY,
+      prodotto_id INTEGER NOT NULL REFERENCES prodotti(id) ON DELETE CASCADE,
+      cliente_id  INTEGER REFERENCES clienti(id) ON DELETE CASCADE,
+      prezzo      NUMERIC NOT NULL CHECK(prezzo >= 0),
+      valido_dal  DATE NOT NULL DEFAULT CURRENT_DATE,
+      valido_al   DATE,
+      note        TEXT DEFAULT '',
+      created_by  INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ DEFAULT NOW(),
+      updated_at  TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_ordini_data    ON ordini(data);
     CREATE INDEX IF NOT EXISTS idx_ordini_stato   ON ordini(stato);
     CREATE INDEX IF NOT EXISTS idx_ordini_agente  ON ordini(agente_id);
     CREATE INDEX IF NOT EXISTS idx_ordini_cliente ON ordini(cliente_id);
     CREATE INDEX IF NOT EXISTS idx_linee_ordine   ON ordine_linee(ordine_id);
     CREATE INDEX IF NOT EXISTS idx_activity_ts    ON activity_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_listini_prod_cliente ON listini(prodotto_id,cliente_id);
+    CREATE INDEX IF NOT EXISTS idx_listini_validita ON listini(valido_dal,valido_al);
 
     -- Migrazioni safe per DB esistenti
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS classificazione TEXT DEFAULT '';
@@ -233,6 +249,7 @@ async function createSchema() {
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS is_pedana      BOOLEAN DEFAULT FALSE;
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS nota_riga      TEXT DEFAULT '';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS unita_misura   TEXT DEFAULT 'pezzi';
+    ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS prezzo_unitario NUMERIC;
 
     DO $$
     BEGIN
@@ -547,6 +564,8 @@ const PERMISSIONS = {
   'clienti:create': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'clienti:update': ['admin', 'amministrazione', 'direzione'],
   'clienti:delete': ['admin'],
+  'listini:view': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
+  'listini:manage': ['admin', 'direzione'],
   'onboarding:manage': ['admin', 'amministrazione'],
   'ordini:create': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'ordini:update': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
@@ -575,6 +594,27 @@ async function logOnboardingChange({ clienteId, reqUser, oldStato, newStato, old
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
     [clienteId, reqUser.id || null, userName || 'Sistema', oldStato || null, newStato || null, oldFido ?? null, newFido ?? null, note || '']
   );
+}
+
+async function resolvePrezzoUnitario({ prodottoId, clienteId, data, client = null }) {
+  const run = client ? client.query.bind(client) : q;
+  const sql = `
+    SELECT prezzo
+    FROM listini
+    WHERE prodotto_id = $1
+      AND (cliente_id = $2 OR cliente_id IS NULL)
+      AND valido_dal <= $3::date
+      AND (valido_al IS NULL OR valido_al >= $3::date)
+    ORDER BY
+      CASE WHEN cliente_id = $2 THEN 0 ELSE 1 END,
+      valido_dal DESC,
+      id DESC
+    LIMIT 1
+  `;
+  const { rows } = await run(sql, [prodottoId, clienteId || null, data]);
+  if (!rows.length) return null;
+  const p = Number(rows[0].prezzo);
+  return Number.isFinite(p) ? p : null;
 }
 
 // ─── AUTH ROUTES ─────────────────────────────────────────────────
@@ -916,6 +956,79 @@ app.delete('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req
 });
 
 // ─── ORDINI ──────────────────────────────────────────────────────
+app.get('/api/listini', authMiddleware, requirePermission('listini:view'), async (req, res) => {
+  try {
+    const { prodotto_id, cliente_id, include_scaduti } = req.query;
+    const where = ['1=1'];
+    const params = [];
+    let i = 1;
+    if (prodotto_id) { where.push(`l.prodotto_id=$${i++}`); params.push(parseInt(prodotto_id)); }
+    if (cliente_id === 'null') {
+      where.push('l.cliente_id IS NULL');
+    } else if (cliente_id) {
+      where.push(`l.cliente_id=$${i++}`); params.push(parseInt(cliente_id)); }
+    if (!include_scaduti || include_scaduti === '0') {
+      where.push(`(l.valido_al IS NULL OR l.valido_al >= CURRENT_DATE)`);
+    }
+    const { rows } = await q(
+      `SELECT l.*, p.codice AS prodotto_codice, p.nome AS prodotto_nome, c.nome AS cliente_nome
+       FROM listini l
+       JOIN prodotti p ON p.id=l.prodotto_id
+       LEFT JOIN clienti c ON c.id=l.cliente_id
+       WHERE ${where.join(' AND ')}
+       ORDER BY p.nome, l.cliente_id NULLS FIRST, l.valido_dal DESC, l.id DESC`,
+      params
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
+  try {
+    const { prodotto_id, cliente_id = null, prezzo, valido_dal, valido_al = null, note = '' } = req.body || {};
+    if (!prodotto_id || prezzo === undefined || !valido_dal) {
+      return res.status(400).json({ error: 'Campi obbligatori mancanti' });
+    }
+    const p = Number(prezzo);
+    if (!Number.isFinite(p) || p < 0) return res.status(400).json({ error: 'Prezzo non valido' });
+    if (valido_al && valido_al < valido_dal) return res.status(400).json({ error: 'Intervallo date non valido' });
+    const r = await q(
+      `INSERT INTO listini (prodotto_id,cliente_id,prezzo,valido_dal,valido_al,note,created_by,updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) RETURNING *`,
+      [parseInt(prodotto_id), cliente_id ? parseInt(cliente_id) : null, p, valido_dal, valido_al || null, note, req.user.id || null]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/listini/:id', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { prezzo, valido_dal, valido_al = null, note = '' } = req.body || {};
+    if (prezzo === undefined || !valido_dal) return res.status(400).json({ error: 'Campi mancanti' });
+    const p = Number(prezzo);
+    if (!Number.isFinite(p) || p < 0) return res.status(400).json({ error: 'Prezzo non valido' });
+    if (valido_al && valido_al < valido_dal) return res.status(400).json({ error: 'Intervallo date non valido' });
+    const r = await q(
+      `UPDATE listini
+       SET prezzo=$1, valido_dal=$2, valido_al=$3, note=$4, updated_at=NOW()
+       WHERE id=$5
+       RETURNING *`,
+      [p, valido_dal, valido_al || null, note, id]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Listino non trovato' });
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/listini/:id', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await q('DELETE FROM listini WHERE id=$1', [id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 async function getOrdineCompleto(id) {
   const { rows } = await q(`
     SELECT o.*,
@@ -977,7 +1090,7 @@ app.get('/api/ordini', authMiddleware, async (req, res) => {
       const ids = rows.map(r => r.id);
       const { rows: linee } = await q(
         `SELECT ol.ordine_id, ol.prodotto_id, ol.qty, ol.peso_effettivo,
-                ol.is_pedana, ol.nota_riga, ol.unita_misura,
+                ol.prezzo_unitario, ol.is_pedana, ol.nota_riga, ol.unita_misura,
                 p.codice, p.nome as prodotto_nome, p.um, p.packaging
          FROM ordine_linee ol JOIN prodotti p ON ol.prodotto_id = p.id
          WHERE ol.ordine_id = ANY($1) ORDER BY ol.ordine_id, ol.id`, [ids]);
@@ -1020,9 +1133,15 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
     );
     const oid = r.rows[0].id;
     for (const l of linee) {
+      const prezzoUnitario = await resolvePrezzoUnitario({
+        prodottoId: l.prodotto_id,
+        clienteId: cliente_id,
+        data,
+        client,
+      });
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,qty,is_pedana,nota_riga,unita_misura) VALUES ($1,$2,$3,$4,$5,$6)`,
-        [oid, l.prodotto_id, l.qty, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi']
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [oid, l.prodotto_id, l.qty, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi']
       );
     }
     await client.query('COMMIT');
@@ -1054,9 +1173,16 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
     );
     await client.query('DELETE FROM ordine_linee WHERE ordine_id=$1', [id]);
     for (const l of linee) {
+      const prezzoUnitario = await resolvePrezzoUnitario({
+        prodottoId: l.prodotto_id,
+        clienteId: cliente_id,
+        data,
+        client,
+      });
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,qty) VALUES ($1,$2,$3)`,
-        [id, l.prodotto_id, l.qty]
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [id, l.prodotto_id, l.qty, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi']
       );
     }
     await client.query('COMMIT');

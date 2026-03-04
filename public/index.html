@@ -1260,6 +1260,7 @@
                 <th>U.M.</th>
                 <th>Packaging</th>
                 <th>Peso</th>
+                <th>Prezzo base</th>
                 <th>Azioni</th>
               </tr>
             </thead>
@@ -1622,7 +1623,7 @@
         </div>
         <div class="field">
           <label>Data Consegna *</label>
-          <input type="date" id="ord-data">
+          <input type="date" id="ord-data" onchange="renderOrderLines()">
           <div style="display:flex;gap:16px;margin-top:6px;">
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
               <input type="checkbox" id="ord-data-non-certa" style="width:15px;height:15px;">
@@ -1654,6 +1655,7 @@
         <label>Prodotti *</label>
         <div class="order-lines" id="ord-lines-container"></div>
         <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addOrderLine()">＋ Aggiungi prodotto</button>
+        <div id="ord-price-summary" style="margin-top:8px;font-size:12px;color:var(--text2);"></div>
       </div>
 
       <div class="field" style="margin-top:12px;">
@@ -1925,6 +1927,64 @@
   </div>
 </div>
 
+<!-- Modal: Listini prodotto -->
+<div class="modal-overlay" id="modal-listini">
+  <div class="modal" style="max-width:860px;">
+    <div class="modal-header">
+      <div class="modal-title">Listini prodotto</div>
+      <button class="modal-close" onclick="closeModal('modal-listini')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="listini-prodotto-title" style="font-weight:700;font-size:14px;margin-bottom:10px;"></div>
+      <div class="form-row">
+        <div class="field">
+          <label>Cliente</label>
+          <select id="ls-cliente">
+            <option value="">Listino base (tutti)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Prezzo</label>
+          <input type="number" id="ls-prezzo" min="0" step="0.01" placeholder="es. 12.50">
+        </div>
+        <div class="field">
+          <label>Valido dal</label>
+          <input type="date" id="ls-dal">
+        </div>
+        <div class="field">
+          <label>Valido al</label>
+          <input type="date" id="ls-al">
+        </div>
+        <div class="field form-full">
+          <label>Note</label>
+          <input type="text" id="ls-note" placeholder="opzionale">
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+        <button class="btn btn-green btn-sm" onclick="saveListinoEntry()">Salva listino</button>
+      </div>
+      <div style="margin-top:12px;border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:300px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Prezzo</th>
+              <th>Dal</th>
+              <th>Al</th>
+              <th>Note</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody id="listini-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-listini')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Utente -->
 <div class="modal-overlay" id="modal-utente">
   <div class="modal" style="max-width:540px;">
@@ -2179,6 +2239,7 @@ let state = {
   utenti:    [],
   clienti:   [],
   prodotti:  [],
+  listini:   [],
   ordini:    [],
   camions:   [],
   giriCalendario: [],
@@ -2189,6 +2250,7 @@ let state = {
   devMonitorTimer: null,
   devSmoke: null,
   devThresholds: null,
+  listinoProdottoId: null,
 };
 
 function canSeeDevPanel() {
@@ -2263,6 +2325,39 @@ function canApproveOnboarding() {
   return r === 'admin' || r === 'amministrazione';
 }
 
+function canManageListini() {
+  const r = state.currentUser?.ruolo;
+  return r === 'admin' || r === 'direzione';
+}
+
+function eur(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '-';
+  return `€ ${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function getListinoPrezzo(prodottoId, clienteId, dataRif) {
+  const d = dataRif || today();
+  const validi = state.listini.filter(l => {
+    if (l.prodottoId !== prodottoId) return false;
+    if (!(l.clienteId === null || l.clienteId === clienteId)) return false;
+    if (l.validoDal && l.validoDal > d) return false;
+    if (l.validoAl && l.validoAl < d) return false;
+    return true;
+  });
+  if (!validi.length) return null;
+  validi.sort((a, b) => {
+    if ((a.clienteId === clienteId) !== (b.clienteId === clienteId)) return (a.clienteId === clienteId) ? -1 : 1;
+    if (a.validoDal !== b.validoDal) return (a.validoDal < b.validoDal) ? 1 : -1;
+    return b.id - a.id;
+  });
+  return validi[0].prezzo;
+}
+
+function getListinoBaseProdotto(prodottoId) {
+  return getListinoPrezzo(prodottoId, null, today());
+}
+
 function isClienteSbloccato(c) {
   return !!c?.sbloccato || c?.onboardingStato === 'approvato';
 }
@@ -2290,10 +2385,11 @@ async function api(method, path, body = null) {
 async function loadAllData() {
   try {
     const canSeePiano = ['admin', 'autista', 'magazzino'].includes(state.currentUser?.ruolo);
-    const [utenti, clienti, prodotti, ordini, camions, giri] = await Promise.all([
+    const [utenti, clienti, prodotti, listini, ordini, camions, giri] = await Promise.all([
       api('GET', '/api/utenti'),
       api('GET', '/api/clienti'),
       api('GET', '/api/prodotti'),
+      api('GET', '/api/listini'),
       api('GET', '/api/ordini'),
       canSeePiano ? api('GET', '/api/camions') : Promise.resolve([]),
       api('GET', '/api/giri'),
@@ -2302,6 +2398,7 @@ async function loadAllData() {
     state.utenti   = (utenti   ||[]).map(normalizeUtente);
     state.clienti  = (clienti  ||[]).map(normalizeCliente);
     state.prodotti = (prodotti ||[]).map(normalizeProdotto);
+    state.listini  = (listini  ||[]).map(normalizeListino);
     state.ordini   = (ordini   ||[]).map(normalizeOrdine);
     state.camions  = (camions  ||[]).map(normalizeCamion);
     state.giriCalendario = (giri||[]).map(g => ({...g, giorni: g.giorni||[]}));
@@ -2364,6 +2461,20 @@ function normalizeProdotto(p) {
   };
 }
 
+function normalizeListino(l) {
+  return {
+    id: l.id,
+    prodottoId: l.prodotto_id,
+    clienteId: l.cliente_id || null,
+    prezzo: Number(l.prezzo),
+    validoDal: (l.valido_dal || '').substring(0, 10),
+    validoAl: l.valido_al ? String(l.valido_al).substring(0, 10) : '',
+    note: l.note || '',
+    prodottoNome: l.prodotto_nome || '',
+    clienteNome: l.cliente_nome || '',
+  };
+}
+
 function normalizeOrdine(o) {
   return {
     id: o.id,
@@ -2380,6 +2491,7 @@ function normalizeOrdine(o) {
     linee: (o.linee||[]).map(l => ({
       prodId: l.prodotto_id,
       qty: l.qty,
+      prezzoUnitario: (l.prezzo_unitario !== undefined && l.prezzo_unitario !== null) ? Number(l.prezzo_unitario) : null,
       pesoEffettivo: l.peso_effettivo||null,
       isPedana: !!l.is_pedana,
       notaRiga: l.nota_riga||'',
@@ -2467,6 +2579,7 @@ function doLogout() {
   state.token = null;
   state.currentUser = null;
   state.utenti = []; state.clienti = []; state.prodotti = [];
+  state.listini = []; state.listinoProdottoId = null;
   state.ordini = []; state.camions = []; state.giriCalendario = [];
   state.devMetrics = null; state.devSmoke = null; state.devErrors = []; state.devThresholds = null;
   document.getElementById('screen-app').style.display = 'none';
@@ -3034,6 +3147,123 @@ async function deleteCliente(id) {
 // PRODOTTI
 // ═══════════════════════════════════════════════
 
+let editingListinoId = null;
+
+function getListiniProdotto(prodottoId) {
+  return state.listini
+    .filter(l => l.prodottoId === prodottoId)
+    .sort((a, b) => {
+      if ((a.clienteId === null) !== (b.clienteId === null)) return a.clienteId === null ? -1 : 1;
+      if (a.validoDal !== b.validoDal) return a.validoDal < b.validoDal ? 1 : -1;
+      return b.id - a.id;
+    });
+}
+
+function openListiniModal(prodottoId) {
+  if (!canManageListini()) return;
+  state.listinoProdottoId = prodottoId;
+  editingListinoId = null;
+  const p = getProdotto(prodottoId);
+  document.getElementById('listini-prodotto-title').textContent = `[${p.codice}] ${p.nome}`;
+  const sel = document.getElementById('ls-cliente');
+  sel.innerHTML = '<option value="">Listino base (tutti)</option>' +
+    state.clienti.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+  document.getElementById('ls-prezzo').value = '';
+  document.getElementById('ls-dal').value = today();
+  document.getElementById('ls-al').value = '';
+  document.getElementById('ls-note').value = '';
+  renderListiniTable();
+  openModal('modal-listini');
+}
+
+function renderListiniTable() {
+  const prodottoId = state.listinoProdottoId;
+  const body = document.getElementById('listini-table-body');
+  if (!prodottoId || !body) return;
+  const rows = getListiniProdotto(prodottoId);
+  body.innerHTML = rows.length ? rows.map(l => `
+    <tr>
+      <td>${l.clienteId ? (state.clienti.find(c => c.id === l.clienteId)?.nome || '-') : '<b>TUTTI</b>'}</td>
+      <td style="font-family:'DM Mono',monospace;">${eur(l.prezzo)}</td>
+      <td>${l.validoDal || '-'}</td>
+      <td>${l.validoAl || '-'}</td>
+      <td>${l.note || ''}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="editListinoEntry(${l.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteListinoEntry(${l.id})">🗑️</button>
+      </td>
+    </tr>
+  `).join('') : '<tr><td colspan="6" style="color:var(--text3);">Nessun prezzo configurato</td></tr>';
+}
+
+function editListinoEntry(id) {
+  const l = state.listini.find(x => x.id === id);
+  if (!l) return;
+  editingListinoId = id;
+  document.getElementById('ls-cliente').value = l.clienteId || '';
+  document.getElementById('ls-prezzo').value = l.prezzo;
+  document.getElementById('ls-dal').value = l.validoDal || today();
+  document.getElementById('ls-al').value = l.validoAl || '';
+  document.getElementById('ls-note').value = l.note || '';
+}
+
+async function saveListinoEntry() {
+  if (!canManageListini()) return;
+  const prodottoId = state.listinoProdottoId;
+  const prezzo = parseFloat(document.getElementById('ls-prezzo').value);
+  const validoDal = document.getElementById('ls-dal').value;
+  const validoAl = document.getElementById('ls-al').value || null;
+  if (!prodottoId || !Number.isFinite(prezzo) || prezzo < 0 || !validoDal) {
+    showToast('Compila prezzo e data inizio', 'warning');
+    return;
+  }
+  if (validoAl && validoAl < validoDal) {
+    showToast('Intervallo date non valido', 'warning');
+    return;
+  }
+  const body = {
+    prodotto_id: prodottoId,
+    cliente_id: document.getElementById('ls-cliente').value ? parseInt(document.getElementById('ls-cliente').value) : null,
+    prezzo,
+    valido_dal: validoDal,
+    valido_al: validoAl,
+    note: document.getElementById('ls-note').value.trim(),
+  };
+  try {
+    let saved;
+    if (editingListinoId) {
+      saved = await api('PUT', `/api/listini/${editingListinoId}`, {
+        prezzo: body.prezzo, valido_dal: body.valido_dal, valido_al: body.valido_al, note: body.note,
+      });
+      const idx = state.listini.findIndex(x => x.id === editingListinoId);
+      if (idx !== -1) state.listini[idx] = normalizeListino({ ...state.listini[idx], ...saved, prodotto_id: prodottoId, cliente_id: body.cliente_id });
+    } else {
+      saved = await api('POST', '/api/listini', body);
+      state.listini.push(normalizeListino(saved));
+    }
+    editingListinoId = null;
+    document.getElementById('ls-prezzo').value = '';
+    document.getElementById('ls-dal').value = today();
+    document.getElementById('ls-al').value = '';
+    document.getElementById('ls-note').value = '';
+    renderListiniTable();
+    renderProdottiTable();
+    showToast('Listino salvato', 'success');
+  } catch (e) { showToast(e.message, 'warning'); }
+}
+
+async function deleteListinoEntry(id) {
+  if (!canManageListini()) return;
+  if (!await customConfirm('Eliminare questa voce listino?')) return;
+  try {
+    await api('DELETE', `/api/listini/${id}`);
+    state.listini = state.listini.filter(l => l.id !== id);
+    if (editingListinoId === id) editingListinoId = null;
+    renderListiniTable();
+    renderProdottiTable();
+  } catch (e) { showToast(e.message, 'warning'); }
+}
+
 function renderProdottiTable() {
   const q = (document.getElementById('search-prodotti')?.value || '').toLowerCase();
   const filterCat = document.getElementById('filter-cat-prodotti')?.value || '';
@@ -3050,7 +3280,9 @@ function renderProdottiTable() {
       <td style="font-family:'DM Mono',monospace;">${p.um}</td>
       <td style="font-size:12px;color:var(--text2);">${p.packaging}</td>
       <td><span class="badge ${p.pesoFisso ? 'badge-blue' : 'badge-orange'}">${p.pesoFisso ? 'Fisso' : 'Variabile'}</span></td>
+      <td style="font-family:'DM Mono',monospace;">${eur(getListinoBaseProdotto(p.id))}</td>
       <td>
+        ${canManageListini() ? `<button class="btn btn-outline btn-sm" onclick="openListiniModal(${p.id})">€</button>` : ''}
         <button class="btn btn-outline btn-sm" onclick="openEditProdotto(${p.id})">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="deleteProdotto(${p.id})">🗑️</button>
       </td>
@@ -3651,11 +3883,19 @@ function umPlurale(um, qty) {
 
 function renderOrderLines() {
   const container = document.getElementById('ord-lines-container');
+  const clienteId = parseInt(document.getElementById('ord-cliente')?.value || acState.cliente?.value || 0) || null;
+  const dataOrdine = document.getElementById('ord-data')?.value || today();
+  let totale = 0;
+  let righeConPrezzo = 0;
   container.innerHTML = orderLines.map((l, i) => {
     const p = l.prodId ? getProdotto(l.prodId) : null;
     const umOpts = ['Pezzi','Cartoni','Litri','Kg','Pedana'];
     const curUM = l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi');
     const isPedana = curUM === 'Pedana';
+    const prezzo = p ? getListinoPrezzo(p.id, clienteId, dataOrdine) : null;
+    const qty = Number(l.qty || 0);
+    const subtot = (prezzo !== null && Number.isFinite(qty)) ? prezzo * qty : null;
+    if (subtot !== null) { totale += subtot; righeConPrezzo++; }
     return `
     <div class="order-line" id="ord-line-${i}">
       <div style="display:flex;align-items:center;gap:6px;">
@@ -3683,12 +3923,22 @@ function renderOrderLines() {
       </div>
       ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">📦 ${p.packaging}${isPedana ? ' · <b style=color:var(--accent)>PEDANA INTERA</b>' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">🪵 PEDANA INTERA</div>` : '')}
       ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">📌 ${p.note}</div>` : ''}
+      ${p ? `<div style="font-size:11px;color:var(--text2);padding-left:2px;">Prezzo: ${prezzo !== null ? eur(prezzo) : 'non configurato'}${subtot !== null ? ` · Subtotale: <b>${eur(subtot)}</b>` : ''}</div>` : ''}
       <input type="text" value="${l.notaRiga||''}"
         placeholder="📝 Nota riga (es. nuovo lotto, data scadenza…)"
         oninput="orderLines[${i}].notaRiga=this.value"
         style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
     </div>`;
   }).join('') || '<div style="padding:12px;color:var(--text3);font-size:13px;">Nessun prodotto aggiunto</div>';
+  const summary = document.getElementById('ord-price-summary');
+  if (summary) {
+    if (!orderLines.length) {
+      summary.textContent = '';
+    } else {
+      const missing = orderLines.length - righeConPrezzo;
+      summary.innerHTML = `Totale stimato ordine: <b>${eur(totale)}</b>${missing ? ` · ${missing} riga/e senza prezzo` : ''}`;
+    }
+  }
 }
 
 
