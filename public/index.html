@@ -1009,6 +1009,9 @@
         <button class="role-btn active" onclick="selectRole('admin',this)">
           <span class="role-icon">🖥️</span>Admin / Ufficio
         </button>
+        <button class="role-btn" onclick="selectRole('amministrazione',this)">
+          <span class="role-icon">🧾</span>Amministrazione
+        </button>
         <button class="role-btn" onclick="selectRole('autista',this)">
           <span class="role-icon">🚚</span>Autista / Agente
         </button>
@@ -1187,6 +1190,8 @@
                 <th>Località</th>
                 <th>Giro</th>
                 <th>Ordini</th>
+                <th>Fido</th>
+                <th>Onboarding</th>
                 <th>Azioni</th>
               </tr>
             </thead>
@@ -1769,6 +1774,10 @@
             <option value="variabile">Variabile</option>
           </select>
         </div>
+        <div class="field">
+          <label>Fido (solo approvazione)</label>
+          <input type="number" id="cl-fido" min="0" step="0.01" placeholder="es. 5000">
+        </div>
         <div class="field form-full">
           <label>Agente di default</label>
           <select id="cl-agente">
@@ -1891,6 +1900,7 @@
           <label>Ruolo nel sistema *</label>
           <select id="ut-ruolo" onchange="toggleGiriUtente()">
             <option value="admin">Admin / Ufficio</option>
+            <option value="amministrazione">Amministrazione</option>
             <option value="autista">Autista / Agente</option>
             <option value="magazzino">Magazzino</option>
             <option value="direzione">Direzione</option>
@@ -2130,6 +2140,19 @@ let state = {
   carichiTentataVendita: [],
 };
 
+function canApproveOnboarding() {
+  const r = state.currentUser?.ruolo;
+  return r === 'admin' || r === 'amministrazione';
+}
+
+function isClienteSbloccato(c) {
+  return !!c?.sbloccato || c?.onboardingStato === 'approvato';
+}
+
+function clientiOrdinabili() {
+  return state.clienti.filter(isClienteSbloccato);
+}
+
 // ─── HTTP HELPER ──────────────────────────────────────────────────
 async function api(method, path, body = null) {
   const opts = {
@@ -2148,12 +2171,13 @@ async function api(method, path, body = null) {
 // ─── CARICAMENTO DATI INIZIALI ────────────────────────────────────
 async function loadAllData() {
   try {
+    const canSeePiano = ['admin', 'autista', 'magazzino'].includes(state.currentUser?.ruolo);
     const [utenti, clienti, prodotti, ordini, camions, giri] = await Promise.all([
       api('GET', '/api/utenti'),
       api('GET', '/api/clienti'),
       api('GET', '/api/prodotti'),
       api('GET', '/api/ordini'),
-      api('GET', '/api/camions'),
+      canSeePiano ? api('GET', '/api/camions') : Promise.resolve([]),
       api('GET', '/api/giri'),
     ]);
     // Normalizza campi: il backend usa snake_case, il frontend usa camelCase
@@ -2197,6 +2221,11 @@ function normalizeCliente(c) {
     classificazione: c.classificazione||'',
     condPagamento: c.cond_pagamento||'',
     eFornitore: !!c.e_fornitore,
+    onboardingStato: c.onboarding_stato || 'in_attesa',
+    fido: Number(c.fido || 0),
+    sbloccato: !!c.sbloccato,
+    onboardingApprovatoDa: c.onboarding_approvato_da || '',
+    onboardingApprovatoAt: c.onboarding_approvato_at || null,
   };
 }
 
@@ -2263,7 +2292,7 @@ function selectRole(role, el) {
   selectedRole = role;
   document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
-  const hints = {admin:'marco', autista:'francescoa', magazzino:'gaston', direzione:'francesco'};
+  const hints = {admin:'marco', amministrazione:'marica', autista:'francescoa', magazzino:'gaston', direzione:'francesco'};
   document.getElementById('login-user').value = hints[role] || 'admin';
 }
 
@@ -2296,10 +2325,10 @@ async function doLogin() {
     document.getElementById('screen-app').style.display = 'block';
     document.getElementById('topbar-username').textContent =
       (state.currentUser.nome + ' ' + (state.currentUser.cognome||'')).trim();
-    const roleLabels = {admin:'Admin', autista:'Autista', magazzino:'Magazzino', direzione:'Direzione'};
+    const roleLabels = {admin:'Admin', amministrazione:'Amministrazione', autista:'Autista', magazzino:'Magazzino', direzione:'Direzione'};
     document.getElementById('topbar-role').textContent = roleLabels[state.currentUser.ruolo];
     setupNav();
-    const defaultPages = {admin:'dashboard', autista:'autista', magazzino:'magazzino', direzione:'report'};
+    const defaultPages = {admin:'dashboard', amministrazione:'clienti', autista:'autista', magazzino:'magazzino', direzione:'report'};
     goTo(defaultPages[state.currentUser.ruolo] || 'dashboard');
   } catch(e) {
     showToast(e.message || 'Errore di connessione', 'warning');
@@ -2333,6 +2362,12 @@ const navConfigs = {
     { page: 'impostazioni', icon: '⚙️', label: 'Impostazioni' },
     { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
+  amministrazione: [
+    { page: 'clienti', icon: '🏢', label: 'Clienti' },
+    { page: 'ordini', icon: '📋', label: 'Ordini' },
+    { page: 'report', icon: '📊', label: 'Report' },
+    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
+  ],
   autista: [
     { page: 'autista', icon: '🚚', label: 'Il mio giro' },
     { page: 'piano', icon: '🚛', label: 'Piano Carico' },
@@ -2347,7 +2382,6 @@ const navConfigs = {
   ],
   direzione: [
     { page: 'report', icon: '📊', label: 'Report' },
-    { page: 'piano', icon: '🚛', label: 'Piano Carico' },
     { page: 'ordini', icon: '📋', label: 'Ordini' },
     { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
@@ -2357,7 +2391,7 @@ function setupNav() {
   const role = state.currentUser.ruolo;
   const items = navConfigs[role] || navConfigs.admin;
   const u = state.currentUser;
-  const roleLabels = {admin:'Admin / Ufficio', autista:'Autista / Agente', magazzino:'Magazzino', direzione:'Direzione'};
+  const roleLabels = {admin:'Admin / Ufficio', amministrazione:'Amministrazione', autista:'Autista / Agente', magazzino:'Magazzino', direzione:'Direzione'};
 
   // Sidebar desktop
   const sidebar = document.getElementById('sidebar-nav');
@@ -2626,6 +2660,10 @@ function renderClientiTable() {
   tbody.innerHTML = list.map(c => {
     const nOrdini = state.ordini.filter(o => o.clienteId === c.id).length;
     const giroColors = {'bari nord':'badge-blue','murgia':'badge-green','taranto':'badge-orange','lecce':'badge-red','valle itria':'badge-gray','calabria':'badge-gray','foggia':'badge-gray','diretto':'badge-green','':`badge-gray`};
+    const onboardingLabel = isClienteSbloccato(c) ? 'Approvato' : 'In attesa';
+    const onboardingBadge = isClienteSbloccato(c) ? 'badge-green' : 'badge-orange';
+    const fidoTxt = (Number(c.fido || 0)).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    const canApprove = canApproveOnboarding() && !isClienteSbloccato(c);
     return `
     <tr>
       <td>
@@ -2641,7 +2679,10 @@ function renderClientiTable() {
       <td style="color:var(--text2);">${c.localita}</td>
       <td>${c.giro ? `<span class="badge ${giroColors[c.giro]||'badge-gray'}">${c.giro}</span>` : '<span style="color:var(--text3)">—</span>'}</td>
       <td><span style="font-family:'DM Mono',monospace;font-weight:700;">${nOrdini}</span></td>
+      <td><span style="font-family:'DM Mono',monospace;">€ ${fidoTxt}</span></td>
+      <td><span class="badge ${onboardingBadge}">${onboardingLabel}</span></td>
       <td>
+        ${canApprove ? `<button class="btn btn-green btn-sm" onclick="approveClienteOnboarding(${c.id})">✅</button>` : ''}
         <button class="btn btn-outline btn-sm" onclick="openEditCliente(${c.id})">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="deleteCliente(${c.id})">🗑️</button>
       </td>
@@ -2659,6 +2700,7 @@ function openNewCliente() {
   document.getElementById('cl-piva').value = '';
   document.getElementById('cl-classificazione').value = '';
   document.getElementById('cl-condpag').value = '';
+  document.getElementById('cl-fido').value = '';
   document.getElementById('cl-efornitore').checked = false;
   populateAgenteSelect('cl-agente', null);
   openModal('modal-cliente');
@@ -2675,6 +2717,7 @@ function openEditCliente(id) {
   document.getElementById('cl-piva').value = c.piva || '';
   document.getElementById('cl-classificazione').value = c.classificazione || '';
   document.getElementById('cl-condpag').value = c.condPagamento || '';
+  document.getElementById('cl-fido').value = c.fido || 0;
   document.getElementById('cl-efornitore').checked = c.eFornitore || false;
   populateAgenteSelect('cl-agente', c.agenteId);
   openModal('modal-cliente');
@@ -2705,10 +2748,17 @@ async function saveCliente() {
     if (state.editingId) {
       await api('PUT', `/api/clienti/${state.editingId}`, body);
       const i2 = state.clienti.findIndex(c => c.id === state.editingId);
-      if (i2 !== -1) state.clienti[i2] = normalizeCliente({...body, id: state.editingId, agente_id: body.agente_id});
+      if (i2 !== -1) {
+        state.clienti[i2] = normalizeCliente({
+          ...state.clienti[i2],
+          ...body,
+          id: state.editingId,
+          agente_id: body.agente_id,
+        });
+      }
     } else {
       const saved = await api('POST', '/api/clienti', body);
-      state.clienti.push(normalizeCliente({...body, id: saved.id, agente_id: body.agente_id}));
+      state.clienti.push(normalizeCliente({...body, ...saved, id: saved.id, agente_id: body.agente_id}));
       state.clienti.sort((a,b) => a.nome.localeCompare(b.nome));
     }
     closeModal('modal-cliente');
@@ -2716,6 +2766,34 @@ async function saveCliente() {
     state.editingId = null;
     renderClientiTable();
   } catch(e) { showToast(e.message, 'warning'); }
+}
+
+async function approveClienteOnboarding(id) {
+  if (!canApproveOnboarding()) return;
+  const c = state.clienti.find(x => x.id === id);
+  if (!c) return;
+  const val = prompt(`Inserisci il fido per ${c.nome}`, String(c.fido || 0));
+  if (val === null) return;
+  const fido = Number(String(val).replace(',', '.'));
+  if (!Number.isFinite(fido) || fido < 0) {
+    showToast('Fido non valido', 'warning');
+    return;
+  }
+  try {
+    const r = await api('PATCH', `/api/clienti/${id}/onboarding`, { fido });
+    const idx = state.clienti.findIndex(x => x.id === id);
+    if (idx !== -1) {
+      state.clienti[idx].fido = Number(r.fido || 0);
+      state.clienti[idx].sbloccato = !!r.sbloccato;
+      state.clienti[idx].onboardingStato = r.onboarding_stato || 'approvato';
+      state.clienti[idx].onboardingApprovatoDa = r.onboarding_approvato_da || '';
+      state.clienti[idx].onboardingApprovatoAt = r.onboarding_approvato_at || null;
+    }
+    showToast('Cliente approvato e sbloccato ✅', 'success');
+    renderClientiTable();
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
 }
 
 async function deleteCliente(id) {
@@ -2822,8 +2900,8 @@ async function deleteProdotto(id) {
 // ═══════════════════════════════════════════════
 
 function renderUtentiTable() {
-  const roleLabels = {admin:'Admin/Ufficio', autista:'Autista/Agente', magazzino:'Magazzino', direzione:'Direzione'};
-  const roleBadges = {admin:'badge-green', autista:'badge-orange', magazzino:'badge-blue', direzione:'badge-gray'};
+  const roleLabels = {admin:'Admin/Ufficio', amministrazione:'Amministrazione', autista:'Autista/Agente', magazzino:'Magazzino', direzione:'Direzione'};
+  const roleBadges = {admin:'badge-green', amministrazione:'badge-blue', autista:'badge-orange', magazzino:'badge-blue', direzione:'badge-gray'};
   const tbody = document.getElementById('utenti-table');
   tbody.innerHTML = state.utenti.map(u => {
     const nomeCompleto = (u.nome + ' ' + (u.cognome||'')).trim();
@@ -3143,7 +3221,7 @@ function acRender(type) {
     let html = '';
     let totalShown = 0;
     giri.forEach(g => {
-      let gruppo = state.clienti.filter(c => c.giro === g);
+      let gruppo = clientiOrdinabili().filter(c => c.giro === g);
       if (q) gruppo = gruppo.filter(c => c.nome.toLowerCase().includes(q) || c.localita.toLowerCase().includes(q));
       if (!gruppo.length) return;
       html += `<div class="ac-group-label">${g ? g.toUpperCase() : 'NON ASSEGNATO'}</div>`;
@@ -3164,7 +3242,7 @@ function acRender(type) {
     const q = acState.tentata.query;
     const dd = document.getElementById('ac-tentata-dd');
     if (!dd) return;
-    let clienti = state.clienti;
+    let clienti = clientiOrdinabili();
     if (q) clienti = clienti.filter(c => c.nome.toLowerCase().includes(q) || c.localita.toLowerCase().includes(q));
     dd.innerHTML = clienti.slice(0,15).map(c => `
       <div class="ac-item" data-id="${c.id}" onmousedown="acSelect('tentata',${c.id})">
@@ -3182,7 +3260,7 @@ function acRender(type) {
   let totalShown = 0;
 
   giri.forEach(g => {
-    let gruppo = state.clienti.filter(c => c.giro === g);
+    let gruppo = clientiOrdinabili().filter(c => c.giro === g);
     if (q) gruppo = gruppo.filter(c =>
       c.nome.toLowerCase().includes(q) ||
       c.localita.toLowerCase().includes(q)
@@ -3206,6 +3284,7 @@ function acSelect(type, id) {
   if (type === 'cliente') {
     const c = state.clienti.find(x => x.id === id);
     if (!c) return;
+    if (!isClienteSbloccato(c)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
     acState.cliente.value = id;
     document.getElementById('ac-cliente-input').value = c.nome;
     document.getElementById('ac-cliente-input').classList.add('has-value');
@@ -3252,6 +3331,7 @@ function acSelect(type, id) {
   } else if (type === 'tentata') {
     const c = state.clienti.find(x => x.id === id);
     if (!c) return;
+    if (!isClienteSbloccato(c)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
     if (!acState.tentata) acState.tentata = { value: null, query: '', focusIdx: -1 };
     acState.tentata.value = id;
     document.getElementById('ac-tentata-input').value = c.nome;
@@ -3260,6 +3340,7 @@ function acSelect(type, id) {
   } else if (type === 'cat-cliente') {
     const cl = state.clienti.find(x => x.id === id);
     if (!cl) return;
+    if (!isClienteSbloccato(cl)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
     if (!acState['cat-cliente']) acState['cat-cliente'] = { value: null, query: '', focusIdx: -1 };
     acState['cat-cliente'].value = id;
     const inp = document.getElementById('ac-cat-cliente-input');
@@ -3653,6 +3734,8 @@ async function saveOrder() {
   const stef        = document.getElementById('ord-stef')?.checked || false;
 
   if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
+  const cliente = getCliente(clienteId);
+  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
   if (!data)      { showToast('Inserisci la data', 'warning'); return; }
 
   const linee = orderLines
@@ -4314,8 +4397,47 @@ function setLinePesoEffettivo(ordineId, lineIdx, val) {
 // REPORT
 // ═══════════════════════════════════════════════
 
+function initReportDropdowns() {
+  const defs = [
+    { contentId: 'chart-week', toggleEl: () => document.querySelector('#chart-week')?.previousElementSibling },
+    { contentId: 'chart-agenti', toggleEl: () => document.querySelector('#chart-agenti')?.previousElementSibling },
+    { contentId: 'report-top-prodotti', toggleEl: () => document.querySelector('#report-top-prodotti')?.previousElementSibling },
+    { contentId: 'report-giri', toggleEl: () => document.querySelector('#report-giri')?.previousElementSibling },
+    { contentId: 'report-clienti-inattivi', toggleEl: () => document.querySelector('#report-clienti-inattivi')?.previousElementSibling },
+    { contentId: 'report-agenti-clienti', toggleEl: () => document.querySelector('#report-agenti-clienti')?.previousElementSibling },
+    { contentId: 'report-clienti-table', toggleEl: () => document.querySelector('#report-clienti-table')?.closest('.card')?.querySelector('.card-header') },
+    { contentId: 'activity-log-list', toggleEl: () => document.querySelector('#activity-log-list')?.previousElementSibling },
+  ];
+  defs.forEach(def => {
+    const content = document.getElementById(def.contentId);
+    const toggle = def.toggleEl();
+    if (!content || !toggle) return;
+    if (!content.dataset.reportOpen) content.dataset.reportOpen = '1';
+    if (!toggle.dataset.reportReady) {
+      toggle.dataset.reportReady = '1';
+      toggle.style.cursor = 'pointer';
+      toggle.onclick = () => {
+        const willOpen = content.dataset.reportOpen !== '1';
+        content.dataset.reportOpen = willOpen ? '1' : '0';
+        content.style.display = willOpen ? '' : 'none';
+        const ind = toggle.querySelector('.report-toggle-ind');
+        if (ind) ind.textContent = willOpen ? '▾' : '▸';
+      };
+      const ind = document.createElement('span');
+      ind.className = 'report-toggle-ind';
+      ind.textContent = '▾';
+      ind.style.marginLeft = '8px';
+      ind.style.fontSize = '12px';
+      ind.style.color = 'var(--text3)';
+      toggle.appendChild(ind);
+    }
+    content.style.display = content.dataset.reportOpen === '1' ? '' : 'none';
+  });
+}
+
 async function renderReport() {
-  if (state.currentUser?.ruolo === 'admin' || state.currentUser?.ruolo === 'direzione') {
+  initReportDropdowns();
+  if (state.currentUser?.ruolo === 'admin' || state.currentUser?.ruolo === 'direzione' || state.currentUser?.ruolo === 'amministrazione') {
     try { const logs = await api('GET', '/api/activity'); state.activityLog = (logs||[]).map(l=>({ts:l.ts,userId:l.user_id,userName:l.user_name,action:l.action,detail:l.detail})); } catch(e) {}
   }
   const total = state.ordini.length || 1;
@@ -4499,6 +4621,8 @@ async function saveTentataVendita() {
   const note = document.getElementById('tentata-note').value.trim();
   const validLines = tentataLines.filter(l => l.prodId);
   if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
+  const cliente = getCliente(clienteId);
+  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
   if (!validLines.length) { showToast('Aggiungi almeno un prodotto', 'warning'); return; }
 
   const body = {
@@ -4535,8 +4659,8 @@ function renderProfilo() {
 
   const nomeCompleto = (u.nome + ' ' + (u.cognome||'')).trim();
   const iniziali = (u.nome.charAt(0) + (u.cognome ? u.cognome.charAt(0) : '')).toUpperCase();
-  const roleLabels = { admin:'Admin / Ufficio', autista:'Autista / Agente', magazzino:'Magazzino', direzione:'Direzione' };
-  const roleBadges = { admin:'badge-green', autista:'badge-orange', magazzino:'badge-blue', direzione:'badge-gray' };
+  const roleLabels = { admin:'Admin / Ufficio', amministrazione:'Amministrazione', autista:'Autista / Agente', magazzino:'Magazzino', direzione:'Direzione' };
+  const roleBadges = { admin:'badge-green', amministrazione:'badge-blue', autista:'badge-orange', magazzino:'badge-blue', direzione:'badge-gray' };
 
   // Avatar e intestazione
   document.getElementById('profilo-avatar').textContent = iniziali;
@@ -4970,6 +5094,8 @@ async function saveCatalogoOrder() {
   const dataNonCerta = document.getElementById('cat-data-non-certa').checked;
 
   if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
+  const cliente = getCliente(clienteId);
+  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
   if (!data)      { showToast('Inserisci la data', 'warning'); return; }
 
   const linee = Object.entries(catalogoCart)
