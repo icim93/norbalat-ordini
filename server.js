@@ -1078,6 +1078,47 @@ app.get('/api/stats/dashboard', authMiddleware, async (req, res) => {
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '2.0.0' }));
 
+app.get('/api/dev/metrics', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const tDb0 = Date.now();
+    await q('SELECT 1');
+    const db_latency_ms = Date.now() - tDb0;
+
+    const [utenti, clienti, ordini, prodotti, camions, onboarding, recent] = await Promise.all([
+      q('SELECT COUNT(*)::int AS n FROM utenti'),
+      q('SELECT COUNT(*)::int AS n FROM clienti'),
+      q('SELECT COUNT(*)::int AS n FROM ordini'),
+      q('SELECT COUNT(*)::int AS n FROM prodotti'),
+      q('SELECT COUNT(*)::int AS n FROM camions'),
+      q(`SELECT COUNT(*)::int AS n
+         FROM clienti
+         WHERE onboarding_stato <> 'approvato' OR sbloccato = FALSE`),
+      q('SELECT id,user_name,action,detail,ts FROM activity_log ORDER BY id DESC LIMIT 20'),
+    ]);
+
+    res.json({
+      server_time: new Date().toISOString(),
+      version: '2.0.0',
+      uptime_sec: Math.floor(process.uptime()),
+      memory_mb: Math.round(process.memoryUsage().rss / (1024 * 1024)),
+      db_latency_ms,
+      counts: {
+        utenti: utenti.rows[0].n,
+        clienti: clienti.rows[0].n,
+        ordini: ordini.rows[0].n,
+        prodotti: prodotti.rows[0].n,
+        camions: camions.rows[0].n,
+      },
+      onboarding: {
+        pending: onboarding.rows[0].n,
+      },
+      recent_activity: recent.rows,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Serve frontend
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
