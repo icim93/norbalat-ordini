@@ -1938,14 +1938,47 @@
       <div id="listini-prodotto-title" style="font-weight:700;font-size:14px;margin-bottom:10px;"></div>
       <div class="form-row">
         <div class="field">
+          <label>Ambito</label>
+          <select id="ls-scope" onchange="onListinoScopeChange()">
+            <option value="all">Tutti i clienti</option>
+            <option value="giro">Tutti i clienti del giro</option>
+            <option value="cliente">Cliente singolo</option>
+            <option value="giro_cliente">Cliente + giro (eccezione)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Regola prezzo</label>
+          <select id="ls-mode" onchange="onListinoModeChange()">
+            <option value="base_markup">Base + ricarico %</option>
+            <option value="discount_pct">Sconto % sul prezzo corrente</option>
+            <option value="final_price">Prezzo finale diretto</option>
+          </select>
+        </div>
+        <div class="field" id="ls-giro-wrap" style="display:none;">
+          <label>Giro</label>
+          <select id="ls-giro"></select>
+        </div>
+        <div class="field">
           <label>Cliente</label>
           <select id="ls-cliente">
             <option value="">Listino base (tutti)</option>
           </select>
         </div>
-        <div class="field">
-          <label>Prezzo</label>
-          <input type="number" id="ls-prezzo" min="0" step="0.01" placeholder="es. 12.50">
+        <div class="field" id="ls-base-wrap">
+          <label>Prezzo base</label>
+          <input type="number" id="ls-base" min="0" step="0.01" placeholder="es. 10.00">
+        </div>
+        <div class="field" id="ls-markup-wrap">
+          <label>Ricarico %</label>
+          <input type="number" id="ls-markup" step="0.01" placeholder="es. 15">
+        </div>
+        <div class="field" id="ls-discount-wrap" style="display:none;">
+          <label>Sconto %</label>
+          <input type="number" id="ls-discount" min="0" max="100" step="0.01" placeholder="es. 5">
+        </div>
+        <div class="field" id="ls-final-wrap" style="display:none;">
+          <label>Prezzo finale</label>
+          <input type="number" id="ls-final" min="0" step="0.01" placeholder="es. 9.90">
         </div>
         <div class="field">
           <label>Valido dal</label>
@@ -1967,7 +2000,8 @@
         <table>
           <thead>
             <tr>
-              <th>Cliente</th>
+              <th>Ambito</th>
+              <th>Regola</th>
               <th>Prezzo</th>
               <th>Dal</th>
               <th>Al</th>
@@ -2336,22 +2370,48 @@ function eur(v) {
   return `€ ${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function applyListinoRuleClient(price, l) {
+  const mode = l.mode || 'final_price';
+  if (mode === 'final_price') {
+    const fp = Number.isFinite(Number(l.finalPrice)) ? Number(l.finalPrice) : Number(l.prezzo);
+    return Number.isFinite(fp) ? fp : price;
+  }
+  if (mode === 'base_markup') {
+    const base = Number.isFinite(Number(l.basePrice)) ? Number(l.basePrice) : price;
+    const mk = Number.isFinite(Number(l.markupPct)) ? Number(l.markupPct) : 0;
+    if (!Number.isFinite(base)) return price;
+    return base * (1 + mk / 100);
+  }
+  if (mode === 'discount_pct') {
+    const s = Number.isFinite(Number(l.discountPct)) ? Number(l.discountPct) : null;
+    if (s === null || !Number.isFinite(price)) return price;
+    return price * (1 - s / 100);
+  }
+  return price;
+}
+
 function getListinoPrezzo(prodottoId, clienteId, dataRif) {
   const d = dataRif || today();
+  const cliente = clienteId ? getCliente(clienteId) : null;
+  const giro = cliente?.giro || '';
   const validi = state.listini.filter(l => {
     if (l.prodottoId !== prodottoId) return false;
-    if (!(l.clienteId === null || l.clienteId === clienteId)) return false;
     if (l.validoDal && l.validoDal > d) return false;
     if (l.validoAl && l.validoAl < d) return false;
-    return true;
+    if (l.scope === 'all') return true;
+    if (l.scope === 'giro') return !!giro && l.giro === giro;
+    if (l.scope === 'cliente') return !!clienteId && l.clienteId === clienteId;
+    if (l.scope === 'giro_cliente') return !!clienteId && !!giro && l.clienteId === clienteId && l.giro === giro;
+    return false;
   });
   if (!validi.length) return null;
-  validi.sort((a, b) => {
-    if ((a.clienteId === clienteId) !== (b.clienteId === clienteId)) return (a.clienteId === clienteId) ? -1 : 1;
-    if (a.validoDal !== b.validoDal) return (a.validoDal < b.validoDal) ? 1 : -1;
-    return b.id - a.id;
-  });
-  return validi[0].prezzo;
+  validi.sort((a, b) => (a.validoDal < b.validoDal ? 1 : (a.validoDal > b.validoDal ? -1 : b.id - a.id)));
+  const best = {};
+  validi.forEach(l => { if (!best[l.scope]) best[l.scope] = l; });
+  const chain = ['all', 'giro', 'cliente', 'giro_cliente'];
+  let price = null;
+  chain.forEach(k => { if (best[k]) price = applyListinoRuleClient(price, best[k]); });
+  return Number.isFinite(Number(price)) ? Math.round(Number(price) * 100) / 100 : null;
 }
 
 function getListinoBaseProdotto(prodottoId) {
@@ -2466,7 +2526,14 @@ function normalizeListino(l) {
     id: l.id,
     prodottoId: l.prodotto_id,
     clienteId: l.cliente_id || null,
-    prezzo: Number(l.prezzo),
+    giro: l.giro || '',
+    scope: l.scope || 'all',
+    mode: l.mode || 'final_price',
+    prezzo: (l.prezzo !== undefined && l.prezzo !== null) ? Number(l.prezzo) : null,
+    basePrice: (l.base_price !== undefined && l.base_price !== null) ? Number(l.base_price) : null,
+    markupPct: (l.markup_pct !== undefined && l.markup_pct !== null) ? Number(l.markup_pct) : 0,
+    discountPct: (l.discount_pct !== undefined && l.discount_pct !== null) ? Number(l.discount_pct) : 0,
+    finalPrice: (l.final_price !== undefined && l.final_price !== null) ? Number(l.final_price) : null,
     validoDal: (l.valido_dal || '').substring(0, 10),
     validoAl: l.valido_al ? String(l.valido_al).substring(0, 10) : '',
     note: l.note || '',
@@ -3150,13 +3217,59 @@ async function deleteCliente(id) {
 let editingListinoId = null;
 
 function getListiniProdotto(prodottoId) {
+  const rank = { all: 0, giro: 1, cliente: 2, giro_cliente: 3 };
   return state.listini
     .filter(l => l.prodottoId === prodottoId)
     .sort((a, b) => {
-      if ((a.clienteId === null) !== (b.clienteId === null)) return a.clienteId === null ? -1 : 1;
+      if ((rank[a.scope] ?? 9) !== (rank[b.scope] ?? 9)) return (rank[a.scope] ?? 9) - (rank[b.scope] ?? 9);
       if (a.validoDal !== b.validoDal) return a.validoDal < b.validoDal ? 1 : -1;
       return b.id - a.id;
     });
+}
+
+function onListinoScopeChange() {
+  const scope = document.getElementById('ls-scope')?.value || 'all';
+  const clienteWrap = document.getElementById('ls-cliente')?.closest('.field');
+  const giroWrap = document.getElementById('ls-giro-wrap');
+  if (clienteWrap) clienteWrap.style.display = (scope === 'cliente' || scope === 'giro_cliente') ? '' : 'none';
+  if (giroWrap) giroWrap.style.display = (scope === 'giro' || scope === 'giro_cliente') ? '' : 'none';
+}
+
+function onListinoModeChange() {
+  const mode = document.getElementById('ls-mode')?.value || 'base_markup';
+  const sh = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  sh('ls-base-wrap', mode === 'base_markup');
+  sh('ls-markup-wrap', mode === 'base_markup');
+  sh('ls-discount-wrap', mode === 'discount_pct');
+  sh('ls-final-wrap', mode === 'final_price');
+}
+
+function listinoScopeLabel(l) {
+  if (l.scope === 'all') return 'Tutti';
+  if (l.scope === 'giro') return `Giro: ${l.giro || '-'}`;
+  if (l.scope === 'cliente') return `Cliente: ${l.clienteId ? (state.clienti.find(c => c.id === l.clienteId)?.nome || '-') : '-'}`;
+  if (l.scope === 'giro_cliente') {
+    const cn = l.clienteId ? (state.clienti.find(c => c.id === l.clienteId)?.nome || '-') : '-';
+    return `Giro ${l.giro || '-'} + ${cn}`;
+  }
+  return '-';
+}
+
+function listinoRuleLabel(l) {
+  if (l.mode === 'base_markup') return `Base ${eur(l.basePrice)} + ${Number(l.markupPct || 0).toFixed(2)}%`;
+  if (l.mode === 'discount_pct') return `Sconto ${Number(l.discountPct || 0).toFixed(2)}%`;
+  return `Prezzo diretto ${eur(l.finalPrice ?? l.prezzo)}`;
+}
+
+function listinoPreviewPrezzo(l) {
+  if (l.mode === 'final_price') return eur(l.finalPrice ?? l.prezzo);
+  if (l.mode === 'base_markup') {
+    const b = Number(l.basePrice);
+    const m = Number(l.markupPct || 0);
+    if (!Number.isFinite(b)) return '-';
+    return eur(b * (1 + m / 100));
+  }
+  return 'Derivato';
 }
 
 function openListiniModal(prodottoId) {
@@ -3165,13 +3278,25 @@ function openListiniModal(prodottoId) {
   editingListinoId = null;
   const p = getProdotto(prodottoId);
   document.getElementById('listini-prodotto-title').textContent = `[${p.codice}] ${p.nome}`;
-  const sel = document.getElementById('ls-cliente');
-  sel.innerHTML = '<option value="">Listino base (tutti)</option>' +
+  const selCliente = document.getElementById('ls-cliente');
+  selCliente.innerHTML = '<option value="">Seleziona cliente</option>' +
     state.clienti.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
-  document.getElementById('ls-prezzo').value = '';
+  const selGiro = document.getElementById('ls-giro');
+  const giri = [...new Set(state.clienti.map(c => c.giro).filter(Boolean))].sort();
+  selGiro.innerHTML = '<option value="">Seleziona giro</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
+  document.getElementById('ls-scope').value = 'all';
+  document.getElementById('ls-mode').value = 'base_markup';
+  document.getElementById('ls-base').value = '';
+  document.getElementById('ls-markup').value = '';
+  document.getElementById('ls-discount').value = '';
+  document.getElementById('ls-final').value = '';
+  document.getElementById('ls-cliente').value = '';
+  document.getElementById('ls-giro').value = '';
   document.getElementById('ls-dal').value = today();
   document.getElementById('ls-al').value = '';
   document.getElementById('ls-note').value = '';
+  onListinoScopeChange();
+  onListinoModeChange();
   renderListiniTable();
   openModal('modal-listini');
 }
@@ -3183,8 +3308,9 @@ function renderListiniTable() {
   const rows = getListiniProdotto(prodottoId);
   body.innerHTML = rows.length ? rows.map(l => `
     <tr>
-      <td>${l.clienteId ? (state.clienti.find(c => c.id === l.clienteId)?.nome || '-') : '<b>TUTTI</b>'}</td>
-      <td style="font-family:'DM Mono',monospace;">${eur(l.prezzo)}</td>
+      <td>${listinoScopeLabel(l)}</td>
+      <td>${listinoRuleLabel(l)}</td>
+      <td style="font-family:'DM Mono',monospace;">${listinoPreviewPrezzo(l)}</td>
       <td>${l.validoDal || '-'}</td>
       <td>${l.validoAl || '-'}</td>
       <td>${l.note || ''}</td>
@@ -3193,28 +3319,63 @@ function renderListiniTable() {
         <button class="btn btn-danger btn-sm" onclick="deleteListinoEntry(${l.id})">🗑️</button>
       </td>
     </tr>
-  `).join('') : '<tr><td colspan="6" style="color:var(--text3);">Nessun prezzo configurato</td></tr>';
+  `).join('') : '<tr><td colspan="7" style="color:var(--text3);">Nessuna regola listino</td></tr>';
 }
 
 function editListinoEntry(id) {
   const l = state.listini.find(x => x.id === id);
   if (!l) return;
   editingListinoId = id;
+  document.getElementById('ls-scope').value = l.scope || 'all';
+  document.getElementById('ls-mode').value = l.mode || 'final_price';
+  document.getElementById('ls-giro').value = l.giro || '';
   document.getElementById('ls-cliente').value = l.clienteId || '';
-  document.getElementById('ls-prezzo').value = l.prezzo;
+  document.getElementById('ls-base').value = Number.isFinite(Number(l.basePrice)) ? l.basePrice : '';
+  document.getElementById('ls-markup').value = Number.isFinite(Number(l.markupPct)) ? l.markupPct : '';
+  document.getElementById('ls-discount').value = Number.isFinite(Number(l.discountPct)) ? l.discountPct : '';
+  document.getElementById('ls-final').value = Number.isFinite(Number(l.finalPrice ?? l.prezzo)) ? (l.finalPrice ?? l.prezzo) : '';
   document.getElementById('ls-dal').value = l.validoDal || today();
   document.getElementById('ls-al').value = l.validoAl || '';
   document.getElementById('ls-note').value = l.note || '';
+  onListinoScopeChange();
+  onListinoModeChange();
 }
 
 async function saveListinoEntry() {
   if (!canManageListini()) return;
   const prodottoId = state.listinoProdottoId;
-  const prezzo = parseFloat(document.getElementById('ls-prezzo').value);
+  const scope = document.getElementById('ls-scope').value;
+  const mode = document.getElementById('ls-mode').value;
+  const clienteId = document.getElementById('ls-cliente').value ? parseInt(document.getElementById('ls-cliente').value) : null;
+  const giro = (document.getElementById('ls-giro').value || '').trim();
+  const basePrice = document.getElementById('ls-base').value !== '' ? parseFloat(document.getElementById('ls-base').value) : null;
+  const markupPct = document.getElementById('ls-markup').value !== '' ? parseFloat(document.getElementById('ls-markup').value) : 0;
+  const discountPct = document.getElementById('ls-discount').value !== '' ? parseFloat(document.getElementById('ls-discount').value) : 0;
+  const finalPrice = document.getElementById('ls-final').value !== '' ? parseFloat(document.getElementById('ls-final').value) : null;
   const validoDal = document.getElementById('ls-dal').value;
   const validoAl = document.getElementById('ls-al').value || null;
-  if (!prodottoId || !Number.isFinite(prezzo) || prezzo < 0 || !validoDal) {
-    showToast('Compila prezzo e data inizio', 'warning');
+  if (!prodottoId || !validoDal) {
+    showToast('Compila i campi obbligatori', 'warning');
+    return;
+  }
+  if ((scope === 'giro' || scope === 'giro_cliente') && !giro) {
+    showToast('Seleziona il giro', 'warning');
+    return;
+  }
+  if ((scope === 'cliente' || scope === 'giro_cliente') && !clienteId) {
+    showToast('Seleziona il cliente', 'warning');
+    return;
+  }
+  if (mode === 'base_markup' && (!Number.isFinite(basePrice) || basePrice < 0)) {
+    showToast('Prezzo base non valido', 'warning');
+    return;
+  }
+  if (mode === 'discount_pct' && (!Number.isFinite(discountPct) || discountPct < 0 || discountPct > 100)) {
+    showToast('Sconto % non valido', 'warning');
+    return;
+  }
+  if (mode === 'final_price' && (!Number.isFinite(finalPrice) || finalPrice < 0)) {
+    showToast('Prezzo finale non valido', 'warning');
     return;
   }
   if (validoAl && validoAl < validoDal) {
@@ -3223,8 +3384,15 @@ async function saveListinoEntry() {
   }
   const body = {
     prodotto_id: prodottoId,
-    cliente_id: document.getElementById('ls-cliente').value ? parseInt(document.getElementById('ls-cliente').value) : null,
-    prezzo,
+    scope,
+    mode,
+    cliente_id: clienteId,
+    giro,
+    prezzo: finalPrice,
+    final_price: finalPrice,
+    base_price: basePrice,
+    markup_pct: markupPct,
+    discount_pct: discountPct,
     valido_dal: validoDal,
     valido_al: validoAl,
     note: document.getElementById('ls-note').value.trim(),
@@ -3232,17 +3400,18 @@ async function saveListinoEntry() {
   try {
     let saved;
     if (editingListinoId) {
-      saved = await api('PUT', `/api/listini/${editingListinoId}`, {
-        prezzo: body.prezzo, valido_dal: body.valido_dal, valido_al: body.valido_al, note: body.note,
-      });
+      saved = await api('PUT', `/api/listini/${editingListinoId}`, body);
       const idx = state.listini.findIndex(x => x.id === editingListinoId);
-      if (idx !== -1) state.listini[idx] = normalizeListino({ ...state.listini[idx], ...saved, prodotto_id: prodottoId, cliente_id: body.cliente_id });
+      if (idx !== -1) state.listini[idx] = normalizeListino(saved);
     } else {
       saved = await api('POST', '/api/listini', body);
       state.listini.push(normalizeListino(saved));
     }
     editingListinoId = null;
-    document.getElementById('ls-prezzo').value = '';
+    document.getElementById('ls-base').value = '';
+    document.getElementById('ls-markup').value = '';
+    document.getElementById('ls-discount').value = '';
+    document.getElementById('ls-final').value = '';
     document.getElementById('ls-dal').value = today();
     document.getElementById('ls-al').value = '';
     document.getElementById('ls-note').value = '';

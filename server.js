@@ -217,7 +217,14 @@ async function createSchema() {
       id          SERIAL PRIMARY KEY,
       prodotto_id INTEGER NOT NULL REFERENCES prodotti(id) ON DELETE CASCADE,
       cliente_id  INTEGER REFERENCES clienti(id) ON DELETE CASCADE,
-      prezzo      NUMERIC NOT NULL CHECK(prezzo >= 0),
+      giro        TEXT DEFAULT '',
+      scope       TEXT NOT NULL DEFAULT 'all',
+      mode        TEXT NOT NULL DEFAULT 'final_price',
+      prezzo      NUMERIC,
+      base_price  NUMERIC,
+      markup_pct  NUMERIC DEFAULT 0,
+      discount_pct NUMERIC DEFAULT 0,
+      final_price NUMERIC,
       valido_dal  DATE NOT NULL DEFAULT CURRENT_DATE,
       valido_al   DATE,
       note        TEXT DEFAULT '',
@@ -250,6 +257,17 @@ async function createSchema() {
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS nota_riga      TEXT DEFAULT '';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS unita_misura   TEXT DEFAULT 'pezzi';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS prezzo_unitario NUMERIC;
+    ALTER TABLE listini     ADD COLUMN IF NOT EXISTS giro            TEXT DEFAULT '';
+    ALTER TABLE listini     ADD COLUMN IF NOT EXISTS scope           TEXT NOT NULL DEFAULT 'all';
+    ALTER TABLE listini     ADD COLUMN IF NOT EXISTS mode            TEXT NOT NULL DEFAULT 'final_price';
+    ALTER TABLE listini     ADD COLUMN IF NOT EXISTS base_price      NUMERIC;
+    ALTER TABLE listini     ADD COLUMN IF NOT EXISTS markup_pct      NUMERIC DEFAULT 0;
+    ALTER TABLE listini     ADD COLUMN IF NOT EXISTS discount_pct    NUMERIC DEFAULT 0;
+    ALTER TABLE listini     ADD COLUMN IF NOT EXISTS final_price     NUMERIC;
+    ALTER TABLE listini     ALTER COLUMN prezzo DROP NOT NULL;
+    UPDATE listini SET scope = CASE WHEN cliente_id IS NULL THEN 'all' ELSE 'cliente' END WHERE scope IS NULL OR scope = '';
+    UPDATE listini SET mode = 'final_price' WHERE mode IS NULL OR mode = '';
+    UPDATE listini SET final_price = COALESCE(final_price, prezzo) WHERE mode = 'final_price';
 
     DO $$
     BEGIN
@@ -279,6 +297,38 @@ async function createSchema() {
       ALTER TABLE clienti
         ADD CONSTRAINT clienti_onboarding_stato_check
         CHECK (onboarding_stato IN ('bozza','in_attesa','in_verifica','approvato','rifiutato','sospeso'));
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END $$;
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'listini_scope_check'
+          AND conrelid = 'listini'::regclass
+      ) THEN
+        ALTER TABLE listini DROP CONSTRAINT listini_scope_check;
+      END IF;
+      ALTER TABLE listini
+        ADD CONSTRAINT listini_scope_check
+        CHECK (scope IN ('all','giro','cliente','giro_cliente'));
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END $$;
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'listini_mode_check'
+          AND conrelid = 'listini'::regclass
+      ) THEN
+        ALTER TABLE listini DROP CONSTRAINT listini_mode_check;
+      END IF;
+      ALTER TABLE listini
+        ADD CONSTRAINT listini_mode_check
+        CHECK (mode IN ('base_markup','discount_pct','final_price'));
     EXCEPTION
       WHEN duplicate_object THEN NULL;
     END $$;
@@ -596,25 +646,65 @@ async function logOnboardingChange({ clienteId, reqUser, oldStato, newStato, old
   );
 }
 
+function asNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function applyListinoRule(currentPrice, rule) {
+  const mode = rule.mode || 'final_price';
+  if (mode === 'final_price') {
+    const fp = asNum(rule.final_price ?? rule.prezzo);
+    return fp !== null ? fp : currentPrice;
+  }
+  if (mode === 'base_markup') {
+    const base = asNum(rule.base_price ?? currentPrice);
+    const markup = asNum(rule.markup_pct) ?? 0;
+    if (base === null) return currentPrice;
+    return base * (1 + markup / 100);
+  }
+  if (mode === 'discount_pct') {
+    const d = asNum(rule.discount_pct);
+    if (d === null || currentPrice === null) return currentPrice;
+    return currentPrice * (1 - d / 100);
+  }
+  return currentPrice;
+}
+
 async function resolvePrezzoUnitario({ prodottoId, clienteId, data, client = null }) {
   const run = client ? client.query.bind(client) : q;
+  const c = await run('SELECT id, giro FROM clienti WHERE id=$1', [clienteId]);
+  if (!c.rows.length) return null;
+  const giro = c.rows[0].giro || '';
   const sql = `
-    SELECT prezzo
+    SELECT *
     FROM listini
     WHERE prodotto_id = $1
-      AND (cliente_id = $2 OR cliente_id IS NULL)
-      AND valido_dal <= $3::date
-      AND (valido_al IS NULL OR valido_al >= $3::date)
-    ORDER BY
-      CASE WHEN cliente_id = $2 THEN 0 ELSE 1 END,
-      valido_dal DESC,
-      id DESC
-    LIMIT 1
+      AND valido_dal <= $2::date
+      AND (valido_al IS NULL OR valido_al >= $2::date)
+      AND (
+        scope = 'all'
+        OR (scope = 'giro' AND giro = $3)
+        OR (scope = 'cliente' AND cliente_id = $4)
+        OR (scope = 'giro_cliente' AND giro = $3 AND cliente_id = $4)
+      )
+    ORDER BY valido_dal DESC, id DESC
   `;
-  const { rows } = await run(sql, [prodottoId, clienteId || null, data]);
+  const { rows } = await run(sql, [prodottoId, data, giro, clienteId]);
   if (!rows.length) return null;
-  const p = Number(rows[0].prezzo);
-  return Number.isFinite(p) ? p : null;
+  const best = {};
+  for (const r of rows) {
+    const key = r.scope || 'all';
+    if (!best[key]) best[key] = r;
+  }
+  const chain = ['all', 'giro', 'cliente', 'giro_cliente'];
+  let price = null;
+  for (const key of chain) {
+    if (!best[key]) continue;
+    price = applyListinoRule(price, best[key]);
+  }
+  const out = asNum(price);
+  return out === null ? null : Math.round(out * 100) / 100;
 }
 
 // ─── AUTH ROUTES ─────────────────────────────────────────────────
@@ -958,7 +1048,7 @@ app.delete('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req
 // ─── ORDINI ──────────────────────────────────────────────────────
 app.get('/api/listini', authMiddleware, requirePermission('listini:view'), async (req, res) => {
   try {
-    const { prodotto_id, cliente_id, include_scaduti } = req.query;
+    const { prodotto_id, cliente_id, giro, scope, include_scaduti } = req.query;
     const where = ['1=1'];
     const params = [];
     let i = 1;
@@ -966,17 +1056,21 @@ app.get('/api/listini', authMiddleware, requirePermission('listini:view'), async
     if (cliente_id === 'null') {
       where.push('l.cliente_id IS NULL');
     } else if (cliente_id) {
-      where.push(`l.cliente_id=$${i++}`); params.push(parseInt(cliente_id)); }
+      where.push(`l.cliente_id=$${i++}`); params.push(parseInt(cliente_id));
+    }
+    if (giro) { where.push(`l.giro=$${i++}`); params.push(String(giro)); }
+    if (scope) { where.push(`l.scope=$${i++}`); params.push(String(scope)); }
     if (!include_scaduti || include_scaduti === '0') {
       where.push(`(l.valido_al IS NULL OR l.valido_al >= CURRENT_DATE)`);
     }
     const { rows } = await q(
-      `SELECT l.*, p.codice AS prodotto_codice, p.nome AS prodotto_nome, c.nome AS cliente_nome
+      `SELECT l.*, p.codice AS prodotto_codice, p.nome AS prodotto_nome,
+              c.nome AS cliente_nome
        FROM listini l
        JOIN prodotti p ON p.id=l.prodotto_id
        LEFT JOIN clienti c ON c.id=l.cliente_id
        WHERE ${where.join(' AND ')}
-       ORDER BY p.nome, l.cliente_id NULLS FIRST, l.valido_dal DESC, l.id DESC`,
+       ORDER BY p.nome, l.scope, l.giro, l.cliente_id NULLS FIRST, l.valido_dal DESC, l.id DESC`,
       params
     );
     res.json(rows);
@@ -985,17 +1079,46 @@ app.get('/api/listini', authMiddleware, requirePermission('listini:view'), async
 
 app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
   try {
-    const { prodotto_id, cliente_id = null, prezzo, valido_dal, valido_al = null, note = '' } = req.body || {};
-    if (!prodotto_id || prezzo === undefined || !valido_dal) {
+    const {
+      prodotto_id, cliente_id = null, giro = '', scope = 'all', mode = 'final_price',
+      prezzo = null, base_price = null, markup_pct = 0, discount_pct = 0, final_price = null,
+      valido_dal, valido_al = null, note = '',
+    } = req.body || {};
+    if (!prodotto_id || !valido_dal) {
       return res.status(400).json({ error: 'Campi obbligatori mancanti' });
     }
-    const p = Number(prezzo);
-    if (!Number.isFinite(p) || p < 0) return res.status(400).json({ error: 'Prezzo non valido' });
+    const allowedScope = ['all', 'giro', 'cliente', 'giro_cliente'];
+    const allowedMode = ['base_markup', 'discount_pct', 'final_price'];
+    if (!allowedScope.includes(scope)) return res.status(400).json({ error: 'Scope non valido' });
+    if (!allowedMode.includes(mode)) return res.status(400).json({ error: 'Modalita prezzo non valida' });
+    if ((scope === 'giro' || scope === 'giro_cliente') && !String(giro).trim()) {
+      return res.status(400).json({ error: 'Giro obbligatorio per questo scope' });
+    }
+    if ((scope === 'cliente' || scope === 'giro_cliente') && !cliente_id) {
+      return res.status(400).json({ error: 'Cliente obbligatorio per questo scope' });
+    }
+    const base = asNum(base_price);
+    const markup = asNum(markup_pct) ?? 0;
+    const discount = asNum(discount_pct) ?? 0;
+    const finalP = asNum(final_price ?? prezzo);
+    if (mode === 'base_markup' && (base === null || base < 0)) {
+      return res.status(400).json({ error: 'Base prezzo non valida' });
+    }
+    if (mode === 'discount_pct' && (discount < 0 || discount > 100)) {
+      return res.status(400).json({ error: 'Sconto % non valido' });
+    }
+    if (mode === 'final_price' && (finalP === null || finalP < 0)) {
+      return res.status(400).json({ error: 'Prezzo finale non valido' });
+    }
     if (valido_al && valido_al < valido_dal) return res.status(400).json({ error: 'Intervallo date non valido' });
     const r = await q(
-      `INSERT INTO listini (prodotto_id,cliente_id,prezzo,valido_dal,valido_al,note,created_by,updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) RETURNING *`,
-      [parseInt(prodotto_id), cliente_id ? parseInt(cliente_id) : null, p, valido_dal, valido_al || null, note, req.user.id || null]
+      `INSERT INTO listini
+       (prodotto_id,cliente_id,giro,scope,mode,prezzo,base_price,markup_pct,discount_pct,final_price,valido_dal,valido_al,note,created_by,updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW()) RETURNING *`,
+      [
+        parseInt(prodotto_id), cliente_id ? parseInt(cliente_id) : null, String(giro || ''),
+        scope, mode, finalP, base, markup, discount, finalP, valido_dal, valido_al || null, note, req.user.id || null,
+      ]
     );
     res.json(r.rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1004,17 +1127,48 @@ app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), as
 app.put('/api/listini/:id', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { prezzo, valido_dal, valido_al = null, note = '' } = req.body || {};
-    if (prezzo === undefined || !valido_dal) return res.status(400).json({ error: 'Campi mancanti' });
-    const p = Number(prezzo);
-    if (!Number.isFinite(p) || p < 0) return res.status(400).json({ error: 'Prezzo non valido' });
+    const {
+      cliente_id = null, giro = '', scope = 'all', mode = 'final_price',
+      prezzo = null, base_price = null, markup_pct = 0, discount_pct = 0, final_price = null,
+      valido_dal, valido_al = null, note = '',
+    } = req.body || {};
+    if (!valido_dal) return res.status(400).json({ error: 'Campi mancanti' });
+    const allowedScope = ['all', 'giro', 'cliente', 'giro_cliente'];
+    const allowedMode = ['base_markup', 'discount_pct', 'final_price'];
+    if (!allowedScope.includes(scope)) return res.status(400).json({ error: 'Scope non valido' });
+    if (!allowedMode.includes(mode)) return res.status(400).json({ error: 'Modalita prezzo non valida' });
+    if ((scope === 'giro' || scope === 'giro_cliente') && !String(giro).trim()) {
+      return res.status(400).json({ error: 'Giro obbligatorio per questo scope' });
+    }
+    if ((scope === 'cliente' || scope === 'giro_cliente') && !cliente_id) {
+      return res.status(400).json({ error: 'Cliente obbligatorio per questo scope' });
+    }
+    const base = asNum(base_price);
+    const markup = asNum(markup_pct) ?? 0;
+    const discount = asNum(discount_pct) ?? 0;
+    const finalP = asNum(final_price ?? prezzo);
+    if (mode === 'base_markup' && (base === null || base < 0)) {
+      return res.status(400).json({ error: 'Base prezzo non valida' });
+    }
+    if (mode === 'discount_pct' && (discount < 0 || discount > 100)) {
+      return res.status(400).json({ error: 'Sconto % non valido' });
+    }
+    if (mode === 'final_price' && (finalP === null || finalP < 0)) {
+      return res.status(400).json({ error: 'Prezzo finale non valido' });
+    }
     if (valido_al && valido_al < valido_dal) return res.status(400).json({ error: 'Intervallo date non valido' });
     const r = await q(
       `UPDATE listini
-       SET prezzo=$1, valido_dal=$2, valido_al=$3, note=$4, updated_at=NOW()
-       WHERE id=$5
+       SET cliente_id=$1, giro=$2, scope=$3, mode=$4,
+           prezzo=$5, base_price=$6, markup_pct=$7, discount_pct=$8, final_price=$9,
+           valido_dal=$10, valido_al=$11, note=$12, updated_at=NOW()
+       WHERE id=$13
        RETURNING *`,
-      [p, valido_dal, valido_al || null, note, id]
+      [
+        cliente_id ? parseInt(cliente_id) : null, String(giro || ''), scope, mode,
+        finalP, base, markup, discount, finalP,
+        valido_dal, valido_al || null, note, id,
+      ]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'Listino non trovato' });
     res.json(r.rows[0]);
