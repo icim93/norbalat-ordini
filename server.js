@@ -1119,6 +1119,41 @@ app.get('/api/dev/metrics', authMiddleware, requireRole('admin'), async (req, re
   }
 });
 
+app.get('/api/dev/smoke', authMiddleware, requireRole('admin'), async (req, res) => {
+  const checks = [];
+  let ok = true;
+  try {
+    const t0 = Date.now();
+    await q('SELECT 1');
+    checks.push({ check: 'db_connection', ok: true, ms: Date.now() - t0 });
+  } catch (e) {
+    ok = false;
+    checks.push({ check: 'db_connection', ok: false, error: e.message });
+  }
+
+  try {
+    const r = await q("SELECT COUNT(*)::int AS n FROM clienti WHERE onboarding_stato='approvato' AND sbloccato=TRUE");
+    checks.push({ check: 'approved_clients', ok: true, value: r.rows[0].n });
+  } catch (e) {
+    ok = false;
+    checks.push({ check: 'approved_clients', ok: false, error: e.message });
+  }
+
+  try {
+    const r = await q("SELECT COUNT(*)::int AS n FROM ordini WHERE data >= CURRENT_DATE - INTERVAL '7 days'");
+    checks.push({ check: 'orders_last_7d', ok: true, value: r.rows[0].n });
+  } catch (e) {
+    ok = false;
+    checks.push({ check: 'orders_last_7d', ok: false, error: e.message });
+  }
+
+  res.json({
+    ok,
+    ts: new Date().toISOString(),
+    checks,
+  });
+});
+
 // Serve frontend
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 

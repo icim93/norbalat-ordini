@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Norbalat â€” Gestione Ordini</title>
+<title>Norbalat — Gestione Ordini</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -43,7 +43,7 @@
     font-size: 15px;
   }
 
-  /* â”€â”€ LOGIN â”€â”€ */
+  /* ── LOGIN ── */
   #screen-login {
     min-height: 100vh;
     display: flex;
@@ -145,7 +145,7 @@
   .btn-primary:hover { background: #245a42; }
   .btn-primary:active { transform: scale(0.98); }
 
-  /* â”€â”€ APP SHELL â”€â”€ */
+  /* ── APP SHELL ── */
   #screen-app { display: none; min-height: 100vh; }
 
   .topbar {
@@ -190,7 +190,7 @@
 
   .app-layout { display: flex; min-height: calc(100vh - 60px); }
 
-  /* â”€â”€ SIDEBAR â”€â”€ */
+  /* ── SIDEBAR ── */
   .sidebar {
     width: 220px;
     background: #0f2233;
@@ -222,7 +222,7 @@
   .nav-item.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
   .nav-item .nav-icon { font-size: 18px; flex-shrink: 0; }
 
-  /* â”€â”€ MAIN CONTENT â”€â”€ */
+  /* ── MAIN CONTENT ── */
   .main { flex: 1; padding: 28px; overflow-y: auto; }
 
   .page { display: none; }
@@ -232,7 +232,7 @@
   .page-title { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
   .page-sub { font-size: 14px; color: var(--text2); margin-top: 4px; }
 
-  /* â”€â”€ STATS CARDS â”€â”€ */
+  /* ── STATS CARDS ── */
   .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -257,7 +257,7 @@
   .stat-card.blue .stat-value { color: var(--blue); }
   .stat-card.red .stat-value { color: var(--danger); }
 
-  /* â”€â”€ TABLE â”€â”€ */
+  /* ── TABLE ── */
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -347,7 +347,7 @@
   .badge-red { background: var(--danger-light); color: var(--danger); }
   .badge-gray { background: var(--surface2); color: var(--text3); }
 
-  /* â”€â”€ MODAL â”€â”€ */
+  /* ── MODAL ── */
   .modal-overlay {
     display: none;
     position: fixed;
@@ -454,7 +454,7 @@
   .line-delete { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 16px; padding: 4px; border-radius: 4px; }
   .line-delete:hover { background: var(--danger-light); color: var(--danger); }
 
-  /* â”€â”€ MOBILE VIEW (autista) â”€â”€ */
+  /* ── MOBILE VIEW (autista) ── */
   .mobile-view { max-width: 440px; margin: 0 auto; }
 
   .mobile-order-card {
@@ -480,7 +480,7 @@
   .mob-actions { display: flex; gap: 8px; margin-top: 12px; }
   .mob-actions .btn { flex: 1; justify-content: center; padding: 10px; font-size: 14px; }
 
-  /* â”€â”€ MAGAZZINO â”€â”€ */
+  /* ── MAGAZZINO ── */
   .warehouse-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -500,7 +500,7 @@
   .wh-detail { font-size: 13px; color: var(--text2); margin-top: 2px; }
   .wh-status { display: flex; align-items: center; gap: 10px; }
 
-  /* â”€â”€ REPORT â”€â”€ */
+  /* ── REPORT ── */
   .report-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -534,7 +534,7 @@
   .bar-label { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; }
   .bar-val { font-size: 10px; color: var(--accent); font-weight: 600; font-family: 'DM Mono', monospace; }
 
-  /* â”€â”€ CATALOGO ORDINE â”€â”€ */
+  /* ── CATALOGO ORDINE ── */
   .catalogo-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -649,8 +649,8 @@
   .modality-btn .mod-label { font-size: 13px; font-weight: 700; color: var(--text1); }
   .modality-btn .mod-desc { font-size: 11px; color: var(--text3); margin-top: 3px; }
 
-  /* â”€â”€ FINE CATALOGO â”€â”€ */
-  /* â”€â”€ TOAST â”€â”€ */
+  /* ── FINE CATALOGO ── */
+  /* ── TOAST ── */
   .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
   .toast {
     background: var(--text1);
@@ -669,10 +669,10 @@
   .toast.success { background: var(--accent); }
   .toast.warning { background: var(--accent2); }
 
-  /* â”€â”€ RESPONSIVE â”€â”€ */
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-     RESPONSIVE â€” TABLET & MOBILE
-     â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  /* ── RESPONSIVE ── */
+  /* ══════════════════════════════════
+     RESPONSIVE — TABLET & MOBILE
+     ══════════════════════════════════ */
 
   /* Piano di carico: griglia pedane */
   .pedane-grid {
@@ -792,7 +792,7 @@
     .report-filters { grid-template-columns: 1fr 1fr 1fr; }
   }
 
-  /* â”€â”€ MOBILE NAV (bottom) â”€â”€ */
+  /* ── MOBILE NAV (bottom) ── */
   .mobile-nav {
     display: none;
     position: fixed;
@@ -826,7 +826,7 @@
   .mobile-nav-item .mn-icon { font-size: 20px; }
   .mobile-nav-item.active { color: var(--accent); }
 
-    /* â”€â”€ HAMBURGER + DRAWER â”€â”€ */
+    /* ── HAMBURGER + DRAWER ── */
   .hamburger-btn {
     display: none;
     background: none;
@@ -938,12 +938,12 @@
     .main { padding-bottom: 80px; }
   }
 
-  /* â”€â”€ EMPTY STATE â”€â”€ */
+  /* ── EMPTY STATE ── */
   .empty-state { text-align: center; padding: 48px 24px; color: var(--text3); }
   .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; }
   .empty-state p { font-size: 15px; }
 
-  /* â”€â”€ ANAGRAFICA â”€â”€ */
+  /* ── ANAGRAFICA ── */
   .anag-avatar {
     width: 36px; height: 36px;
     border-radius: 50%;
@@ -958,7 +958,7 @@
   .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 6px; }
   .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.4s; }
 
-  /* â”€â”€ AUTOCOMPLETE â”€â”€ */
+  /* ── AUTOCOMPLETE ── */
   .ac-wrap { position: relative; }
   .ac-input {
     width: 100%;
@@ -1025,7 +1025,7 @@
 </head>
 <body>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• LOGIN â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ LOGIN ══════════════════ -->
 <div id="screen-login">
   <div class="login-card">
     <div class="login-logo">
@@ -1037,19 +1037,19 @@
       <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Accedi come</div>
       <div class="login-roles">
         <button class="role-btn active" onclick="selectRole('admin',this)">
-          <span class="role-icon">ðŸ–¥ï¸</span>Admin / Ufficio
+          <span class="role-icon">🖥️</span>Admin / Ufficio
         </button>
         <button class="role-btn" onclick="selectRole('amministrazione',this)">
-          <span class="role-icon">ðŸ§¾</span>Amministrazione
+          <span class="role-icon">🧾</span>Amministrazione
         </button>
         <button class="role-btn" onclick="selectRole('autista',this)">
-          <span class="role-icon">ðŸšš</span>Autista / Agente
+          <span class="role-icon">🚚</span>Autista / Agente
         </button>
         <button class="role-btn" onclick="selectRole('magazzino',this)">
-          <span class="role-icon">ðŸ“¦</span>Magazzino
+          <span class="role-icon">📦</span>Magazzino
         </button>
         <button class="role-btn" onclick="selectRole('direzione',this)">
-          <span class="role-icon">ðŸ“Š</span>Direzione
+          <span class="role-icon">📊</span>Direzione
         </button>
       </div>
     </div>
@@ -1060,13 +1060,13 @@
     </div>
     <div class="field">
       <label>Password</label>
-      <input type="password" id="login-pass" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" value="1234">
+      <input type="password" id="login-pass" placeholder="••••••••" value="1234">
     </div>
-    <button class="btn-primary" onclick="doLogin()">Accedi â†’</button>
+    <button class="btn-primary" onclick="doLogin()">Accedi →</button>
   </div>
 </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• APP â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ APP ══════════════════ -->
 <div id="screen-app">
   <!-- Top bar -->
   <div class="topbar">
@@ -1078,7 +1078,7 @@
           <span style="display:block;width:20px;height:2px;background:currentColor;border-radius:2px;"></span>
         </span>
       </button>
-      <div class="topbar-brand">ðŸ§€ Norbalat Ordini</div>
+      <div class="topbar-brand">🧀 Norbalat Ordini</div>
     </div>
     <div class="topbar-user">
       <span id="topbar-username" style="font-size:14px;font-weight:500;color:#c8dff0;"></span>
@@ -1096,7 +1096,7 @@
     <!-- Main content -->
     <div class="main" id="main-content">
 
-      <!-- â”€â”€â”€ PAGE: Dashboard Admin â”€â”€â”€ -->
+      <!-- ─── PAGE: Dashboard Admin ─── -->
       <div class="page" id="page-dashboard">
         <div class="page-header">
           <div class="page-title">Dashboard</div>
@@ -1125,12 +1125,12 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title">Ultimi Ordini</div>
-            <button class="btn btn-green" onclick="openNewOrder()">ï¼‹ Nuovo Ordine</button>
+            <button class="btn btn-green" onclick="openNewOrder()">＋ Nuovo Ordine</button>
           </div>
           <div class="table-scroll-wrap"><table>
             <thead>
               <tr>
-                <th>NÂ°</th>
+                <th>N°</th>
                 <th>Cliente</th>
                 <th>Data</th>
                 <th>Inserito da</th>
@@ -1143,7 +1143,7 @@
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Tutti gli Ordini â”€â”€â”€ -->
+      <!-- ─── PAGE: Tutti gli Ordini ─── -->
       <div class="page" id="page-ordini">
         <div class="page-header">
           <div class="page-title">Ordini</div>
@@ -1151,7 +1151,7 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <input type="text" class="search-input" id="search-ordini" placeholder="ðŸ” Cerca cliente, agenteâ€¦" oninput="renderOrdiniTable()">
+            <input type="text" class="search-input" id="search-ordini" placeholder="🔍 Cerca cliente, agente…" oninput="renderOrdiniTable()">
             <div style="display:flex;gap:8px;">
               <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-stato" onchange="renderOrdiniTable()">
                 <option value="">Tutti gli stati</option>
@@ -1160,19 +1160,19 @@
                 <option value="consegnato">Consegnato</option>
                 <option value="annullato">Annullato</option>
               </select>
-              <button class="btn btn-green" onclick="openNewOrder()">ï¼‹ Nuovo</button>
+              <button class="btn btn-green" onclick="openNewOrder()">＋ Nuovo</button>
             </div>
           </div>
           <div id="bulk-toolbar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--accent-light);border:1.5px solid var(--accent);border-radius:8px;margin-bottom:10px;">
             <span id="bulk-count" style="font-weight:600;color:var(--accent);font-size:13px;"></span>
-            <button class="btn btn-danger btn-sm" onclick="deleteSelectedOrders()">ðŸ—‘ï¸ Elimina selezionati</button>
-            <button class="btn btn-outline btn-sm" onclick="selectedOrders.clear();renderOrdiniTable()">âœ• Deseleziona tutto</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteSelectedOrders()">🗑️ Elimina selezionati</button>
+            <button class="btn btn-outline btn-sm" onclick="selectedOrders.clear();renderOrdiniTable()">✕ Deseleziona tutto</button>
           </div>
           <div class="table-scroll-wrap"><table>
             <thead>
               <tr>
                 <th style="width:36px;padding:8px 6px;"><input type="checkbox" id="th-select-all" onchange="selectAllOrders(this.checked)" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;" title="Seleziona tutti"></th>
-                <th>NÂ°</th>
+                <th>N°</th>
                 <th>Cliente</th>
                 <th>Data</th>
                 <th>Inserito da</th>
@@ -1187,7 +1187,7 @@
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Clienti â”€â”€â”€ -->
+      <!-- ─── PAGE: Clienti ─── -->
       <div class="page" id="page-clienti">
         <div class="page-header">
           <div class="page-title">Clienti</div>
@@ -1195,7 +1195,7 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <input type="text" class="search-input" id="search-clienti" placeholder="ðŸ” Cercaâ€¦" oninput="renderClientiTable()">
+            <input type="text" class="search-input" id="search-clienti" placeholder="🔍 Cerca…" oninput="renderClientiTable()">
             <div style="display:flex;gap:8px;">
               <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-giro" onchange="renderClientiTable()">
                 <option value="">Tutti i giri</option>
@@ -1208,8 +1208,8 @@
                 <option value="foggia">Foggia</option>
                 <option value="diretto">Diretto</option>
               </select>
-              <button class="btn btn-green" onclick="openNewCliente()">ï¼‹ Nuovo Cliente</button>
-              <button class="btn btn-outline" onclick="document.getElementById('import-clienti-file').click()" title="Importa/aggiorna clienti da Excel">ðŸ“¥ Excel</button>
+              <button class="btn btn-green" onclick="openNewCliente()">＋ Nuovo Cliente</button>
+              <button class="btn btn-outline" onclick="document.getElementById('import-clienti-file').click()" title="Importa/aggiorna clienti da Excel">📥 Excel</button>
               <input type="file" id="import-clienti-file" accept=".xlsx,.xls" style="display:none" onchange="importClientiExcel(this)">
             </div>
           </div>
@@ -1217,7 +1217,7 @@
             <thead>
               <tr>
                 <th>Cliente</th>
-                <th>LocalitÃ </th>
+                <th>Località</th>
                 <th>Giro</th>
                 <th>Ordini</th>
                 <th>Fido</th>
@@ -1230,7 +1230,7 @@
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Prodotti â”€â”€â”€ -->
+      <!-- ─── PAGE: Prodotti ─── -->
       <div class="page" id="page-prodotti">
         <div class="page-header">
           <div class="page-title">Prodotti</div>
@@ -1238,7 +1238,7 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <input type="text" class="search-input" id="search-prodotti" placeholder="ðŸ” Cerca codice, nomeâ€¦" oninput="renderProdottiTable()">
+            <input type="text" class="search-input" id="search-prodotti" placeholder="🔍 Cerca codice, nome…" oninput="renderProdottiTable()">
             <div style="display:flex;gap:8px;">
               <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-cat-prodotti" onchange="renderProdottiTable()">
                 <option value="">Tutte le categorie</option>
@@ -1248,7 +1248,7 @@
                 <option value="PANNA UHT">Panna UHT</option>
                 <option value="ALTRO">Altro</option>
               </select>
-              <button class="btn btn-green" onclick="openNewProdotto()">ï¼‹ Nuovo Prodotto</button>
+              <button class="btn btn-green" onclick="openNewProdotto()">＋ Nuovo Prodotto</button>
             </div>
           </div>
           <div class="table-scroll-wrap"><table>
@@ -1268,7 +1268,7 @@
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Utenti â”€â”€â”€ -->
+      <!-- ─── PAGE: Utenti ─── -->
       <div class="page" id="page-utenti">
         <div class="page-header">
           <div class="page-title">Utenti</div>
@@ -1277,7 +1277,7 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title">Utenti del sistema</div>
-            <button class="btn btn-green" onclick="openNewUtente()">ï¼‹ Nuovo Utente</button>
+            <button class="btn btn-green" onclick="openNewUtente()">＋ Nuovo Utente</button>
           </div>
           <div class="table-scroll-wrap"><table>
             <thead>
@@ -1293,7 +1293,7 @@
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Vista Autista â”€â”€â”€ -->
+      <!-- ─── PAGE: Vista Autista ─── -->
       <div class="page" id="page-autista">
         <div class="page-header">
           <div class="page-title" id="autista-title">Buongiorno!</div>
@@ -1318,8 +1318,8 @@
         <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
           <div style="font-weight:600;font-size:15px;">Giro consegne di oggi</div>
           <div style="display:flex;gap:8px;">
-            <button class="btn" style="background:var(--accent2-light);color:var(--accent2);border:1px solid #f5d7a0;" onclick="openTentataVendita()">ðŸšš Tentata Vendita</button>
-            <button class="btn btn-green" onclick="openNewOrder()">ï¼‹ Nuovo ordine</button>
+            <button class="btn" style="background:var(--accent2-light);color:var(--accent2);border:1px solid #f5d7a0;" onclick="openTentataVendita()">🚚 Tentata Vendita</button>
+            <button class="btn btn-green" onclick="openNewOrder()">＋ Nuovo ordine</button>
           </div>
         </div>
 
@@ -1328,11 +1328,11 @@
 
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Piano di Carico â”€â”€â”€ -->
+      <!-- ─── PAGE: Piano di Carico ─── -->
       <div class="page" id="page-piano">
         <div class="page-header">
           <div>
-            <div class="page-title">ðŸšš Piano di Carico</div>
+            <div class="page-title">🚚 Piano di Carico</div>
             <div class="page-sub" id="piano-sub">Seleziona il mezzo e compila le pedane</div>
           </div>
         </div>
@@ -1346,17 +1346,17 @@
         <!-- Sezione conferma carico (visibile a magazzino e admin) -->
         <div id="piano-conferma-section" style="display:none;margin-top:20px;">
           <div class="card" style="padding:20px;">
-            <div style="font-size:15px;font-weight:700;margin-bottom:12px;">âœ… Conferma Carico</div>
+            <div style="font-size:15px;font-weight:700;margin-bottom:12px;">✅ Conferma Carico</div>
             <div id="piano-conferma-checklist" style="margin-bottom:16px;"></div>
             <button class="btn btn-green" style="width:100%;font-size:15px;padding:14px;" onclick="confermaCarico()">
-              âœ… Confermo: tutti gli ordini del giro sono caricati
+              ✅ Confermo: tutti gli ordini del giro sono caricati
             </button>
             <div id="piano-conferma-stato" style="margin-top:12px;font-size:13px;"></div>
           </div>
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Magazzino â”€â”€â”€ -->
+      <!-- ─── PAGE: Magazzino ─── -->
       <div class="page" id="page-magazzino">
         <div class="page-header">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
@@ -1366,7 +1366,7 @@
             </div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <div style="display:flex;align-items:center;gap:6px;">
-                <label style="font-size:13px;font-weight:600;color:var(--text2);">ðŸ“…</label>
+                <label style="font-size:13px;font-weight:600;color:var(--text2);">📅</label>
                 <input type="date" id="filter-magazzino-data" onchange="renderMagazzino()"
                   style="padding:8px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text1);font-family:inherit;cursor:pointer;">
               </div>
@@ -1394,7 +1394,7 @@
         <!-- Piano di carico (view per magazzino) -->
         <div class="card" style="margin-top:20px;" id="piano-carico-magaz-card">
           <div class="card-header">
-            <div class="card-title">ðŸšš Piano di Carico Camion</div>
+            <div class="card-title">🚚 Piano di Carico Camion</div>
             <div style="font-size:13px;color:var(--text2);">Aggiornato dagli autisti</div>
           </div>
           <div id="piano-carico-magaz-body" style="padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:20px;"></div>
@@ -1402,36 +1402,36 @@
 
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Report â”€â”€â”€ -->
+      <!-- ─── PAGE: Report ─── -->
       <div class="page" id="page-report">
         <div class="page-header">
           <div class="page-title">Report & Statistiche</div>
           <div style="display:flex;align-items:center;gap:12px;">
             <div class="page-sub">Andamento ordini e consegne</div>
-            <button class="btn" style="background:var(--accent-light);color:var(--accent);border:1px solid var(--border);" onclick="openPDFGiornaliero()">ðŸ“„ PDF Giornaliero</button>
+            <button class="btn" style="background:var(--accent-light);color:var(--accent);border:1px solid var(--border);" onclick="openPDFGiornaliero()">📄 PDF Giornaliero</button>
           </div>
         </div>
         <div class="report-grid" style="margin-bottom:20px;">
           <div class="chart-placeholder">
-            <div class="chart-title">ðŸ“ˆ Ordini ultimi 7 giorni</div>
+            <div class="chart-title">📈 Ordini ultimi 7 giorni</div>
             <div class="bar-chart" id="chart-week"></div>
           </div>
           <div class="chart-placeholder">
-            <div class="chart-title">ðŸ‘¤ Ordini per agente</div>
+            <div class="chart-title">👤 Ordini per agente</div>
             <div id="chart-agenti"></div>
           </div>
         </div>
         <div class="report-grid" style="margin-bottom:20px;">
           <div class="card">
             <div class="card-header">
-              <div class="card-title">ðŸ† Prodotti piÃ¹ venduti</div>
-              <div style="font-size:12px;color:var(--text3);">Top 10 per quantitÃ </div>
+              <div class="card-title">🏆 Prodotti più venduti</div>
+              <div style="font-size:12px;color:var(--text3);">Top 10 per quantità</div>
             </div>
             <div id="report-top-prodotti" style="padding:4px 16px 12px;"></div>
           </div>
           <div class="card">
             <div class="card-header">
-              <div class="card-title">ðŸ—ºï¸ Ordini per giro</div>
+              <div class="card-title">🗺️ Ordini per giro</div>
               <div style="font-size:12px;color:var(--text3);">Distribuzione per zona</div>
             </div>
             <div id="report-giri" style="padding:4px 16px 12px;"></div>
@@ -1440,32 +1440,32 @@
         <div class="report-grid" style="margin-bottom:20px;">
           <div class="card">
             <div class="card-header">
-              <div class="card-title">âš ï¸ Clienti senza ordini recenti</div>
+              <div class="card-title">⚠️ Clienti senza ordini recenti</div>
               <div style="font-size:12px;color:var(--text3);">Ultimi 30 giorni</div>
             </div>
             <div id="report-clienti-inattivi" style="padding:4px 16px 12px;"></div>
           </div>
           <div class="chart-placeholder">
-            <div class="chart-title">ðŸ¢ Clienti per agente</div>
+            <div class="chart-title">🏢 Clienti per agente</div>
             <div id="report-agenti-clienti"></div>
           </div>
         </div>
         <div class="report-grid" style="margin-bottom:20px;">
           <div class="card">
-            <div class="card-header"><div class="card-title">ðŸ† Classifica clienti</div></div>
+            <div class="card-header"><div class="card-title">🏆 Classifica clienti</div></div>
             <div class="table-scroll-wrap">
-              <table><thead><tr><th>Cliente</th><th>LocalitÃ </th><th>Giro</th><th>Ordini</th><th>%</th></tr></thead>
+              <table><thead><tr><th>Cliente</th><th>Località</th><th>Giro</th><th>Ordini</th><th>%</th></tr></thead>
               <tbody id="report-clienti-table"></tbody></table>
             </div>
           </div>
           <div class="card" id="card-activity-log">
-            <div class="card-header"><div class="card-title">ðŸ“‹ Log attivitÃ </div></div>
+            <div class="card-header"><div class="card-title">📋 Log attività</div></div>
             <div id="activity-log-list" style="max-height:320px;overflow-y:auto;padding:4px 0;"></div>
           </div>
         </div>
       </div><!-- /page-report-end -->
 
-      <!-- â”€â”€â”€ PAGE: Impostazioni (Admin) â”€â”€â”€ -->
+      <!-- ─── PAGE: Impostazioni (Admin) ─── -->
       <div class="page" id="page-impostazioni">
         <div class="page-header">
           <div class="page-title">Impostazioni</div>
@@ -1474,23 +1474,23 @@
         <div style="max-width:900px;">
           <div class="card" style="margin-bottom:24px;">
             <div class="card-header">
-              <div class="card-title">ðŸ“… Calendario Giri Fissi</div>
+              <div class="card-title">📅 Calendario Giri Fissi</div>
               <div style="font-size:13px;color:var(--text3);">Configura i giorni di consegna per ogni giro</div>
             </div>
             <div id="giri-calendar-list" style="padding:0 4px 8px;"></div>
           </div>
           <div class="card" style="margin-bottom:24px;border-color:var(--accent);background:var(--accent-light);">
             <div style="padding:16px 20px;display:flex;align-items:flex-start;gap:14px;">
-              <div style="font-size:28px;flex-shrink:0;">ðŸš›</div>
+              <div style="font-size:28px;flex-shrink:0;">🚛</div>
               <div>
                 <div style="font-weight:700;font-size:15px;color:var(--accent-dark);margin-bottom:4px;">Spedizione STEF</div>
-                <div style="font-size:13px;color:var(--text2);">Gli ordini contrassegnati con STEF vengono gestiti tramite corriere esterno. Seleziona âœ… STEF al momento della creazione dell'ordine.</div>
+                <div style="font-size:13px;color:var(--text2);">Gli ordini contrassegnati con STEF vengono gestiti tramite corriere esterno. Seleziona ✅ STEF al momento della creazione dell'ordine.</div>
               </div>
             </div>
           </div>
           <div class="card" style="margin-bottom:24px;">
             <div class="card-header">
-              <div class="card-title">ðŸšš Tentata Vendita</div>
+              <div class="card-title">🚚 Tentata Vendita</div>
               <div><button class="btn btn-green btn-sm" onclick="openNuovaTentata()">+ Nuova</button></div>
             </div>
             <div id="tentata-list" style="padding:0 0 8px;"></div>
@@ -1498,7 +1498,7 @@
         </div>
       </div><!-- /page-impostazioni -->
 
-      <!-- â”€â”€â”€ PAGE: Il mio profilo â”€â”€â”€ -->
+      <!-- ─── PAGE: Il mio profilo ─── -->
       <div class="page" id="page-profilo">
         <div class="page-header">
           <div class="page-title">Il mio profilo</div>
@@ -1519,7 +1519,7 @@
           <!-- 2 colonne -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
             <div class="card">
-              <div class="card-header"><div class="card-title">âœï¸ Informazioni personali</div></div>
+              <div class="card-header"><div class="card-title">✏️ Informazioni personali</div></div>
               <div style="padding:16px 20px 20px;">
                 <div class="field" style="margin-bottom:12px;"><label>Nome *</label><input type="text" id="profilo-nome" placeholder="Il tuo nome"></div>
                 <div class="field" style="margin-bottom:12px;"><label>Cognome</label><input type="text" id="profilo-cognome" placeholder="Il tuo cognome"></div>
@@ -1527,34 +1527,34 @@
               </div>
             </div>
             <div class="card">
-              <div class="card-header"><div class="card-title">ðŸ”’ Cambio password</div></div>
+              <div class="card-header"><div class="card-title">🔒 Cambio password</div></div>
               <div style="padding:16px 20px 20px;">
-                <div class="field" style="margin-bottom:12px;"><label>Password attuale *</label><input type="password" id="profilo-pass-old" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="current-password"></div>
-                <div class="field" style="margin-bottom:12px;"><label>Nuova password</label><input type="password" id="profilo-pass-new" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="new-password"></div>
-                <div class="field" style="margin-bottom:10px;"><label>Conferma nuova password</label><input type="password" id="profilo-pass-new2" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="new-password"></div>
+                <div class="field" style="margin-bottom:12px;"><label>Password attuale *</label><input type="password" id="profilo-pass-old" placeholder="••••••" autocomplete="current-password"></div>
+                <div class="field" style="margin-bottom:12px;"><label>Nuova password</label><input type="password" id="profilo-pass-new" placeholder="••••••" autocomplete="new-password"></div>
+                <div class="field" style="margin-bottom:10px;"><label>Conferma nuova password</label><input type="password" id="profilo-pass-new2" placeholder="••••••" autocomplete="new-password"></div>
                 <div style="font-size:12px;color:var(--text3);">Lascia vuoto se non vuoi cambiare la password.</div>
               </div>
             </div>
           </div>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
-            <button class="btn btn-green" onclick="saveProfilo()">ðŸ’¾ Salva modifiche</button>
-            <button class="btn btn-outline" onclick="renderProfilo()">â†©ï¸ Annulla</button>
+            <button class="btn btn-green" onclick="saveProfilo()">💾 Salva modifiche</button>
+            <button class="btn btn-outline" onclick="renderProfilo()">↩️ Annulla</button>
           </div>
           <div id="profilo-feedback" style="display:none;margin-bottom:20px;font-size:13px;border-radius:8px;padding:10px 14px;"></div>
           <!-- Preferenze -->
           <div class="card">
-            <div class="card-header"><div class="card-title">ðŸ–¥ï¸ Preferenze visualizzazione</div></div>
+            <div class="card-header"><div class="card-title">🖥️ Preferenze visualizzazione</div></div>
             <div style="padding:16px 20px 20px;">
               <div style="font-size:13px;color:var(--text2);margin-bottom:14px;">Scegli come vuoi inserire i nuovi ordini. La preferenza viene salvata su questo dispositivo.</div>
               <div class="modality-toggle" id="modality-toggle">
                 <button class="modality-btn" id="mod-btn-classico" onclick="setModalitaOrdine('classico')">
-                  <span class="mod-icon">ðŸ“‹</span>
-                  <span class="mod-label">ModalitÃ  classica</span>
+                  <span class="mod-icon">📋</span>
+                  <span class="mod-label">Modalità classica</span>
                   <span class="mod-desc">Cerca prodotto, aggiungi riga per riga</span>
                 </button>
                 <button class="modality-btn" id="mod-btn-catalogo" onclick="setModalitaOrdine('catalogo')">
-                  <span class="mod-icon">ðŸ›’</span>
-                  <span class="mod-label">ModalitÃ  catalogo</span>
+                  <span class="mod-icon">🛒</span>
+                  <span class="mod-label">Modalità catalogo</span>
                   <span class="mod-desc">Griglia per categoria, aggiungi al carrello</span>
                 </button>
               </div>
@@ -1570,12 +1570,12 @@
   </div>
 </div>
 
-<!-- â•â•â•â•â•â• DRAWER MOBILE â•â•â•â•â•â• -->
+<!-- ══════ DRAWER MOBILE ══════ -->
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
   <div class="drawer-header">
-    <div class="drawer-brand">ðŸ§€ Norbalat Ordini</div>
-    <button class="drawer-close" onclick="closeDrawer()">âœ•</button>
+    <div class="drawer-brand">🧀 Norbalat Ordini</div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
   </div>
   <div class="drawer-user">
     <div class="drawer-user-name" id="drawer-username"></div>
@@ -1584,26 +1584,26 @@
   <nav class="drawer-nav" id="drawer-nav"></nav>
   <div class="drawer-footer">
     <button class="btn btn-outline" style="width:100%;justify-content:center;" onclick="closeDrawer();doLogout()">
-      ðŸšª Esci
+      🚪 Esci
     </button>
   </div>
 </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• MODALS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ MODALS ══════════════════ -->
 
 <!-- Modal: Nuovo/Modifica Ordine -->
 <div class="modal-overlay" id="modal-ordine">
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modal-ordine-title">Nuovo Ordine</div>
-      <button class="modal-close" onclick="closeModal('modal-ordine')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-ordine')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
         <div class="field form-full">
           <label>Cliente *</label>
           <div class="ac-wrap" id="ac-cliente-wrap">
-            <input type="text" class="ac-input" id="ac-cliente-input" placeholder="Cerca clienteâ€¦" autocomplete="off" oninput="acFilter('cliente')" onfocus="acOpen('cliente')" onkeydown="acKey(event,'cliente')">
+            <input type="text" class="ac-input" id="ac-cliente-input" placeholder="Cerca cliente…" autocomplete="off" oninput="acFilter('cliente')" onfocus="acOpen('cliente')" onkeydown="acKey(event,'cliente')">
             <input type="hidden" id="ord-cliente">
             <div class="ac-dropdown" id="ac-cliente-dd"></div>
           </div>
@@ -1615,7 +1615,7 @@
         <div class="field">
           <label>Consegnatario</label>
           <div id="ord-consegnatario-box" style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:8px;">
-            <span>ðŸšš</span><span id="ord-consegnatario-nome">â€”</span>
+            <span>🚚</span><span id="ord-consegnatario-nome">—</span>
             <span style="font-size:11px;color:var(--text3);margin-left:auto;">auto dal giro</span>
           </div>
           <input type="hidden" id="ord-autista-di-giro">
@@ -1626,11 +1626,11 @@
           <div style="display:flex;gap:16px;margin-top:6px;">
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
               <input type="checkbox" id="ord-data-non-certa" style="width:15px;height:15px;">
-              âš ï¸ Data non certa
+              ⚠️ Data non certa
             </label>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
               <input type="checkbox" id="ord-stef" style="width:15px;height:15px;">
-              ðŸš› Spedizione STEF
+              🚛 Spedizione STEF
             </label>
           </div>
         </div>
@@ -1647,28 +1647,28 @@
 
       <!-- Note fisse cliente (readonly, informative) -->
       <div id="ord-cliente-note-box" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--blue-light);border:1px solid #b3d4f0;border-radius:8px;font-size:13px;color:var(--blue);">
-        <b>ðŸ“Œ Note cliente:</b> <span id="ord-cliente-note-text"></span>
+        <b>📌 Note cliente:</b> <span id="ord-cliente-note-text"></span>
       </div>
 
       <div class="field">
         <label>Prodotti *</label>
         <div class="order-lines" id="ord-lines-container"></div>
-        <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addOrderLine()">ï¼‹ Aggiungi prodotto</button>
+        <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addOrderLine()">＋ Aggiungi prodotto</button>
       </div>
 
       <div class="field" style="margin-top:12px;">
         <label>Note ordine</label>
-        <textarea id="ord-note" placeholder="Istruzioni di consegna, orari particolariâ€¦"></textarea>
+        <textarea id="ord-note" placeholder="Istruzioni di consegna, orari particolari…"></textarea>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-ordine')">Annulla</button>
-      <button class="btn btn-green" onclick="saveOrder()">ðŸ’¾ Salva Ordine</button>
+      <button class="btn btn-green" onclick="saveOrder()">💾 Salva Ordine</button>
     </div>
   </div>
 </div>
 
-<!-- Modal: Nuovo Ordine â€” MODALITÃ€ CATALOGO -->
+<!-- Modal: Nuovo Ordine — MODALITÀ CATALOGO -->
 <div class="modal-overlay" id="modal-catalogo">
   <div class="modal" style="max-width:680px;">
     <div class="modal-header">
@@ -1677,7 +1677,7 @@
         <!-- breadcrumb categoria -->
         <div id="cat-breadcrumb" style="display:none;font-size:13px;color:var(--text2);"></div>
       </div>
-      <button class="modal-close" onclick="closeModal('modal-catalogo')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-catalogo')">✕</button>
     </div>
     <div class="modal-body" style="padding-top:12px;">
 
@@ -1687,7 +1687,7 @@
           <label>Cliente *</label>
           <div class="ac-wrap" id="ac-cat-cliente-wrap">
             <input type="text" class="ac-input" id="ac-cat-cliente-input"
-              placeholder="Cerca clienteâ€¦" autocomplete="off"
+              placeholder="Cerca cliente…" autocomplete="off"
               oninput="acFilter('cat-cliente')"
               onfocus="acOpen('cat-cliente')"
               onkeydown="acKey(event,'cat-cliente')">
@@ -1705,26 +1705,26 @@
         </div>
         <div class="field" style="display:flex;align-items:flex-end;gap:12px;padding-bottom:2px;">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
-            <input type="checkbox" id="cat-stef" style="width:15px;height:15px;">ðŸš› STEF
+            <input type="checkbox" id="cat-stef" style="width:15px;height:15px;">🚛 STEF
           </label>
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
-            <input type="checkbox" id="cat-data-non-certa" style="width:15px;height:15px;">âš ï¸ Data incerta
+            <input type="checkbox" id="cat-data-non-certa" style="width:15px;height:15px;">⚠️ Data incerta
           </label>
         </div>
       </div>
 
       <!-- Note cliente -->
       <div id="cat-cliente-note-box" style="display:none;margin-bottom:10px;padding:8px 12px;background:var(--blue-light);border:1px solid #b3d4f0;border-radius:8px;font-size:13px;color:var(--blue);">
-        <b>ðŸ“Œ Note cliente:</b> <span id="cat-cliente-note-text"></span>
+        <b>📌 Note cliente:</b> <span id="cat-cliente-note-text"></span>
       </div>
 
       <!-- Riepilogo carrello (sempre visibile se ci sono prodotti) -->
       <div id="cat-cart-bar" style="display:none;margin-bottom:10px;">
         <div class="cat-cart-summary">
-          <span>ðŸ›’</span>
+          <span>🛒</span>
           <span id="cat-cart-items" style="font-size:13px;flex:1;"></span>
-          <button class="btn btn-outline btn-sm" onclick="catShowCarrello()" style="white-space:nowrap;">ðŸ‘ï¸ Vedi tutto</button>
-          <button class="btn btn-danger btn-sm" onclick="resetCatalogo()">ðŸ—‘ï¸</button>
+          <button class="btn btn-outline btn-sm" onclick="catShowCarrello()" style="white-space:nowrap;">👁️ Vedi tutto</button>
+          <button class="btn btn-danger btn-sm" onclick="resetCatalogo()">🗑️</button>
         </div>
       </div>
 
@@ -1734,16 +1734,16 @@
         <div id="cat-cat-buttons" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;"></div>
         <!-- Storico cliente (se selezionato) -->
         <div id="cat-storico-section" style="display:none;margin-top:16px;">
-          <div class="cat-section-title" style="color:var(--accent);">â­ GiÃ  ordinati da questo cliente</div>
+          <div class="cat-section-title" style="color:var(--accent);">⭐ Già ordinati da questo cliente</div>
           <div id="cat-storico-grid" class="catalogo-grid" style="margin-top:8px;"></div>
         </div>
       </div>
 
       <!-- SCHERMATA 2: Prodotti della categoria -->
       <div id="cat-screen-prod" style="display:none;">
-        <button class="btn btn-outline btn-sm" onclick="catBackToCategorie()" style="margin-bottom:12px;">â† Categorie</button>
+        <button class="btn btn-outline btn-sm" onclick="catBackToCategorie()" style="margin-bottom:12px;">← Categorie</button>
         <div style="margin-bottom:10px;">
-          <input type="text" id="cat-search" placeholder="ðŸ” Cerca prodottoâ€¦"
+          <input type="text" id="cat-search" placeholder="🔍 Cerca prodotto…"
             oninput="catRenderProdotti()"
             style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);">
         </div>
@@ -1752,19 +1752,19 @@
 
       <!-- SCHERMATA 3: Riepilogo carrello completo -->
       <div id="cat-screen-carrello" style="display:none;">
-        <button class="btn btn-outline btn-sm" onclick="catBackToCategorie()" style="margin-bottom:12px;">â† Continua a ordinare</button>
+        <button class="btn btn-outline btn-sm" onclick="catBackToCategorie()" style="margin-bottom:12px;">← Continua a ordinare</button>
         <div id="cat-carrello-list" style="max-height:320px;overflow-y:auto;"></div>
       </div>
 
       <!-- Note ordine -->
       <div class="field" style="margin-top:12px;">
         <label>Note ordine</label>
-        <textarea id="cat-note" placeholder="Istruzioni di consegna, orari particolariâ€¦" style="min-height:52px;"></textarea>
+        <textarea id="cat-note" placeholder="Istruzioni di consegna, orari particolari…" style="min-height:52px;"></textarea>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-catalogo')">Annulla</button>
-      <button class="btn btn-green" onclick="saveCatalogoOrder()">ðŸ’¾ Conferma ordine</button>
+      <button class="btn btn-green" onclick="saveCatalogoOrder()">💾 Conferma ordine</button>
     </div>
   </div>
 </div>
@@ -1774,7 +1774,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modal-cliente-title">Nuovo Cliente</div>
-      <button class="modal-close" onclick="closeModal('modal-cliente')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-cliente')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
@@ -1783,13 +1783,13 @@
           <input type="text" id="cl-nome" placeholder="es. CASEIFICIO ROSSI SRL">
         </div>
         <div class="field">
-          <label>LocalitÃ </label>
+          <label>Località</label>
           <input type="text" id="cl-localita" placeholder="es. BARI">
         </div>
         <div class="field">
           <label>Giro</label>
           <select id="cl-giro">
-            <option value="">â€” Non assegnato â€”</option>
+            <option value="">— Non assegnato —</option>
             <option value="bari nord">Bari Nord / Andria</option>
             <option value="bari/foggia">Bari / Foggia</option>
             <option value="murgia">Murgia</option>
@@ -1811,20 +1811,20 @@
         <div class="field form-full">
           <label>Agente di default</label>
           <select id="cl-agente">
-            <option value="">â€” Nessuno â€”</option>
+            <option value="">— Nessuno —</option>
           </select>
         </div>
         <div class="field form-full">
-          <label>ðŸ“Œ Note fisse cliente</label>
-          <textarea id="cl-note" placeholder="Es: Consegnare solo il martedÃ¬ mattina, campanello interno 3â€¦" style="min-height:70px;"></textarea>
+          <label>📌 Note fisse cliente</label>
+          <textarea id="cl-note" placeholder="Es: Consegnare solo il martedì mattina, campanello interno 3…" style="min-height:70px;"></textarea>
         </div>
         <div class="field">
           <label>Classificazione</label>
           <select id="cl-classificazione">
-            <option value="">â€” Non specificata â€”</option>
-            <option value="Caseificio">ðŸ§€ Caseificio</option>
-            <option value="Alimentari">ðŸª Alimentari</option>
-            <option value="Rivenditori">ðŸ”„ Rivenditori</option>
+            <option value="">— Non specificata —</option>
+            <option value="Caseificio">🧀 Caseificio</option>
+            <option value="Alimentari">🏪 Alimentari</option>
+            <option value="Rivenditori">🔄 Rivenditori</option>
           </select>
         </div>
         <div class="field">
@@ -1833,19 +1833,19 @@
         </div>
         <div class="field">
           <label>Condizioni di Pagamento</label>
-          <input type="text" id="cl-condpag" placeholder="es. 30gg data fattura, RB 60ggâ€¦">
+          <input type="text" id="cl-condpag" placeholder="es. 30gg data fattura, RB 60gg…">
         </div>
         <div class="field form-full">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
             <input type="checkbox" id="cl-efornitore" style="width:16px;height:16px;">
-            <span>ðŸ”„ Questo cliente Ã¨ anche <b>fornitore</b></span>
+            <span>🔄 Questo cliente è anche <b>fornitore</b></span>
           </label>
         </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-cliente')">Annulla</button>
-      <button class="btn btn-green" onclick="saveCliente()">ðŸ’¾ Salva</button>
+      <button class="btn btn-green" onclick="saveCliente()">💾 Salva</button>
     </div>
   </div>
 </div>
@@ -1855,7 +1855,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modal-prodotto-title">Nuovo Prodotto</div>
-      <button class="modal-close" onclick="closeModal('modal-prodotto')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-prodotto')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
@@ -1878,7 +1878,7 @@
           <input type="text" id="pr-nome" placeholder="es. CACIO PICCANTE">
         </div>
         <div class="field">
-          <label>UnitÃ  di misura</label>
+          <label>Unità di misura</label>
           <select id="pr-um">
             <option value="kg">kg</option>
             <option value="pz">pz</option>
@@ -1897,14 +1897,14 @@
           <input type="text" id="pr-packaging" placeholder="es. 1pz=1,5kg circa">
         </div>
         <div class="field form-full">
-          <label>ðŸ“Œ Note fisse prodotto</label>
-          <textarea id="pr-note" placeholder="Es: Conservare a 4Â°C, prodotto stagionaleâ€¦" style="min-height:60px;"></textarea>
+          <label>📌 Note fisse prodotto</label>
+          <textarea id="pr-note" placeholder="Es: Conservare a 4°C, prodotto stagionale…" style="min-height:60px;"></textarea>
         </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-prodotto')">Annulla</button>
-      <button class="btn btn-green" onclick="saveProdotto()">ðŸ’¾ Salva</button>
+      <button class="btn btn-green" onclick="saveProdotto()">💾 Salva</button>
     </div>
   </div>
 </div>
@@ -1914,7 +1914,7 @@
   <div class="modal" style="max-width:540px;">
     <div class="modal-header">
       <div class="modal-title" id="modal-utente-title">Nuovo Utente</div>
-      <button class="modal-close" onclick="closeModal('modal-utente')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-utente')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
@@ -1938,7 +1938,7 @@
         </div>
         <div class="field">
           <label>Qualifica</label>
-          <input type="text" id="ut-tipo" placeholder="es. Commerciale, CEOâ€¦">
+          <input type="text" id="ut-tipo" placeholder="es. Commerciale, CEO…">
         </div>
         <div class="field">
           <label>Username *</label>
@@ -1946,25 +1946,25 @@
         </div>
         <div class="field">
           <label>Password *</label>
-          <input type="password" id="ut-password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="new-password">
+          <input type="password" id="ut-password" placeholder="••••••" autocomplete="new-password">
         </div>
       </div>
       <!-- Checkbox isAgente -->
       <div class="field form-full" style="margin-top:4px;">
         <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;">
           <input type="checkbox" id="ut-isagente" style="width:16px;height:16px;accent-color:var(--accent);">
-          Ãˆ un agente commerciale (puÃ² essere assegnato agli ordini)
+          È un agente commerciale (può essere assegnato agli ordini)
         </label>
       </div>
       <!-- Giri assegnati (solo autisti) -->
       <div id="ut-giri-section" style="display:none;margin-top:8px;">
-        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">ðŸ—ºï¸ Giri assegnati</label>
+        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">🗺️ Giri assegnati</label>
         <div id="ut-giri-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-utente')">Annulla</button>
-      <button class="btn btn-green" onclick="saveUtente()">ðŸ’¾ Salva</button>
+      <button class="btn btn-green" onclick="saveUtente()">💾 Salva</button>
     </div>
   </div>
 </div>
@@ -1974,7 +1974,7 @@
   <div class="modal" style="max-width:400px;">
     <div class="modal-header">
       <div class="modal-title" id="modal-cred-title">Modifica Credenziali</div>
-      <button class="modal-close" onclick="closeModal('modal-credenziali')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-credenziali')">✕</button>
     </div>
     <div class="modal-body">
       <div class="field">
@@ -1987,16 +1987,16 @@
       </div>
       <div class="field">
         <label>Nuova Password <span style="color:var(--text3);font-weight:400;">(lascia vuoto per non cambiare)</span></label>
-        <input type="password" id="cred-pass" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢">
+        <input type="password" id="cred-pass" placeholder="••••••">
       </div>
       <div class="field">
         <label>Conferma Password</label>
-        <input type="password" id="cred-pass2" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢">
+        <input type="password" id="cred-pass2" placeholder="••••••">
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-credenziali')">Annulla</button>
-      <button class="btn btn-green" onclick="saveCredenziali()">ðŸ’¾ Salva</button>
+      <button class="btn btn-green" onclick="saveCredenziali()">💾 Salva</button>
     </div>
   </div>
 </div>
@@ -2006,7 +2006,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="det-title">Dettaglio Ordine</div>
-      <button class="modal-close" onclick="closeModal('modal-dettaglio')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-dettaglio')">✕</button>
     </div>
     <div class="modal-body" id="det-body"></div>
     <div class="modal-footer" id="det-footer"></div>
@@ -2017,17 +2017,17 @@
 <div class="modal-overlay" id="modal-tentata">
   <div class="modal" style="max-width:600px;">
     <div class="modal-header">
-      <div class="modal-title">ðŸšš Tentata Vendita</div>
-      <button class="modal-close" onclick="closeModal('modal-tentata')">âœ•</button>
+      <div class="modal-title">🚚 Tentata Vendita</div>
+      <button class="modal-close" onclick="closeModal('modal-tentata')">✕</button>
     </div>
     <div class="modal-body">
       <div style="background:var(--accent2-light);border:1px solid #f5d7a0;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--accent2);">
-        <b>Carico predefinito per il tuo mezzo.</b> Modifica le quantitÃ  prima di confermare. L'ordine sarÃ  registrato come "tentata vendita".
+        <b>Carico predefinito per il tuo mezzo.</b> Modifica le quantità prima di confermare. L'ordine sarà registrato come "tentata vendita".
       </div>
       <div class="field">
         <label>Cliente</label>
         <div class="ac-wrap" id="ac-tentata-wrap">
-          <input type="text" class="ac-input" id="ac-tentata-input" placeholder="Cerca clienteâ€¦" autocomplete="off" oninput="acFilter('tentata')" onfocus="acOpen('tentata')" onkeydown="acKey(event,'tentata')">
+          <input type="text" class="ac-input" id="ac-tentata-input" placeholder="Cerca cliente…" autocomplete="off" oninput="acFilter('tentata')" onfocus="acOpen('tentata')" onkeydown="acKey(event,'tentata')">
           <input type="hidden" id="tentata-cliente">
           <div class="ac-dropdown" id="ac-tentata-dd"></div>
         </div>
@@ -2035,16 +2035,16 @@
       <div class="field">
         <label>Prodotti nel carico</label>
         <div id="tentata-lines-container" class="order-lines"></div>
-        <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addTentataLine()">ï¼‹ Aggiungi prodotto</button>
+        <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addTentataLine()">＋ Aggiungi prodotto</button>
       </div>
       <div class="field">
         <label>Note</label>
-        <textarea id="tentata-note" placeholder="Es: cliente non trovato, rifornimento scorteâ€¦"></textarea>
+        <textarea id="tentata-note" placeholder="Es: cliente non trovato, rifornimento scorte…"></textarea>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-tentata')">Annulla</button>
-      <button class="btn btn-green" onclick="saveTentataVendita()">âœ… Registra Tentata Vendita</button>
+      <button class="btn btn-green" onclick="saveTentataVendita()">✅ Registra Tentata Vendita</button>
     </div>
   </div>
 </div>
@@ -2053,8 +2053,8 @@
 <div class="modal-overlay" id="modal-pdf-giornaliero">
   <div class="modal" style="max-width:760px;">
     <div class="modal-header">
-      <div class="modal-title">ðŸ“„ Report Giornaliero</div>
-      <button class="modal-close" onclick="closeModal('modal-pdf-giornaliero')">âœ•</button>
+      <div class="modal-title">📄 Report Giornaliero</div>
+      <button class="modal-close" onclick="closeModal('modal-pdf-giornaliero')">✕</button>
     </div>
     <div class="modal-body">
       <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
@@ -2120,11 +2120,11 @@
           <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
               <input type="radio" name="pdf-tipo" value="magazzino" checked onchange="updatePDFPreview()" style="accent-color:var(--accent);">
-              <span>ðŸ“¦ Magazzino <span style="font-size:11px;color:var(--text3);">(pezzi da preparare)</span></span>
+              <span>📦 Magazzino <span style="font-size:11px;color:var(--text3);">(pezzi da preparare)</span></span>
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
               <input type="radio" name="pdf-tipo" value="fatturazione" onchange="updatePDFPreview()" style="accent-color:var(--accent);">
-              <span>ðŸ’¶ Fatturazione <span style="font-size:11px;color:var(--text3);">(pesi effettivi)</span></span>
+              <span>💶 Fatturazione <span style="font-size:11px;color:var(--text3);">(pesi effettivi)</span></span>
             </label>
           </div>
         </div>
@@ -2133,8 +2133,8 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-pdf-giornaliero')">Chiudi</button>
-      <button class="btn" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="updatePDFPreview()">ðŸ”„ Aggiorna anteprima</button>
-      <button class="btn btn-green" onclick="stampaPDFGiornaliero()">ðŸ–¨ï¸ Stampa / Salva PDF</button>
+      <button class="btn" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="updatePDFPreview()">🔄 Aggiorna anteprima</button>
+      <button class="btn btn-green" onclick="stampaPDFGiornaliero()">🖨️ Stampa / Salva PDF</button>
     </div>
   </div>
 </div>
@@ -2143,16 +2143,16 @@
 <div class="toast-container" id="toast-container"></div>
 
 <script>
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // DATA STORE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
-// â”€â”€â”€ API BASE URL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// In produzione il frontend Ã¨ servito dallo stesso server Express,
-// quindi BASE_URL Ã¨ stringa vuota. In sviluppo separato cambia in 'http://localhost:3000'
+// ─── API BASE URL ─────────────────────────────────────────────────
+// In produzione il frontend è servito dallo stesso server Express,
+// quindi BASE_URL è stringa vuota. In sviluppo separato cambia in 'http://localhost:3000'
 const BASE_URL = '';
 
-// â”€â”€â”€ STATO RUNTIME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── STATO RUNTIME ────────────────────────────────────────────────
 let state = {
   currentUser: null,
   currentPage: null,
@@ -2171,6 +2171,8 @@ let state = {
   devMetrics: null,
   devErrors: [],
   devMonitorTimer: null,
+  devSmoke: null,
+  devThresholds: null,
 };
 
 function canSeeDevPanel() {
@@ -2181,12 +2183,63 @@ function devAutoKey() {
   return 'dev_auto_monitor_' + (state.currentUser?.id || 'default');
 }
 
+function devErrorsKey() {
+  return 'dev_errors_' + (state.currentUser?.id || 'default');
+}
+
+function devThresholdsKey() {
+  return 'dev_thresholds_' + (state.currentUser?.id || 'default');
+}
+
 function isDevAutoEnabled() {
   return localStorage.getItem(devAutoKey()) !== '0';
 }
 
 function setDevAutoEnabled(val) {
   localStorage.setItem(devAutoKey(), val ? '1' : '0');
+}
+
+function loadDevErrors() {
+  try {
+    const raw = localStorage.getItem(devErrorsKey());
+    state.devErrors = raw ? JSON.parse(raw) : [];
+  } catch (_) {
+    state.devErrors = [];
+  }
+}
+
+function saveDevErrors() {
+  localStorage.setItem(devErrorsKey(), JSON.stringify(state.devErrors.slice(0, 30)));
+}
+
+function loadDevThresholds() {
+  const defaults = { db_warn: 120, db_err: 300, onb_warn: 8, onb_err: 20 };
+  try {
+    const raw = localStorage.getItem(devThresholdsKey());
+    const parsed = raw ? JSON.parse(raw) : {};
+    return { ...defaults, ...parsed };
+  } catch (_) {
+    return defaults;
+  }
+}
+
+function saveDevThresholds(th) {
+  localStorage.setItem(devThresholdsKey(), JSON.stringify(th));
+}
+
+function appendDevError(message) {
+  state.devErrors.unshift(`[${new Date().toLocaleTimeString('it-IT')}] ${message}`);
+  state.devErrors = state.devErrors.slice(0, 30);
+  saveDevErrors();
+}
+
+function escHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function canApproveOnboarding() {
@@ -2202,7 +2255,7 @@ function clientiOrdinabili() {
   return state.clienti.filter(isClienteSbloccato);
 }
 
-// â”€â”€â”€ HTTP HELPER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── HTTP HELPER ──────────────────────────────────────────────────
 async function api(method, path, body = null) {
   const opts = {
     method,
@@ -2217,7 +2270,7 @@ async function api(method, path, body = null) {
   return data;
 }
 
-// â”€â”€â”€ CARICAMENTO DATI INIZIALI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── CARICAMENTO DATI INIZIALI ────────────────────────────────────
 async function loadAllData() {
   try {
     const canSeePiano = ['admin', 'autista', 'magazzino'].includes(state.currentUser?.ruolo);
@@ -2242,7 +2295,7 @@ async function loadAllData() {
   }
 }
 
-// â”€â”€â”€ NORMALIZZATORI snake_case â†’ camelCase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── NORMALIZZATORI snake_case → camelCase ─────────────────────────
 function normalizeUtente(u) {
   return {
     id: u.id,
@@ -2253,7 +2306,7 @@ function normalizeUtente(u) {
     tipoUtente: u.tipo_utente||'',
     giriConsegna: Array.isArray(u.giri_consegna) ? u.giri_consegna : (u.giri_consegna ? JSON.parse(u.giri_consegna) : []),
     isAgente: !!u.is_agente,
-    password: 'â€¢â€¢â€¢â€¢', // non esposto
+    password: '••••', // non esposto
   };
 }
 
@@ -2332,9 +2385,9 @@ function normalizeCamion(c) {
 }
 
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // AUTH
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 let selectedRole = 'admin';
 
@@ -2367,6 +2420,8 @@ async function doLogin() {
 
     state.token = data.token;
     state.currentUser = normalizeUtente(data.user);
+    loadDevErrors();
+    state.devThresholds = loadDevThresholds();
 
     // Carica tutti i dati
     await loadAllData();
@@ -2384,7 +2439,7 @@ async function doLogin() {
   } catch(e) {
     showToast(e.message || 'Errore di connessione', 'warning');
   } finally {
-    if (btn) { btn.textContent = 'Accedi â†’'; btn.disabled = false; }
+    if (btn) { btn.textContent = 'Accedi →'; btn.disabled = false; }
   }
 }
 
@@ -2394,48 +2449,49 @@ function doLogout() {
   state.currentUser = null;
   state.utenti = []; state.clienti = []; state.prodotti = [];
   state.ordini = []; state.camions = []; state.giriCalendario = [];
+  state.devMetrics = null; state.devSmoke = null; state.devErrors = []; state.devThresholds = null;
   document.getElementById('screen-app').style.display = 'none';
   document.getElementById('screen-login').style.display = 'flex';
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // NAVIGATION
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 const navConfigs = {
   admin: [
-    { page: 'dashboard', icon: 'ðŸ ', label: 'Dashboard' },
-    { page: 'ordini', icon: 'ðŸ“‹', label: 'Ordini' },
-    { page: 'clienti', icon: 'ðŸ¢', label: 'Clienti' },
-    { page: 'prodotti', icon: 'ðŸ§€', label: 'Prodotti' },
-    { page: 'utenti', icon: 'ðŸ‘¥', label: 'Utenti' },
-    { page: 'piano', icon: 'ðŸš›', label: 'Piano Carico' },
-    { page: 'report', icon: 'ðŸ“Š', label: 'Report' },
-    { page: 'impostazioni', icon: 'âš™ï¸', label: 'Impostazioni' },
-    { page: 'profilo', icon: 'ðŸ‘¤', label: 'Il mio profilo' },
+    { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
+    { page: 'ordini', icon: '📋', label: 'Ordini' },
+    { page: 'clienti', icon: '🏢', label: 'Clienti' },
+    { page: 'prodotti', icon: '🧀', label: 'Prodotti' },
+    { page: 'utenti', icon: '👥', label: 'Utenti' },
+    { page: 'piano', icon: '🚛', label: 'Piano Carico' },
+    { page: 'report', icon: '📊', label: 'Report' },
+    { page: 'impostazioni', icon: '⚙️', label: 'Impostazioni' },
+    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
   amministrazione: [
-    { page: 'clienti', icon: 'ðŸ¢', label: 'Clienti' },
-    { page: 'ordini', icon: 'ðŸ“‹', label: 'Ordini' },
-    { page: 'report', icon: 'ðŸ“Š', label: 'Report' },
-    { page: 'profilo', icon: 'ðŸ‘¤', label: 'Il mio profilo' },
+    { page: 'clienti', icon: '🏢', label: 'Clienti' },
+    { page: 'ordini', icon: '📋', label: 'Ordini' },
+    { page: 'report', icon: '📊', label: 'Report' },
+    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
   autista: [
-    { page: 'autista', icon: 'ðŸšš', label: 'Il mio giro' },
-    { page: 'piano', icon: 'ðŸš›', label: 'Piano Carico' },
-    { page: 'ordini', icon: 'ðŸ“‹', label: 'Tutti gli ordini' },
-    { page: 'profilo', icon: 'ðŸ‘¤', label: 'Il mio profilo' },
+    { page: 'autista', icon: '🚚', label: 'Il mio giro' },
+    { page: 'piano', icon: '🚛', label: 'Piano Carico' },
+    { page: 'ordini', icon: '📋', label: 'Tutti gli ordini' },
+    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
   magazzino: [
-    { page: 'magazzino', icon: 'ðŸ“¦', label: 'Da preparare' },
-    { page: 'piano', icon: 'ðŸš›', label: 'Piano Carico' },
-    { page: 'ordini', icon: 'ðŸ“‹', label: 'Ordini' },
-    { page: 'profilo', icon: 'ðŸ‘¤', label: 'Il mio profilo' },
+    { page: 'magazzino', icon: '📦', label: 'Da preparare' },
+    { page: 'piano', icon: '🚛', label: 'Piano Carico' },
+    { page: 'ordini', icon: '📋', label: 'Ordini' },
+    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
   direzione: [
-    { page: 'report', icon: 'ðŸ“Š', label: 'Report' },
-    { page: 'ordini', icon: 'ðŸ“‹', label: 'Ordini' },
-    { page: 'profilo', icon: 'ðŸ‘¤', label: 'Il mio profilo' },
+    { page: 'report', icon: '📊', label: 'Report' },
+    { page: 'ordini', icon: '📋', label: 'Ordini' },
+    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
 };
 
@@ -2453,7 +2509,7 @@ function setupNav() {
     </button>
   `).join('');
 
-  // Drawer mobile â€” tutte le voci
+  // Drawer mobile — tutte le voci
   const drawerNav = document.getElementById('drawer-nav');
   if (drawerNav) {
     drawerNav.innerHTML = items.map(i => `
@@ -2513,7 +2569,7 @@ function renderPage(page) {
   if (page === 'utenti') renderUtentiTable();
   if (page === 'autista') renderAutistaView();
   if (page === 'magazzino') {
-    // Imposta la data di default = oggi se non giÃ  impostata
+    // Imposta la data di default = oggi se non già impostata
     const dtInput = document.getElementById('filter-magazzino-data');
     if (dtInput && !dtInput.value) dtInput.value = today();
     renderMagazzino();
@@ -2524,9 +2580,9 @@ function renderPage(page) {
   if (page === 'profilo') renderProfilo();
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // HELPERS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function getCliente(id) { return state.clienti.find(c => c.id === id) || {nome:'?', localita:'', giro:''}; }
 function getAgente(id) {
@@ -2551,7 +2607,7 @@ function statoBadge(stato) {
 
 function lineeResume(linee) {
   return linee.map(l => {
-    const pedana = l.isPedana ? ' <b style="color:var(--accent)">ðŸªµPDN</b>' : '';
+    const pedana = l.isPedana ? ' <b style="color:var(--accent)">🪵PDN</b>' : '';
     const p = getProdotto(l.prodId);
     return `${l.qty} ${p.um} ${p.nome.split(' ').slice(0,3).join(' ')}`;
   }).join(', ');
@@ -2563,9 +2619,9 @@ function formatDate(d) {
   return `${dd}/${m}/${y}`;
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // DASHBOARD
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function renderDashboard() {
   const t = today();
@@ -2590,21 +2646,21 @@ function renderDashboard() {
       <td><b>${getCliente(o.clienteId).nome}</b></td>
       <td style="color:var(--text2);">${formatDate(o.data)}</td>
       <td>
-        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : 'â€”'; })()}</div>
-        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">ðŸ‘¤ ${getAgente(o.agenteId).nome}</div>` : ''}
+        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : '—'; })()}</div>
+        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">👤 ${getAgente(o.agenteId).nome}</div>` : ''}
       </td>
       <td>${statoBadge(o.stato)}</td>
       <td>
-        <button class="btn btn-outline btn-sm" onclick="openEditOrder(${o.id})">âœï¸</button>
-        <button class="btn btn-outline btn-sm" onclick="openDettaglio(${o.id})">ðŸ‘ï¸</button>
+        <button class="btn btn-outline btn-sm" onclick="openEditOrder(${o.id})">✏️</button>
+        <button class="btn btn-outline btn-sm" onclick="openDettaglio(${o.id})">👁️</button>
       </td>
     </tr>
   `).join('');
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // ORDINI TABLE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function renderOrdiniTable() {
   const q = (document.getElementById('search-ordini')?.value || '').toLowerCase();
@@ -2627,7 +2683,7 @@ function renderOrdiniTable() {
 
   const tbody = document.getElementById('ordini-table');
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">ðŸ“‹</div><p>Nessun ordine trovato</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📋</div><p>Nessun ordine trovato</p></div></td></tr>`;
     return;
   }
   const allIds = list.map(o => o.id);
@@ -2647,16 +2703,16 @@ function renderOrdiniTable() {
       <td><b>${getCliente(o.clienteId).nome}</b></td>
       <td>${formatDate(o.data)}</td>
       <td>
-        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : 'â€”'; })()}</div>
-        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">ðŸ‘¤ ${getAgente(o.agenteId).nome}</div>` : ''}
+        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : '—'; })()}</div>
+        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">👤 ${getAgente(o.agenteId).nome}</div>` : ''}
       </td>
       <td class="col-lines" style="font-size:12px;color:var(--text2);max-width:200px;">${lineeResume(o.linee)}</td>
       <td>${statoBadge(o.stato)}</td>
-      <td class="col-note" style="font-size:13px;color:var(--text2);">${o.note || 'â€”'}</td>
+      <td class="col-note" style="font-size:13px;color:var(--text2);">${o.note || '—'}</td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-outline btn-sm" onclick="openEditOrder(${o.id})">âœï¸</button>
-        <button class="btn btn-outline btn-sm" onclick="openDettaglio(${o.id})">ðŸ‘ï¸</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id})">ðŸ—‘ï¸</button>
+        <button class="btn btn-outline btn-sm" onclick="openEditOrder(${o.id})">✏️</button>
+        <button class="btn btn-outline btn-sm" onclick="openDettaglio(${o.id})">👁️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id})">🗑️</button>
       </td>
     </tr>`;
   }).join('');
@@ -2693,13 +2749,13 @@ async function deleteSelectedOrders() {
       ok++;
     } catch(e) { /* ignora singolo errore */ }
   }
-  showToast(`${ok} ordine${ok>1?'i':''} eliminat${ok>1?'i':'o'} âœ…`, 'success');
+  showToast(`${ok} ordine${ok>1?'i':''} eliminat${ok>1?'i':'o'} ✅`, 'success');
   renderOrdiniTable();
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // CLIENTI
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function renderClientiTable() {
   const q = (document.getElementById('search-clienti')?.value || '').toLowerCase();
@@ -2739,23 +2795,23 @@ function renderClientiTable() {
           <div class="anag-avatar">${c.nome.charAt(0)}</div>
           <div>
             <b style="font-size:13px;">${c.nome}</b>
-            ${c.note ? `<div style="font-size:11px;color:var(--blue);margin-top:1px;">ðŸ“Œ ${c.note.substring(0,50)}${c.note.length>50?'â€¦':''}</div>` : ''}
-            ${c.classificazione ? `<div style="font-size:10px;color:var(--text3);margin-top:1px;">${c.classificazione === 'Caseificio' ? 'ðŸ§€' : c.classificazione === 'Alimentari' ? 'ðŸª' : 'ðŸ”„'} ${c.classificazione}${c.eFornitore?' Â· ðŸ” Fornitore':''}</div>` : (c.eFornitore ? '<div style="font-size:10px;color:var(--text3);margin-top:1px;">ðŸ” Fornitore</div>' : '')}
+            ${c.note ? `<div style="font-size:11px;color:var(--blue);margin-top:1px;">📌 ${c.note.substring(0,50)}${c.note.length>50?'…':''}</div>` : ''}
+            ${c.classificazione ? `<div style="font-size:10px;color:var(--text3);margin-top:1px;">${c.classificazione === 'Caseificio' ? '🧀' : c.classificazione === 'Alimentari' ? '🏪' : '🔄'} ${c.classificazione}${c.eFornitore?' · 🔁 Fornitore':''}</div>` : (c.eFornitore ? '<div style="font-size:10px;color:var(--text3);margin-top:1px;">🔁 Fornitore</div>' : '')}
           </div>
         </div>
       </td>
       <td style="color:var(--text2);">${c.localita}</td>
-      <td>${c.giro ? `<span class="badge ${giroColors[c.giro]||'badge-gray'}">${c.giro}</span>` : '<span style="color:var(--text3)">â€”</span>'}</td>
+      <td>${c.giro ? `<span class="badge ${giroColors[c.giro]||'badge-gray'}">${c.giro}</span>` : '<span style="color:var(--text3)">—</span>'}</td>
       <td><span style="font-family:'DM Mono',monospace;font-weight:700;">${nOrdini}</span></td>
-      <td><span style="font-family:'DM Mono',monospace;">â‚¬ ${fidoTxt}</span></td>
+      <td><span style="font-family:'DM Mono',monospace;">€ ${fidoTxt}</span></td>
       <td><span class="badge ${onboardingBadge}">${onboardingLabel}</span></td>
       <td>
-        ${canManageOnboarding ? `<button class="btn btn-outline btn-sm" onclick="setClienteOnboardingStatus(${c.id},'in_verifica')">ðŸ”Ž</button>` : ''}
-        ${canManageOnboarding ? `<button class="btn btn-green btn-sm" onclick="approveClienteOnboarding(${c.id})">âœ…</button>` : ''}
-        ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" onclick="setClienteOnboardingStatus(${c.id},'rifiutato')">â›”</button>` : ''}
-        ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" onclick="setClienteOnboardingStatus(${c.id},'sospeso')">â¸ï¸</button>` : ''}
-        <button class="btn btn-outline btn-sm" onclick="openEditCliente(${c.id})">âœï¸</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteCliente(${c.id})">ðŸ—‘ï¸</button>
+        ${canManageOnboarding ? `<button class="btn btn-outline btn-sm" onclick="setClienteOnboardingStatus(${c.id},'in_verifica')">🔎</button>` : ''}
+        ${canManageOnboarding ? `<button class="btn btn-green btn-sm" onclick="approveClienteOnboarding(${c.id})">✅</button>` : ''}
+        ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" onclick="setClienteOnboardingStatus(${c.id},'rifiutato')">⛔</button>` : ''}
+        ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" onclick="setClienteOnboardingStatus(${c.id},'sospeso')">⏸️</button>` : ''}
+        <button class="btn btn-outline btn-sm" onclick="openEditCliente(${c.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCliente(${c.id})">🗑️</button>
       </td>
     </tr>`;
   }).join('');
@@ -2797,7 +2853,7 @@ function openEditCliente(id) {
 function populateAgenteSelect(selectId, selectedId) {
   const sel = document.getElementById(selectId);
   const agenti = state.utenti.filter(u => u.ruolo === 'autista');
-  sel.innerHTML = '<option value="">â€” Nessuno â€”</option>' +
+  sel.innerHTML = '<option value="">— Nessuno —</option>' +
     agenti.map(a => `<option value="${a.id}" ${a.id==selectedId?'selected':''}>${(a.nome+' '+(a.cognome||'')).trim()}</option>`).join('');
 }
 
@@ -2833,7 +2889,7 @@ async function saveCliente() {
       state.clienti.sort((a,b) => a.nome.localeCompare(b.nome));
     }
     closeModal('modal-cliente');
-    showToast(state.editingId ? 'Cliente aggiornato âœ…' : 'Cliente salvato âœ…', 'success');
+    showToast(state.editingId ? 'Cliente aggiornato ✅' : 'Cliente salvato ✅', 'success');
     state.editingId = null;
     renderClientiTable();
   } catch(e) { showToast(e.message, 'warning'); }
@@ -2910,9 +2966,9 @@ async function deleteCliente(id) {
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // PRODOTTI
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function renderProdottiTable() {
   const q = (document.getElementById('search-prodotti')?.value || '').toLowerCase();
@@ -2931,8 +2987,8 @@ function renderProdottiTable() {
       <td style="font-size:12px;color:var(--text2);">${p.packaging}</td>
       <td><span class="badge ${p.pesoFisso ? 'badge-blue' : 'badge-orange'}">${p.pesoFisso ? 'Fisso' : 'Variabile'}</span></td>
       <td>
-        <button class="btn btn-outline btn-sm" onclick="openEditProdotto(${p.id})">âœï¸</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteProdotto(${p.id})">ðŸ—‘ï¸</button>
+        <button class="btn btn-outline btn-sm" onclick="openEditProdotto(${p.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteProdotto(${p.id})">🗑️</button>
       </td>
     </tr>
   `).join('');
@@ -2981,7 +3037,7 @@ async function saveProdotto() {
       state.prodotti.push(normalizeProdotto({...body, id: saved.id, peso_fisso: body.peso_fisso?1:0}));
     }
     closeModal('modal-prodotto');
-    showToast(state.editingId ? 'Prodotto aggiornato âœ…' : 'Prodotto salvato âœ…', 'success');
+    showToast(state.editingId ? 'Prodotto aggiornato ✅' : 'Prodotto salvato ✅', 'success');
     state.editingId = null;
     renderProdottiTable();
   } catch(e) { showToast(e.message, 'warning'); }
@@ -2998,9 +3054,9 @@ async function deleteProdotto(id) {
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // UTENTI
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function renderUtentiTable() {
   const roleLabels = {admin:'Admin/Ufficio', amministrazione:'Amministrazione', autista:'Autista/Agente', magazzino:'Magazzino', direzione:'Direzione'};
@@ -3027,8 +3083,8 @@ function renderUtentiTable() {
         ${giriTag}
       </td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-outline btn-sm" onclick="openEditUtente(${u.id})">âœï¸ Modifica</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteUtente(${u.id})">ðŸ—‘ï¸</button>
+        <button class="btn btn-outline btn-sm" onclick="openEditUtente(${u.id})">✏️ Modifica</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUtente(${u.id})">🗑️</button>
       </td>
     </tr>`;
   }).join('');
@@ -3037,7 +3093,7 @@ function renderUtentiTable() {
 function openCredenziali(id) {
   const u = state.utenti.find(x => x.id === id);
   state.editingId = id;
-  document.getElementById('modal-cred-title').textContent = `Modifica â€” ${u.nome} ${u.cognome||''}`.trim();
+  document.getElementById('modal-cred-title').textContent = `Modifica — ${u.nome} ${u.cognome||''}`.trim();
   document.getElementById('cred-nome').value = (u.nome + ' ' + (u.cognome||'')).trim();
   document.getElementById('cred-username').value = u.username;
   document.getElementById('cred-pass').value = '';
@@ -3056,14 +3112,14 @@ function saveCredenziali() {
 
   // Check username duplicato
   const dup = state.utenti.find(u => u.username === username && u.id !== state.editingId);
-  if (dup) { showToast('Username giÃ  in uso', 'warning'); return; }
+  if (dup) { showToast('Username già in uso', 'warning'); return; }
 
   const u = state.utenti.find(x => x.id === state.editingId);
   u.nome = nome;
   u.username = username;
   if (pass) u.password = pass;
 
-  // Aggiorna topbar se Ã¨ l'utente corrente
+  // Aggiorna topbar se è l'utente corrente
   if (state.currentUser.id === u.id) {
     state.currentUser.nome = nome;
     state.currentUser.username = username;
@@ -3153,19 +3209,19 @@ async function saveUtente() {
       state.utenti.push(normalizeUtente({...saved, giri_consegna: giriConsegna}));
     }
     closeModal('modal-utente');
-    showToast(state.editingId ? 'Utente aggiornato âœ…' : 'Utente salvato âœ…', 'success');
+    showToast(state.editingId ? 'Utente aggiornato ✅' : 'Utente salvato ✅', 'success');
     state.editingId = null;
     renderUtentiTable();
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // ACTIVITY LOG
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function logActivity(action, detail = '') {
   // Il backend logga automaticamente le azioni CRUD
-  // Questa funzione Ã¨ mantenuta per compatibilitÃ 
+  // Questa funzione è mantenuta per compatibilità
 }
 
 function reassignClientiGiri() {
@@ -3191,9 +3247,9 @@ async function deleteUtente(id) {
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // ORDINI MODAL
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 let orderLines = [];
 let selectedOrders = new Set();
@@ -3240,9 +3296,9 @@ function openEditOrder(id) {
   openModal('modal-ordine');
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // AUTOCOMPLETE ENGINE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 const acState = {
   cliente: { value: null, query: '', focusIdx: -1 },
@@ -3331,7 +3387,7 @@ function acRender(type) {
       gruppo.forEach(cl => {
         html += `<div class="ac-item" data-id="${cl.id}" onmousedown="acSelect('cat-cliente',${cl.id})">
           <span>${acHighlight(cl.nome, q)}</span>
-          <span class="ac-sub">${cl.localita}${cl.giro ? ' Â· ' + cl.giro : ''}</span>
+          <span class="ac-sub">${cl.localita}${cl.giro ? ' · ' + cl.giro : ''}</span>
         </div>`;
         totalShown++;
       });
@@ -3350,7 +3406,7 @@ function acRender(type) {
     dd.innerHTML = clienti.slice(0,15).map(c => `
       <div class="ac-item" data-id="${c.id}" onmousedown="acSelect('tentata',${c.id})">
         <span>${acHighlight(c.nome, q)}</span>
-        <span class="ac-sub">${c.localita}${c.giro ? ' Â· ' + c.giro : ''}</span>
+        <span class="ac-sub">${c.localita}${c.giro ? ' · ' + c.giro : ''}</span>
       </div>`).join('') || '<div class="ac-empty">Nessun cliente trovato</div>';
     return;
   }
@@ -3373,7 +3429,7 @@ function acRender(type) {
     gruppo.forEach(c => {
       html += `<div class="ac-item" data-id="${c.id}" onmousedown="acSelect('cliente',${c.id})">
         <span>${acHighlight(c.nome, q)}</span>
-        <span class="ac-sub">${c.localita}${c.giro ? ' Â· ' + c.giro : ''}</span>
+        <span class="ac-sub">${c.localita}${c.giro ? ' · ' + c.giro : ''}</span>
       </div>`;
       totalShown++;
     });
@@ -3387,7 +3443,7 @@ function acSelect(type, id) {
   if (type === 'cliente') {
     const c = state.clienti.find(x => x.id === id);
     if (!c) return;
-    if (!isClienteSbloccato(c)) { showToast('Cliente non ancora approvato dallâ€™amministrazione', 'warning'); return; }
+    if (!isClienteSbloccato(c)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
     acState.cliente.value = id;
     document.getElementById('ac-cliente-input').value = c.nome;
     document.getElementById('ac-cliente-input').classList.add('has-value');
@@ -3425,7 +3481,7 @@ function acSelect(type, id) {
 
     // Ri-renderizza righe prodotto per aggiornare lo storico del cliente
     renderOrderLines();
-    // Se c'Ã¨ solo una riga vuota, apri subito il dropdown con lo storico
+    // Se c'è solo una riga vuota, apri subito il dropdown con lo storico
     setTimeout(() => {
       if (orderLines.length === 1 && !orderLines[0].prodId) {
         acProdOpen(0);
@@ -3434,7 +3490,7 @@ function acSelect(type, id) {
   } else if (type === 'tentata') {
     const c = state.clienti.find(x => x.id === id);
     if (!c) return;
-    if (!isClienteSbloccato(c)) { showToast('Cliente non ancora approvato dallâ€™amministrazione', 'warning'); return; }
+    if (!isClienteSbloccato(c)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
     if (!acState.tentata) acState.tentata = { value: null, query: '', focusIdx: -1 };
     acState.tentata.value = id;
     document.getElementById('ac-tentata-input').value = c.nome;
@@ -3443,7 +3499,7 @@ function acSelect(type, id) {
   } else if (type === 'cat-cliente') {
     const cl = state.clienti.find(x => x.id === id);
     if (!cl) return;
-    if (!isClienteSbloccato(cl)) { showToast('Cliente non ancora approvato dallâ€™amministrazione', 'warning'); return; }
+    if (!isClienteSbloccato(cl)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
     if (!acState['cat-cliente']) acState['cat-cliente'] = { value: null, query: '', focusIdx: -1 };
     acState['cat-cliente'].value = id;
     const inp = document.getElementById('ac-cat-cliente-input');
@@ -3506,9 +3562,9 @@ document.addEventListener('click', function(e) {
   if (!e.target.closest('#ac-cat-cliente-wrap')) acClose('cat-cliente');
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // AUTOCOMPLETE PER RIGHE PRODOTTO
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function getDefaultUM(prodotto) {
   if (!prodotto) return 'Pezzi';
@@ -3543,7 +3599,7 @@ function renderOrderLines() {
           <input type="text" class="ac-input${p ? ' has-value' : ''}"
             id="ac-prod-input-${i}"
             value="${p ? '['+p.codice+'] '+p.nome : ''}"
-            placeholder="Cerca codice o nome prodottoâ€¦"
+            placeholder="Cerca codice o nome prodotto…"
             autocomplete="off"
             oninput="acProdFilter(${i})"
             onfocus="acProdOpen(${i})"
@@ -3553,18 +3609,18 @@ function renderOrderLines() {
         </div>
         <input type="number" class="qty-input" value="${l.qty||1}" min="1"
           onchange="orderLines[${i}].qty=parseInt(this.value)||1;renderOrderLines()"
-          placeholder="QtÃ " style="width:56px;flex-shrink:0;">
+          placeholder="Qtà" style="width:56px;flex-shrink:0;">
         <select
           onchange="orderLines[${i}].unitaMisura=this.value;orderLines[${i}].isPedana=(this.value==='Pedana');orderLines[${i}]._umPersonalizzata=true;renderOrderLines()"
           style="flex-shrink:0;font-size:12px;padding:5px 6px;border:1.5px solid ${isPedana ? 'var(--accent)' : 'var(--border)'};border-radius:6px;background:${isPedana ? 'var(--accent-light)' : 'var(--surface2)'};color:var(--text1);cursor:pointer;max-width:92px;">
           ${umOpts.map(u => `<option value="${u}" ${u===curUM?'selected':''}>${umPlurale(u, l.qty||1)}</option>`).join('')}
         </select>
-        <button class="line-delete" onclick="removeOrderLine(${i})" style="flex-shrink:0;width:32px;height:32px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:16px;color:var(--text3);display:flex;align-items:center;justify-content:center;" title="Rimuovi">âœ•</button>
+        <button class="line-delete" onclick="removeOrderLine(${i})" style="flex-shrink:0;width:32px;height:32px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:16px;color:var(--text3);display:flex;align-items:center;justify-content:center;" title="Rimuovi">✕</button>
       </div>
-      ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">ðŸ“¦ ${p.packaging}${isPedana ? ' Â· <b style=color:var(--accent)>PEDANA INTERA</b>' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">ðŸªµ PEDANA INTERA</div>` : '')}
-      ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">ðŸ“Œ ${p.note}</div>` : ''}
+      ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">📦 ${p.packaging}${isPedana ? ' · <b style=color:var(--accent)>PEDANA INTERA</b>' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">🪵 PEDANA INTERA</div>` : '')}
+      ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">📌 ${p.note}</div>` : ''}
       <input type="text" value="${l.notaRiga||''}"
-        placeholder="ðŸ“ Nota riga (es. nuovo lotto, data scadenzaâ€¦)"
+        placeholder="📝 Nota riga (es. nuovo lotto, data scadenza…)"
         oninput="orderLines[${i}].notaRiga=this.value"
         style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
     </div>`;
@@ -3606,12 +3662,12 @@ function acProdOpen(i) {
   dd.classList.add('open');
 }
 
-// Ritorna i prodotti ordinati dal cliente, ordinati per frequenza (piÃ¹ ordinato = primo)
-// Esclude i prodotti giÃ  selezionati nelle righe correnti
+// Ritorna i prodotti ordinati dal cliente, ordinati per frequenza (più ordinato = primo)
+// Esclude i prodotti già selezionati nelle righe correnti
 function getClienteStoricoProdotti(clienteId, escludiProdIds = []) {
   if (!clienteId) return [];
 
-  // Conta quante volte ogni prodotto Ã¨ stato ordinato da questo cliente
+  // Conta quante volte ogni prodotto è stato ordinato da questo cliente
   const freq = {};
   state.ordini
     .filter(o => o.clienteId === clienteId)
@@ -3624,7 +3680,7 @@ function getClienteStoricoProdotti(clienteId, escludiProdIds = []) {
 
   return Object.entries(freq)
     .filter(([id]) => !escludiProdIds.includes(parseInt(id)))
-    .sort(([, a], [, b]) => b - a)           // piÃ¹ frequenti prima
+    .sort(([, a], [, b]) => b - a)           // più frequenti prima
     .slice(0, 8)                              // max 8 suggeriti
     .map(([id, count]) => ({ prodotto: getProdotto(parseInt(id)), count }))
     .filter(x => x.prodotto.id);             // scarta eventuali id non trovati
@@ -3634,7 +3690,7 @@ function acProdRender(i, q) {
   const dd = document.getElementById(`ac-prod-dd-${i}`);
   if (!dd) return;
 
-  // Prodotti giÃ  selezionati nelle altre righe (per non riproporre duplicati nello storico)
+  // Prodotti già selezionati nelle altre righe (per non riproporre duplicati nello storico)
   const giaScelti = orderLines
     .filter((l, idx) => idx !== i && l.prodId)
     .map(l => l.prodId);
@@ -3642,20 +3698,20 @@ function acProdRender(i, q) {
   let html = '';
   let total = 0;
 
-  // â”€â”€ SEZIONE STORICO CLIENTE (solo senza query, se cliente selezionato) â”€â”€
+  // ── SEZIONE STORICO CLIENTE (solo senza query, se cliente selezionato) ──
   const clienteId = acState.cliente.value;
   if (!q && clienteId) {
     const storico = getClienteStoricoProdotti(clienteId, giaScelti);
     if (storico.length) {
-      html += `<div class="ac-group-label" style="background:linear-gradient(90deg,#e8f5e9,var(--surface2));color:var(--accent);">â­ Prodotti abituali</div>`;
+      html += `<div class="ac-group-label" style="background:linear-gradient(90deg,#e8f5e9,var(--surface2));color:var(--accent);">⭐ Prodotti abituali</div>`;
       storico.forEach(({ prodotto: p, count }) => {
         html += `<div class="ac-item" data-id="${p.id}" onmousedown="acProdSelect(${i},${p.id})">
           <span>
             <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">[${p.codice}]</span>
             ${p.nome}
-            <span class="ac-freq">Ã—${count}</span>
+            <span class="ac-freq">×${count}</span>
           </span>
-          <span class="ac-sub">${p.categoria} Â· ${p.um}${p.packaging ? ' Â· ' + p.packaging : ''}</span>
+          <span class="ac-sub">${p.categoria} · ${p.um}${p.packaging ? ' · ' + p.packaging : ''}</span>
         </div>`;
         total++;
       });
@@ -3663,9 +3719,9 @@ function acProdRender(i, q) {
     }
   }
 
-  // â”€â”€ SEZIONE TUTTI I PRODOTTI (filtrati per query se presente) â”€â”€
+  // ── SEZIONE TUTTI I PRODOTTI (filtrati per query se presente) ──
   const cats = ['FORMAGGI','RICOTTA','CAGLIATA','PANNA UHT','ALTRO'];
-  // ID giÃ  mostrati nello storico (per non duplicarli)
+  // ID già mostrati nello storico (per non duplicarli)
   const storicoIds = (!q && clienteId)
     ? getClienteStoricoProdotti(clienteId, giaScelti).map(x => x.prodotto.id)
     : [];
@@ -3682,7 +3738,7 @@ function acProdRender(i, q) {
     gruppo.forEach(p => {
       html += `<div class="ac-item" data-id="${p.id}" onmousedown="acProdSelect(${i},${p.id})">
         <span><span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">[${p.codice}]</span> ${acHighlight(p.nome, q)}</span>
-        <span class="ac-sub">${p.categoria} Â· ${p.um}${p.packaging ? ' Â· ' + p.packaging : ''}</span>
+        <span class="ac-sub">${p.categoria} · ${p.um}${p.packaging ? ' · ' + p.packaging : ''}</span>
       </div>`;
       total++;
     });
@@ -3695,7 +3751,7 @@ function acProdRender(i, q) {
 function acProdSelect(i, prodId) {
   orderLines[i].prodId = prodId;
   const p = getProdotto(prodId);
-  // Imposta UM di default in base alla categoria, solo se non giÃ  personalizzata dall'utente
+  // Imposta UM di default in base alla categoria, solo se non già personalizzata dall'utente
   if (!orderLines[i]._umPersonalizzata) {
     orderLines[i].unitaMisura = getDefaultUM(p);
     orderLines[i].isPedana = false;
@@ -3761,7 +3817,7 @@ function updateConsegnatarioDisplay(clienteId) {
     box.style.color = 'var(--text1)';
     if (hidden) hidden.value = aut.id;
   } else {
-    box.textContent = c ? 'â€” nessun autista per questo giro' : 'â€”';
+    box.textContent = c ? '— nessun autista per questo giro' : '—';
     box.style.color = 'var(--text3)';
     if (hidden) hidden.value = '';
   }
@@ -3771,7 +3827,7 @@ function populateOrderSelects(clienteId, agenteId) {
   // Agenti commerciali: tutti con isAgente=true
   const agenti = state.utenti.filter(u => u.isAgente);
   const selAgente = document.getElementById('ord-agente');
-  selAgente.innerHTML = '<option value="">â€” Seleziona agente â€”</option>' + agenti.map(a =>
+  selAgente.innerHTML = '<option value="">— Seleziona agente —</option>' + agenti.map(a =>
     `<option value="${a.id}" ${a.id==agenteId?'selected':''}>${(a.nome+' '+(a.cognome||'')).trim()}</option>`
   ).join('');
 
@@ -3787,7 +3843,7 @@ function populateOrderSelects(clienteId, agenteId) {
     inp.classList.add('has-value');
     document.getElementById('ord-cliente').value = clienteId;
     acState.cliente.value = clienteId;
-    // Pre-seleziona agente del cliente se non giÃ  impostato
+    // Pre-seleziona agente del cliente se non già impostato
     if (!agenteId && c.agenteId) {
       selAgente.value = c.agenteId;
     }
@@ -3838,7 +3894,7 @@ async function saveOrder() {
 
   if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
   const cliente = getCliente(clienteId);
-  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dallâ€™amministrazione', 'warning'); return; }
+  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
   if (!data)      { showToast('Inserisci la data', 'warning'); return; }
 
   const linee = orderLines
@@ -3875,7 +3931,7 @@ async function saveOrder() {
       state.ordini.unshift(normalized);
     }
     closeModal('modal-ordine');
-    showToast(state.editingId ? 'Ordine aggiornato âœ…' : 'Ordine salvato âœ…', 'success');
+    showToast(state.editingId ? 'Ordine aggiornato ✅' : 'Ordine salvato ✅', 'success');
     state.editingId = null;
     renderPage(state.currentPage);
   } catch(e) {
@@ -3896,9 +3952,9 @@ async function deleteOrder(id) {
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // DETTAGLIO ORDINE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function openDettaglio(id) {
   const o = state.ordini.find(x => x.id === id);
@@ -3906,14 +3962,14 @@ function openDettaglio(id) {
   const a = getAgente(o.agenteId);
   const cons = o.autistaDiGiro ? getAgente(o.autistaDiGiro) : null;
 
-  document.getElementById('det-title').textContent = `Ordine #${o.id} â€” ${c.nome}`;
+  document.getElementById('det-title').textContent = `Ordine #${o.id} — ${c.nome}`;
 
   document.getElementById('det-body').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
       <div>
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Cliente</div>
         <div style="font-weight:600;">${c.nome}</div>
-        <div style="font-size:13px;color:var(--text2);">${c.localita}${c.giro ? ` â€” giro: ${c.giro}` : ''}</div>
+        <div style="font-size:13px;color:var(--text2);">${c.localita}${c.giro ? ` — giro: ${c.giro}` : ''}</div>
       </div>
       <div>
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Agente</div>
@@ -3930,7 +3986,7 @@ function openDettaglio(id) {
           <div>
             <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-right:8px;">[${p.codice}]</span>
             <span>${p.nome}</span>
-            ${p.packaging ? `<div style="font-size:11px;color:var(--text3);">ðŸ“¦ ${p.packaging}</div>` : ''}
+            ${p.packaging ? `<div style="font-size:11px;color:var(--text3);">📦 ${p.packaging}</div>` : ''}
           </div>
           <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--accent);">${l.qty} ${p.um}</span>
         </div>`;
@@ -3943,8 +3999,8 @@ function openDettaglio(id) {
   const canConferma = o.stato !== 'consegnato' && o.stato !== 'annullato';
   footer.innerHTML = `
     <button class="btn btn-outline" onclick="closeModal('modal-dettaglio')">Chiudi</button>
-    ${canConferma ? `<button class="btn btn-green" onclick="confermaConsegna(${o.id})">âœ… Conferma Consegna</button>` : ''}
-    <button class="btn btn-orange" onclick="closeModal('modal-dettaglio');openEditOrder(${o.id})">âœï¸ Modifica</button>
+    ${canConferma ? `<button class="btn btn-green" onclick="confermaConsegna(${o.id})">✅ Conferma Consegna</button>` : ''}
+    <button class="btn btn-orange" onclick="closeModal('modal-dettaglio');openEditOrder(${o.id})">✏️ Modifica</button>
   `;
 
   openModal('modal-dettaglio');
@@ -3956,15 +4012,15 @@ async function confermaConsegna(id) {
     await api('PATCH', `/api/ordini/${id}/stato`, { stato: 'consegnato' });
     const o = state.ordini.find(x => x.id === id);
     if (o) o.stato = 'consegnato';
-    showToast('Consegna confermata! âœ…', 'success');
+    showToast('Consegna confermata! ✅', 'success');
     closeModal('modal-dettaglio');
     renderPage(state.currentPage);
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // AUTISTA VIEW
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function renderActivityLog() {
   const isAdmin = state.currentUser?.ruolo === 'admin' || state.currentUser?.ruolo === 'amministrazione' || state.currentUser?.ruolo === 'direzione';
@@ -3975,26 +4031,26 @@ function renderActivityLog() {
 
   const body = document.getElementById('activity-log-list');
   if (!state.activityLog.length) {
-    body.innerHTML = '<div style="padding:20px;color:var(--text2);font-size:13px;text-align:center;">Nessuna attivitÃ  registrata</div>';
+    body.innerHTML = '<div style="padding:20px;color:var(--text2);font-size:13px;text-align:center;">Nessuna attività registrata</div>';
     return;
   }
 
   const actionIcons = {
-    'Nuovo ordine': 'ðŸŸ¢',
-    'Modifica ordine': 'âœï¸',
-    'Eliminazione ordine': 'ðŸ”´',
-    'Nuovo cliente': 'ðŸ¢',
-    'Modifica cliente': 'âœï¸',
-    'Eliminazione cliente': 'ðŸ”´',
-    'Nuovo utente': 'ðŸ‘¤',
-    'Modifica utente': 'âœï¸',
+    'Nuovo ordine': '🟢',
+    'Modifica ordine': '✏️',
+    'Eliminazione ordine': '🔴',
+    'Nuovo cliente': '🏢',
+    'Modifica cliente': '✏️',
+    'Eliminazione cliente': '🔴',
+    'Nuovo utente': '👤',
+    'Modifica utente': '✏️',
   };
 
   body.innerHTML = state.activityLog.map(log => {
     const d = new Date(log.ts);
     const dateStr = d.toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit',year:'numeric'});
     const timeStr = d.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
-    const icon = actionIcons[log.action] || 'ðŸ“Œ';
+    const icon = actionIcons[log.action] || '📌';
     const isDelete = log.action.startsWith('Eliminazione');
     const isNew = log.action.startsWith('Nuovo');
     const color = isDelete ? 'var(--danger)' : isNew ? 'var(--success)' : 'var(--text1)';
@@ -4007,7 +4063,7 @@ function renderActivityLog() {
           <span style="font-size:12px;color:var(--text2);">${log.detail}</span>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:3px;">
-          ðŸ‘¤ <b>${log.userName}</b> Â· ${dateStr} ${timeStr}
+          👤 <b>${log.userName}</b> · ${dateStr} ${timeStr}
         </div>
       </div>
     </div>`;
@@ -4015,7 +4071,7 @@ function renderActivityLog() {
 }
 
 async function clearActivityLog() {
-  if (!await customConfirm('Svuotare il registro attivitÃ ?', 'Svuota', 'Registro AttivitÃ ')) return;
+  if (!await customConfirm('Svuotare il registro attività?', 'Svuota', 'Registro Attività')) return;
   try {
     await api('DELETE', '/api/activity');
     state.activityLog = [];
@@ -4031,8 +4087,8 @@ function renderAutistaView() {
   const ordini = state.ordini.filter(o => o.autistaDiGiro === uid && o.data === t);
 
   const nome = state.currentUser.nome;
-  document.getElementById('autista-title').textContent = `Ciao, ${nome}! ðŸ‘‹`;
-  document.getElementById('autista-sub').textContent = `Giro di oggi â€” ${new Date().toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long'})}`;
+  document.getElementById('autista-title').textContent = `Ciao, ${nome}! 👋`;
+  document.getElementById('autista-sub').textContent = `Giro di oggi — ${new Date().toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long'})}`;
 
   const daCons = ordini.filter(o => o.stato !== 'consegnato' && o.stato !== 'annullato').length;
   const cons = ordini.filter(o => o.stato === 'consegnato').length;
@@ -4042,7 +4098,7 @@ function renderAutistaView() {
 
   const container = document.getElementById('autista-orders');
   if (!ordini.length) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">ðŸŽ‰</div><p>Nessun ordine assegnato oggi!</p></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🎉</div><p>Nessun ordine assegnato oggi!</p></div>`;
     return;
   }
 
@@ -4060,7 +4116,7 @@ function renderAutistaView() {
       <div class="mob-header">
         <div>
           <div class="mob-client">${c.nome}</div>
-          <div style="font-size:12px;color:var(--text2);">ðŸ“ ${c.localita}</div>
+          <div style="font-size:12px;color:var(--text2);">📍 ${c.localita}</div>
         </div>
         <div style="text-align:right;">
           ${statoBadge(o.stato)}
@@ -4073,14 +4129,14 @@ function renderAutistaView() {
           return `<div class="mob-line"><span>${p.nome}</span><span class="mob-line-qty">${l.qty} ${p.um}</span></div>`;
         }).join('')}
       </div>
-      ${o.note ? `<div style="font-size:12px;color:var(--text2);padding:6px 8px;background:var(--surface2);border-radius:6px;margin-bottom:8px;">ðŸ“ ${o.note}</div>` : ''}
+      ${o.note ? `<div style="font-size:12px;color:var(--text2);padding:6px 8px;background:var(--surface2);border-radius:6px;margin-bottom:8px;">📝 ${o.note}</div>` : ''}
       <div class="mob-actions">
         ${!isConsegnato
-          ? `<button class="btn btn-green" onclick="confermaConsegnaRapida(${o.id})">âœ… Consegnato</button>`
-          : `<button class="btn btn-outline" disabled style="opacity:0.5;">âœ… Consegnato</button>`
+          ? `<button class="btn btn-green" onclick="confermaConsegnaRapida(${o.id})">✅ Consegnato</button>`
+          : `<button class="btn btn-outline" disabled style="opacity:0.5;">✅ Consegnato</button>`
         }
-        <button class="btn btn-outline" onclick="openDettaglio(${o.id})">ðŸ‘ï¸ Dettagli</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id})" title="Elimina ordine">ðŸ—‘ï¸</button>
+        <button class="btn btn-outline" onclick="openDettaglio(${o.id})">👁️ Dettagli</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id})" title="Elimina ordine">🗑️</button>
       </div>
     </div>`;
   }).join('');
@@ -4092,14 +4148,14 @@ async function confermaConsegnaRapida(id) {
     await api('PATCH', `/api/ordini/${id}/stato`, { stato: 'consegnato' });
     const o = state.ordini.find(x => x.id === id);
     if (o) o.stato = 'consegnato';
-    showToast('Consegna confermata! âœ…', 'success');
+    showToast('Consegna confermata! ✅', 'success');
     renderAutistaView();
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // PIANO DI CARICO
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 // Layout fedeli ai PDF:
 // asym8 (01,02,03): col sx 3 grandi (rs 2+2+1) + col dx 5 piccole  = 8 pedane
@@ -4156,17 +4212,17 @@ function renderPianoPage() {
 
   sel.innerHTML = state.camions.map(c => {
     const autistaInUso = c.autistaInUso ? state.utenti.find(u => u.id === c.autistaInUso) : null;
-    const nomeAut = autistaInUso ? autistaInUso.nome : 'â€”';
+    const nomeAut = autistaInUso ? autistaInUso.nome : '—';
     const isSelected = pianoSelectedCamionId === c.id;
     return `<button
       class="btn ${isSelected ? 'btn-green' : 'btn-outline'}"
       style="position:relative;padding:12px 18px 10px 14px;min-width:130px;border-radius:10px;box-shadow:${isSelected?'0 8px 18px rgba(30,139,195,0.22)':'none'};"
       onclick="selectCamionePiano(${c.id})">
-      ðŸš› <b style="font-size:13px;">${c.targa}</b>
+      🚛 <b style="font-size:13px;">${c.targa}</b>
       <span style="display:block;font-size:11px;font-weight:400;color:${isSelected?'rgba(255,255,255,0.75)':'var(--text3)'};">
-        ${c.pedane.length}p Â· ${nomeAut}
+        ${c.pedane.length}p · ${nomeAut}
       </span>
-      ${c.confermato ? '<span style="position:absolute;top:4px;right:6px;">âœ…</span>' : ''}
+      ${c.confermato ? '<span style="position:absolute;top:4px;right:6px;">✅</span>' : ''}
     </button>`;
   }).join('');
 
@@ -4200,21 +4256,21 @@ function renderPianoBody(isEditor, isConferma) {
       return `<div class="pedana-card ${filled?'has-content':''}" style="${spanStyle}min-height:${minH}px;display:flex;flex-direction:column;gap:4px;">
         <div class="pedana-label">
           <span>P${slot.n}</span>
-          <span class="pedana-status">${filled?'â— occupata':'vuota'}</span>
+          <span class="pedana-status">${filled?'● occupata':'vuota'}</span>
         </div>
         <textarea class="pedana-input" id="pedana-txt-${camion.id}-${slot.n}"
-          placeholder="Contenuto pedanaâ€¦" style="flex:1;min-height:56px;resize:none;"
+          placeholder="Contenuto pedana…" style="flex:1;min-height:56px;resize:none;"
           oninput="livePedanaUpdate(${camion.id},${slot.n-1},this.value);
             this.closest('.pedana-card').classList.toggle('has-content',this.value.trim().length>0);
-            this.previousElementSibling.querySelector('.pedana-status').textContent=this.value.trim()?'â— occupata':'vuota';"
+            this.previousElementSibling.querySelector('.pedana-status').textContent=this.value.trim()?'● occupata':'vuota';"
         >${nota}</textarea>
       </div>`;
     } else {
       return `<div class="pedana-card ${filled?'has-content':''}" style="${spanStyle}min-height:${minH}px;">
         <div class="pedana-label">
-          <span>P${slot.n}</span><span class="pedana-status">${filled?'â— occupata':'vuota'}</span>
+          <span>P${slot.n}</span><span class="pedana-status">${filled?'● occupata':'vuota'}</span>
         </div>
-        <div class="pedana-readonly ${filled?'':'pedana-empty'}">${filled?nota.replace(/\n/g,'<br>'):'â€”'}</div>
+        <div class="pedana-readonly ${filled?'':'pedana-empty'}">${filled?nota.replace(/\n/g,'<br>'):'—'}</div>
       </div>`;
     }
   }).join('');
@@ -4231,8 +4287,8 @@ function renderPianoBody(isEditor, isConferma) {
   body.innerHTML = `
     <div style="background:linear-gradient(135deg,#0f2233,#1e3a52);border-radius:var(--radius);padding:20px 24px;margin-bottom:20px;color:#fff;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
       <div>
-        <div style="font-size:24px;font-weight:800;letter-spacing:-0.5px;">ðŸš› ${camion.targa}</div>
-        <div style="font-size:13px;opacity:0.6;margin-top:2px;">${camion.nome} Â· ${totCnt} pedane totali</div>
+        <div style="font-size:24px;font-weight:800;letter-spacing:-0.5px;">🚛 ${camion.targa}</div>
+        <div style="font-size:13px;opacity:0.6;margin-top:2px;">${camion.nome} · ${totCnt} pedane totali</div>
       </div>
       <div style="display:flex;gap:20px;">
         <div style="text-align:center;"><div style="font-size:28px;font-weight:800;color:#60c8f0;">${pieneCnt}</div><div style="font-size:11px;opacity:0.5;text-transform:uppercase;letter-spacing:0.5px;">occupate</div></div>
@@ -4243,19 +4299,19 @@ function renderPianoBody(isEditor, isConferma) {
     <div class="card" style="margin-bottom:14px;">
       <div style="padding:10px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         <span class="badge badge-blue">Legenda</span>
-        <span style="font-size:12px;color:var(--text2);">● occupata = pedana compilata</span>
+        <span style="font-size:12px;color:var(--text2);">? occupata = pedana compilata</span>
         <span style="font-size:12px;color:var(--text2);">vuota = pedana libera</span>
         <span style="font-size:12px;color:var(--text2);">Ogni modifica resetta la conferma carico</span>
       </div>
     </div>
     <div class="card" style="margin-bottom:20px;">
       <div style="padding:16px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-        <div style="width:42px;height:42px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">ðŸ‘¤</div>
+        <div style="width:42px;height:42px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">👤</div>
         <div style="flex:1;min-width:160px;">
           <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Autista al volante oggi</div>
           <select id="autista-inuso-sel" style="width:100%;font-size:14px;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);font-weight:600;color:var(--text1);"
             onchange="setAutistaInUso(${camion.id}, parseInt(this.value)||null)">
-            <option value="">â€” non assegnato â€”</option>
+            <option value="">— non assegnato —</option>
             ${autisti.map(a=>`<option value="${a.id}" ${camion.autistaInUso===a.id?'selected':''}>${a.nome} ${a.cognome||''}</option>`).join('')}
           </select>
         </div>
@@ -4267,7 +4323,7 @@ function renderPianoBody(isEditor, isConferma) {
     </div>
     <div class="card" style="margin-bottom:20px;">
       <div class="card-header">
-        <div class="card-title">ðŸ“¦ Piano di carico</div>
+        <div class="card-title">📦 Piano di carico</div>
         <div style="font-size:13px;color:var(--text3);">${pieneCnt} / ${totCnt} pedane occupate</div>
       </div>
       <div style="padding:16px;">
@@ -4278,18 +4334,18 @@ function renderPianoBody(isEditor, isConferma) {
     </div>
     ${isEditor?`
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
-      <button class="btn btn-green" onclick="salvaPianoCamion(${camion.id})">ðŸ’¾ Salva piano</button>
-      <button class="btn btn-outline" onclick="resetPianoCamion(${camion.id})">ðŸ”„ Reset pedane</button>
+      <button class="btn btn-green" onclick="salvaPianoCamion(${camion.id})">💾 Salva piano</button>
+      <button class="btn btn-outline" onclick="resetPianoCamion(${camion.id})">🔄 Reset pedane</button>
     </div>
-    <div id="piano-save-ok-${camion.id}" style="display:none;font-size:13px;color:var(--accent);margin-bottom:12px;">âœ… Salvato</div>`:''}
+    <div id="piano-save-ok-${camion.id}" style="display:none;font-size:13px;color:var(--accent);margin-bottom:12px;">✅ Salvato</div>`:''}
     ${camion.confermato?`
     <div style="display:flex;align-items:center;gap:14px;padding:16px 20px;background:var(--success-light);border:2px solid var(--success);border-radius:var(--radius);flex-wrap:wrap;">
-      <span style="font-size:28px;">âœ…</span>
+      <span style="font-size:28px;">✅</span>
       <div>
         <div style="font-weight:700;color:var(--success);">Carico confermato da ${camion.confermatoDa}</div>
         <div style="font-size:12px;color:var(--text2);">${new Date(camion.confermatoAt).toLocaleDateString('it-IT')} alle ${new Date(camion.confermatoAt).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</div>
       </div>
-      ${(state.currentUser.ruolo==='magazzino'||state.currentUser.ruolo==='admin')?`<button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="annullaConfermaCarico(${camion.id})">â†©ï¸ Annulla</button>`:''}
+      ${(state.currentUser.ruolo==='magazzino'||state.currentUser.ruolo==='admin')?`<button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="annullaConfermaCarico(${camion.id})">↩️ Annulla</button>`:''}
     </div>`:''}
   `;
 
@@ -4300,13 +4356,13 @@ function renderPianoBody(isEditor, isConferma) {
     confSection.style.display = mostra ? 'block' : 'none';
     if (mostra && confChecklist) {
       if (!autistaInUso) {
-        confChecklist.innerHTML = `<div style="font-size:13px;color:var(--orange);">âš ï¸ Seleziona prima un autista.</div>`;
+        confChecklist.innerHTML = `<div style="font-size:13px;color:var(--orange);">⚠️ Seleziona prima un autista.</div>`;
       } else if (!ordiniGiro.length) {
         confChecklist.innerHTML = `<div style="font-size:13px;color:var(--text3);">Nessun ordine per <b>${nomeAut}</b> oggi.</div>`;
       } else {
         const daCons = ordiniGiro.filter(o=>o.stato!=='consegnato').length;
-        confChecklist.innerHTML = `<div style="font-size:13px;color:var(--text2);margin-bottom:10px;"><b>${nomeAut}</b> â€” ${ordiniGiro.length} ordini Â· <span style="color:var(--accent);font-weight:600;">${daCons} da consegnare</span></div>
-          ${ordiniGiro.map(o=>{const cl=state.clienti.find(x=>x.id===o.clienteId);const icon=o.stato==='consegnato'?'âœ…':o.stato==='preparazione'?'ðŸ”µ':'ðŸŸ¡';return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;"><span>${icon}</span><span><b>#${o.id}</b> ${cl?cl.nome:'?'}</span><span style="margin-left:auto;color:var(--text3);font-size:11px;">${cl?.giro||''}</span></div>`;}).join('')}`;
+        confChecklist.innerHTML = `<div style="font-size:13px;color:var(--text2);margin-bottom:10px;"><b>${nomeAut}</b> — ${ordiniGiro.length} ordini · <span style="color:var(--accent);font-weight:600;">${daCons} da consegnare</span></div>
+          ${ordiniGiro.map(o=>{const cl=state.clienti.find(x=>x.id===o.clienteId);const icon=o.stato==='consegnato'?'✅':o.stato==='preparazione'?'🔵':'🟡';return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;"><span>${icon}</span><span><b>#${o.id}</b> ${cl?cl.nome:'?'}</span><span style="margin-left:auto;color:var(--text3);font-size:11px;">${cl?.giro||''}</span></div>`;}).join('')}`;
       }
     }
   }
@@ -4344,7 +4400,7 @@ async function salvaPianoCamion(camionId) {
     camion.confermato = false; camion.confermatoDa = null; camion.confermatoAt = null;
     const fb = document.getElementById(`piano-save-ok-${camionId}`);
     if (fb) { fb.style.display = 'block'; setTimeout(() => fb.style.display='none', 3000); }
-    showToast(`Piano ${camion.targa} salvato! ðŸ’¾`, 'success');
+    showToast(`Piano ${camion.targa} salvato! 💾`, 'success');
     renderPianoPage();
   } catch(e) { showToast(e.message, 'warning'); }
 }
@@ -4374,7 +4430,7 @@ async function confermaCarico(camionId) {
     camion.confermato = true;
     camion.confermatoDa = (u.nome + ' ' + (u.cognome||'')).trim();
     camion.confermatoAt = new Date().toISOString();
-    showToast(`âœ… Carico ${camion.targa} confermato!`, 'success');
+    showToast(`✅ Carico ${camion.targa} confermato!`, 'success');
     renderPianoPage();
   } catch(e) { showToast(e.message, 'warning'); }
 }
@@ -4390,9 +4446,9 @@ async function annullaConfermaCarico(camionId) {
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // MAGAZZINO
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function renderMagazzino() {
   const filterData  = document.getElementById('filter-magazzino-data')?.value || today();
@@ -4403,7 +4459,7 @@ function renderMagazzino() {
   const sub = document.getElementById('magazzino-sub');
   if (sub) {
     const label = filterData === today() ? 'Oggi' : formatDate(filterData);
-    sub.textContent = `Ordini â€” ${label}`;
+    sub.textContent = `Ordini — ${label}`;
   }
 
   let ordini = state.ordini.filter(o => o.data === filterData && o.stato !== 'annullato');
@@ -4427,9 +4483,9 @@ function renderMagazzino() {
 
   if (!ordini.length) {
     const isOggi = filterData === today();
-    let msg = isOggi ? 'Tutti gli ordini di oggi sono stati preparati! ðŸŽ‰' : `Nessun ordine per il ${formatDate(filterData)}`;
-    if (filterGiro) msg = `Nessun ordine per il giro <b>${filterGiro}</b> â€” ${isOggi ? 'oggi' : formatDate(filterData)}`;
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">ðŸ“¦</div><p>${msg}</p></div>`;
+    let msg = isOggi ? 'Tutti gli ordini di oggi sono stati preparati! 🎉' : `Nessun ordine per il ${formatDate(filterData)}`;
+    if (filterGiro) msg = `Nessun ordine per il giro <b>${filterGiro}</b> — ${isOggi ? 'oggi' : formatDate(filterData)}`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><p>${msg}</p></div>`;
     return;
   }
 
@@ -4438,8 +4494,8 @@ function renderMagazzino() {
     const a = getAgente(o.agenteId);
     const inPrep = o.stato === 'preparazione';
     const isCons = o.stato === 'consegnato';
-    const stef = o.stef ? `<span class="badge" style="background:var(--blue-light);color:var(--blue);font-size:10px;margin-left:4px;">ðŸš› STEF</span>` : '';
-    const dataNonCerta = o.dataNonCerta ? `<span class="badge" style="background:var(--accent2-light);color:var(--accent2);font-size:10px;margin-left:4px;">âš ï¸ Data non certa</span>` : '';
+    const stef = o.stef ? `<span class="badge" style="background:var(--blue-light);color:var(--blue);font-size:10px;margin-left:4px;">🚛 STEF</span>` : '';
+    const dataNonCerta = o.dataNonCerta ? `<span class="badge" style="background:var(--accent2-light);color:var(--accent2);font-size:10px;margin-left:4px;">⚠️ Data non certa</span>` : '';
 
     // Checklist lines when in preparation
     const checkLines = inPrep ? o.linee.map((l, li) => {
@@ -4453,7 +4509,7 @@ function renderMagazzino() {
       return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);">
         <input type="checkbox" ${checked} onchange="toggleLineaPreparata(${o.id},${li},this.checked)"
           style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
-        <span style="flex:1;font-size:13px;${l.preparato?'text-decoration:line-through;color:var(--text3);':''}">${l.qty}Ã— [${p.codice}] ${p.nome}</span>
+        <span style="flex:1;font-size:13px;${l.preparato?'text-decoration:line-through;color:var(--text3);':''}">${l.qty}× [${p.codice}] ${p.nome}</span>
         ${pesoInput}
       </div>`;
     }).join('') : '';
@@ -4465,21 +4521,21 @@ function renderMagazzino() {
         <div class="wh-client">${c.nome} ${stef} ${dataNonCerta}</div>
         <div class="wh-detail">
           ${c.giro ? `<span class="badge badge-blue" style="font-size:10px;margin-right:6px;">${c.giro}</span>` : ''}
-          Agente: ${a.nomeCompleto}${o.autistaDiGiro ? ` Â· ðŸšš ${getAgente(o.autistaDiGiro).nomeCompleto}` : ''}
+          Agente: ${a.nomeCompleto}${o.autistaDiGiro ? ` · 🚚 ${getAgente(o.autistaDiGiro).nomeCompleto}` : ''}
         </div>
         ${inPrep
           ? `<div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;">${checkLines}</div>`
-          : `<div class="wh-detail" style="margin-top:4px;">${o.linee.map(l => `${l.qty}Ã— [${getProdotto(l.prodId).codice}] ${getProdotto(l.prodId).nome.split(' ').slice(0,2).join(' ')}`).join(', ')}</div>`
+          : `<div class="wh-detail" style="margin-top:4px;">${o.linee.map(l => `${l.qty}× [${getProdotto(l.prodId).codice}] ${getProdotto(l.prodId).nome.split(' ').slice(0,2).join(' ')}`).join(', ')}</div>`
         }
-        ${o.note ? `<div style="font-size:12px;color:var(--text2);margin-top:4px;">ðŸ“ ${o.note}</div>` : ''}
+        ${o.note ? `<div style="font-size:12px;color:var(--text2);margin-top:4px;">📝 ${o.note}</div>` : ''}
       </div>
       <div class="wh-status">
         ${statoBadge(o.stato)}
         ${isCons
-          ? `<span style="font-size:12px;color:var(--accent);margin-top:4px;">âœ… Completato</span>`
+          ? `<span style="font-size:12px;color:var(--accent);margin-top:4px;">✅ Completato</span>`
           : !inPrep
-            ? `<button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="setOrdinePrepara(${o.id})">ðŸ“¦ Preso in carico</button>`
-            : `<button class="btn btn-green btn-sm" onclick="confermaConsegna(${o.id})">âœ… Pronto</button>`
+            ? `<button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="setOrdinePrepara(${o.id})">📦 Preso in carico</button>`
+            : `<button class="btn btn-green btn-sm" onclick="confermaConsegna(${o.id})">✅ Pronto</button>`
         }
       </div>
     </div>`;
@@ -4504,9 +4560,9 @@ function setLinePesoEffettivo(ordineId, lineIdx, val) {
   if (o) { o.linee[lineIdx].pesoEffettivo = parseFloat(val) || null; }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // REPORT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function initReportDropdowns() {
   const defs = [
@@ -4755,7 +4811,7 @@ async function renderReport() {
   const cliData = state.clienti.map(cl=>({...cl,n:ordiniReport.filter(o=>o.clienteId===cl.id).length})).sort((a,b)=>b.n-a.n);
   reportDataCache['classifica-clienti'] = cliData.map(cl => ({ cliente: cl.nome, localita: cl.localita, giro: cl.giro, ordini: cl.n, percentuale: Math.round(cl.n/total*100) }));
   const cliEl = document.getElementById('report-clienti-table');
-  if(cliEl) cliEl.innerHTML = cliData.map(cl=>`<tr><td><b style="font-size:13px;">${cl.nome}</b></td><td style="color:var(--text2);font-size:13px;">${cl.localita}</td><td>${cl.giro?`<span class="badge badge-blue">${cl.giro}</span>`:'—'}</td><td style="font-family:'DM Mono',monospace;font-weight:700;">${cl.n}</td><td><div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${Math.round(cl.n/total*100)}%;background:var(--accent);border-radius:3px;"></div></div><span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3);">${Math.round(cl.n/total*100)}%</span></div></td></tr>`).join('');
+  if(cliEl) cliEl.innerHTML = cliData.map(cl=>`<tr><td><b style="font-size:13px;">${cl.nome}</b></td><td style="color:var(--text2);font-size:13px;">${cl.localita}</td><td>${cl.giro?`<span class="badge badge-blue">${cl.giro}</span>`:'-'}</td><td style="font-family:'DM Mono',monospace;font-weight:700;">${cl.n}</td><td><div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${Math.round(cl.n/total*100)}%;background:var(--accent);border-radius:3px;"></div></div><span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3);">${Math.round(cl.n/total*100)}%</span></div></td></tr>`).join('');
 
   const prodFreq = {}; ordiniReport.forEach(o=>o.linee.forEach(l=>{if(l.prodId)prodFreq[l.prodId]=(prodFreq[l.prodId]||0)+(l.qty||1);}));
   const topProd = Object.entries(prodFreq).map(([id,qty])=>({p:getProdotto(parseInt(id)),qty})).filter(x=>x.p.id).sort((a,b)=>b.qty-a.qty).slice(0,10);
@@ -4776,17 +4832,17 @@ async function renderReport() {
   const clientiInattivi = state.clienti.map(cl=>{const oc=ordiniReport.filter(o=>o.clienteId===cl.id);const ul=oc.length?oc.map(o=>o.data).sort().reverse()[0]:null;return{...cl,ultimo:ul};}).filter(cl=>!cl.ultimo||cl.ultimo<sogliaStr).sort((a,b)=>(a.ultimo||'').localeCompare(b.ultimo||'')).slice(0,15);
   reportDataCache.inattivi = clientiInattivi.map(cl => ({ cliente: cl.nome, localita: cl.localita, giro: cl.giro, ultimo_ordine: cl.ultimo || '' }));
   const inEl = document.getElementById('report-clienti-inattivi');
-  if(inEl) inEl.innerHTML = clientiInattivi.length ? clientiInattivi.map(cl=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);"><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;">${cl.nome}</div><div style="font-size:11px;color:var(--text3);">${cl.localita}${cl.giro?' · '+cl.giro:''}</div></div><div style="text-align:right;flex-shrink:0;">${cl.ultimo?`<div style="font-size:12px;color:var(--orange);font-weight:600;">${formatDate(cl.ultimo)}</div><div style="font-size:10px;color:var(--text3);">ultimo ordine</div>`:`<div style="font-size:12px;color:var(--danger);font-weight:600;">Mai ordinato</div>`}</div></div>`).join('') : '<div style="padding:16px;color:var(--success);text-align:center;">? Tutti i clienti sono attivi</div>';
+  if(inEl) inEl.innerHTML = clientiInattivi.length ? clientiInattivi.map(cl=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);"><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;">${cl.nome}</div><div style="font-size:11px;color:var(--text3);">${cl.localita}${cl.giro?' - '+cl.giro:''}</div></div><div style="text-align:right;flex-shrink:0;">${cl.ultimo?`<div style="font-size:12px;color:var(--orange);font-weight:600;">${formatDate(cl.ultimo)}</div><div style="font-size:10px;color:var(--text3);">ultimo ordine</div>`:`<div style="font-size:12px;color:var(--danger);font-weight:600;">Mai ordinato</div>`}</div></div>`).join('') : '<div style="padding:16px;color:var(--success);text-align:center;">Tutti i clienti sono attivi</div>';
 
   const agCliData = agenti.map(a=>({agente:(a.nome+' '+(a.cognome||'')).trim(),clienti:state.clienti.filter(cl=>cl.agenteId===a.id)}));
   reportDataCache['agenti-clienti'] = agCliData.flatMap(x => x.clienti.map(cl => ({ agente: x.agente, cliente: cl.nome, localita: cl.localita, giro: cl.giro })));
   const agCliEl = document.getElementById('report-agenti-clienti');
-  if(agCliEl) agCliEl.innerHTML = agCliData.map(x=>`<div style="margin-bottom:16px;"><div style="font-weight:700;font-size:14px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--border);">?? ${x.agente} <span style="font-weight:400;color:var(--text2);font-size:13px;">(${x.clienti.length} clienti)</span></div>${x.clienti.length?x.clienti.map(cl=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;"><span class="badge badge-blue" style="font-size:10px;">${cl.giro||'—'}</span><span>${cl.nome}</span><span style="color:var(--text3);">${cl.localita}</span></div>`).join(''):'<div style="font-size:13px;color:var(--text3);">Nessun cliente</div>'}</div>`).join('');
+  if(agCliEl) agCliEl.innerHTML = agCliData.map(x=>`<div style="margin-bottom:16px;"><div style="font-weight:700;font-size:14px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--border);">Agente: ${x.agente} <span style="font-weight:400;color:var(--text2);font-size:13px;">(${x.clienti.length} clienti)</span></div>${x.clienti.length?x.clienti.map(cl=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;"><span class="badge badge-blue" style="font-size:10px;">${cl.giro||'-'}</span><span>${cl.nome}</span><span style="color:var(--text3);">${cl.localita}</span></div>`).join(''):'<div style="font-size:13px;color:var(--text3);">Nessun cliente</div>'}</div>`).join('');
 
   renderActivityLog();
 }
 // CALENDARIO GIRI FISSI
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 const GIORNI_NOMI = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 
@@ -4817,7 +4873,7 @@ function renderImpostazioni() {
         <span style="font-size:11px;font-weight:500;">${GIORNI_NOMI[d]}</span>
       </label>`).join('');
     const prossima = getNextGiroDate(g.giro);
-    const prossimaLabel = prossima ? ` <span style="font-size:11px;color:var(--accent);">â†’ prossima: ${formatDate(prossima)}</span>` : '';
+    const prossimaLabel = prossima ? ` <span style="font-size:11px;color:var(--accent);">→ prossima: ${formatDate(prossima)}</span>` : '';
     return `
       <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);">
         <div style="min-width:110px;font-weight:600;font-size:13px;text-transform:capitalize;">${g.giro} ${prossimaLabel}</div>
@@ -4837,15 +4893,15 @@ function renderImpostazioni() {
         <span style="flex:1;">[${p.codice}] ${p.nome}</span>
         <input type="number" value="${l.qty}" min="1" style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:12px;"
           onchange="updateCaricoTentata(${a.id},${li},'qty',parseInt(this.value)||1)">
-        <button onclick="removeCaricoTentataLine(${a.id},${li})" style="background:none;border:none;cursor:pointer;color:var(--danger);">âœ•</button>
+        <button onclick="removeCaricoTentataLine(${a.id},${li})" style="background:none;border:none;cursor:pointer;color:var(--danger);">✕</button>
       </div>`;
     }).join('');
     return `
       <div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px;">
-        <div style="font-weight:600;margin-bottom:8px;">ðŸšš ${(a.nome+' '+(a.cognome||'')).trim()}</div>
+        <div style="font-weight:600;margin-bottom:8px;">🚚 ${(a.nome+' '+(a.cognome||'')).trim()}</div>
         ${lineeHtml || '<div style="font-size:13px;color:var(--text3);margin-bottom:8px;">Nessun prodotto nel carico predefinito</div>'}
         <select onchange="addCaricoTentataLine(${a.id},parseInt(this.value));this.value=''" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:5px;margin-top:4px;">
-          <option value="">ï¼‹ Aggiungi prodottoâ€¦</option>
+          <option value="">＋ Aggiungi prodotto…</option>
           ${state.prodotti.map(p => `<option value="${p.id}">[${p.codice}] ${p.nome}</option>`).join('')}
         </select>
       </div>`;
@@ -4878,9 +4934,9 @@ function updateCaricoTentata(userId, li, field, val) {
   if (carico) carico.linee[li][field] = val;
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // TENTATA VENDITA (AUTISTA)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 let tentataLines = [];
 
@@ -4902,8 +4958,8 @@ function renderTentataLines() {
     const p = getProdotto(l.prodId);
     return `<div class="order-line">
       <div style="flex:1;font-size:13px;">[${p.codice}] ${p.nome}</div>
-      <input type="number" class="qty-input" value="${l.qty}" min="1" onchange="tentataLines[${i}].qty=parseInt(this.value)||1" placeholder="QtÃ ">
-      <button class="line-delete" onclick="tentataLines.splice(${i},1);renderTentataLines()">âœ•</button>
+      <input type="number" class="qty-input" value="${l.qty}" min="1" onchange="tentataLines[${i}].qty=parseInt(this.value)||1" placeholder="Qtà">
+      <button class="line-delete" onclick="tentataLines.splice(${i},1);renderTentataLines()">✕</button>
     </div>`;
   }).join('') || '<div style="padding:8px;font-size:13px;color:var(--text3);">Nessun prodotto</div>';
 }
@@ -4919,7 +4975,7 @@ async function saveTentataVendita() {
   const validLines = tentataLines.filter(l => l.prodId);
   if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
   const cliente = getCliente(clienteId);
-  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dallâ€™amministrazione', 'warning'); return; }
+  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
   if (!validLines.length) { showToast('Aggiungi almeno un prodotto', 'warning'); return; }
 
   const body = {
@@ -4942,13 +4998,13 @@ async function saveTentataVendita() {
 // Aggiungo tentata all'acState e al sistema AC
 acState.tentata = { value: null, query: '', focusIdx: -1 };
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // PDF RIEPILOGATIVO GIORNALIERO
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // IL MIO PROFILO
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function ensureDevPanelDom() {
   const root = document.querySelector('#page-profilo > div');
@@ -4959,23 +5015,31 @@ function ensureDevPanelDom() {
   card.style.marginTop = '20px';
   card.innerHTML = `
     <div class="card-header">
-      <div class="card-title">Sviluppatore</div>
+      <div class="card-title">Sviluppatore <span id="dev-health-badge" class="badge badge-gray">N/D</span></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;">
           <input type="checkbox" id="dev-auto-toggle" onchange="toggleDevAuto(this.checked)" style="width:14px;height:14px;accent-color:var(--accent);">
           Monitoraggio automatico
         </label>
         <button class="btn btn-outline btn-sm" onclick="refreshDevMetrics(false)">Aggiorna</button>
+        <button class="btn btn-outline btn-sm" onclick="runDevSmoke()">Smoke test</button>
       </div>
     </div>
     <div style="padding:14px 18px;">
       <div id="dev-status-line" style="font-size:13px;color:var(--text2);margin-bottom:10px;">In attesa dati...</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+        <label style="font-size:12px;color:var(--text2);">DB warn <input type="number" id="dev-th-db-warn" min="1" style="width:70px;margin-left:4px;" onchange="updateDevThresholds()"></label>
+        <label style="font-size:12px;color:var(--text2);">DB err <input type="number" id="dev-th-db-err" min="1" style="width:70px;margin-left:4px;" onchange="updateDevThresholds()"></label>
+        <label style="font-size:12px;color:var(--text2);">Onb warn <input type="number" id="dev-th-onb-warn" min="0" style="width:70px;margin-left:4px;" onchange="updateDevThresholds()"></label>
+        <label style="font-size:12px;color:var(--text2);">Onb err <input type="number" id="dev-th-onb-err" min="0" style="width:70px;margin-left:4px;" onchange="updateDevThresholds()"></label>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;">
         <div class="stat-card"><div class="stat-label">DB latency</div><div class="stat-value" id="dev-db-lat">-</div></div>
         <div class="stat-card"><div class="stat-label">Uptime</div><div class="stat-value" id="dev-uptime">-</div></div>
         <div class="stat-card"><div class="stat-label">Memoria</div><div class="stat-value" id="dev-mem">-</div></div>
         <div class="stat-card"><div class="stat-label">Onboarding pending</div><div class="stat-value" id="dev-onb">-</div></div>
       </div>
+      <div id="dev-smoke" style="margin:8px 0 12px;font-size:12px;color:var(--text2);"></div>
       <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">Ultime attivita</div>
       <div id="dev-recent-activity" style="max-height:170px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface2);font-size:12px;"></div>
       <div id="dev-errors" style="margin-top:10px;font-size:12px;color:var(--danger);"></div>
@@ -5006,6 +5070,53 @@ function toggleDevAuto(enabled) {
   startDevMonitor();
 }
 
+function updateDevThresholds() {
+  if (!canSeeDevPanel()) return;
+  const read = (id, fallback, min) => {
+    const raw = parseInt(document.getElementById(id)?.value, 10);
+    if (Number.isNaN(raw)) return fallback;
+    return Math.max(min, raw);
+  };
+  const next = {
+    db_warn: read('dev-th-db-warn', state.devThresholds?.db_warn ?? 120, 1),
+    db_err: read('dev-th-db-err', state.devThresholds?.db_err ?? 300, 1),
+    onb_warn: read('dev-th-onb-warn', state.devThresholds?.onb_warn ?? 8, 0),
+    onb_err: read('dev-th-onb-err', state.devThresholds?.onb_err ?? 20, 0),
+  };
+  if (next.db_warn > next.db_err) next.db_warn = next.db_err;
+  if (next.onb_warn > next.onb_err) next.onb_warn = next.onb_err;
+  state.devThresholds = next;
+  saveDevThresholds(next);
+  renderDevPanel();
+}
+
+async function runDevSmoke() {
+  if (!canSeeDevPanel()) return;
+  try {
+    state.devSmoke = await api('GET', '/api/dev/smoke');
+    renderDevPanel();
+    showToast(state.devSmoke.ok ? 'Smoke test OK' : 'Smoke test con errori', state.devSmoke.ok ? 'success' : 'warning');
+  } catch (e) {
+    appendDevError(`Smoke test: ${e.message}`);
+    renderDevPanel();
+    showToast(e.message, 'warning');
+  }
+}
+
+function getDevHealthState(d, thresholds) {
+  if (!d) return { level: 0, label: 'N/D', cls: 'badge-gray' };
+  let level = 0;
+  if ((d.db_latency_ms ?? 0) >= thresholds.db_warn) level = Math.max(level, 1);
+  if ((d.db_latency_ms ?? 0) >= thresholds.db_err) level = Math.max(level, 2);
+  if ((d.onboarding?.pending ?? 0) >= thresholds.onb_warn) level = Math.max(level, 1);
+  if ((d.onboarding?.pending ?? 0) >= thresholds.onb_err) level = Math.max(level, 2);
+  if (state.devErrors.length) level = Math.max(level, 1);
+  if (state.devSmoke && state.devSmoke.ok === false) level = 2;
+  if (level === 2) return { level, label: 'ERR', cls: 'badge-red' };
+  if (level === 1) return { level, label: 'WARN', cls: 'badge-orange' };
+  return { level, label: 'OK', cls: 'badge-green' };
+}
+
 async function refreshDevMetrics(silent = false) {
   if (!canSeeDevPanel()) return;
   try {
@@ -5013,8 +5124,7 @@ async function refreshDevMetrics(silent = false) {
     state.devMetrics = d;
     renderDevPanel();
   } catch (e) {
-    state.devErrors.unshift(`[${new Date().toLocaleTimeString('it-IT')}] ${e.message}`);
-    state.devErrors = state.devErrors.slice(0, 8);
+    appendDevError(e.message);
     renderDevPanel();
     if (!silent) showToast(e.message, 'warning');
   }
@@ -5028,8 +5138,25 @@ function renderDevPanel() {
   if (!visible) return;
   const auto = document.getElementById('dev-auto-toggle');
   if (auto) auto.checked = isDevAutoEnabled();
+  if (!state.devThresholds) state.devThresholds = loadDevThresholds();
+  const th = state.devThresholds;
+  const setInput = (id, value) => {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = value;
+  };
+  setInput('dev-th-db-warn', th.db_warn);
+  setInput('dev-th-db-err', th.db_err);
+  setInput('dev-th-onb-warn', th.onb_warn);
+  setInput('dev-th-onb-err', th.onb_err);
   const d = state.devMetrics;
   const status = document.getElementById('dev-status-line');
+  const badge = document.getElementById('dev-health-badge');
+  const health = getDevHealthState(d, th);
+  if (badge) {
+    badge.classList.remove('badge-gray', 'badge-green', 'badge-orange', 'badge-red');
+    badge.classList.add(health.cls);
+    badge.textContent = health.label;
+  }
   if (!d) {
     if (status) status.textContent = 'Nessun dato diagnostico disponibile.';
     return;
@@ -5047,7 +5174,22 @@ function renderDevPanel() {
       : '<div style="color:var(--text3);">Nessuna attivita recente</div>';
   }
   const err = document.getElementById('dev-errors');
-  if (err) err.innerHTML = state.devErrors.length ? `<b>Errori recenti:</b><br>${state.devErrors.join('<br>')}` : '';
+  if (err) err.innerHTML = state.devErrors.length
+    ? `<b>Errori recenti:</b><br>${state.devErrors.map(escHtml).join('<br>')}`
+    : '';
+  const smokeEl = document.getElementById('dev-smoke');
+  if (smokeEl) {
+    if (!state.devSmoke) {
+      smokeEl.innerHTML = 'Smoke test non eseguito.';
+    } else {
+      const lines = (state.devSmoke.checks || []).map(c => {
+        const value = c.ms != null ? `${c.ms} ms` : (c.value != null ? `${c.value}` : '');
+        const detail = c.error ? ` - ${escHtml(c.error)}` : (value ? ` - ${escHtml(value)}` : '');
+        return `${c.ok ? '[OK]' : '[KO]'} ${escHtml(c.check)}${detail}`;
+      });
+      smokeEl.innerHTML = `<b>Smoke ${state.devSmoke.ok ? 'OK' : 'KO'}</b> (${new Date(state.devSmoke.ts).toLocaleString('it-IT')})<br>${lines.join('<br>')}`;
+    }
+  }
 }
 
 function renderProfilo() {
@@ -5082,7 +5224,7 @@ function renderProfilo() {
   ensureDevPanelDom();
   renderDevPanel();
 
-  // ModalitÃ  ordine
+  // Modalità ordine
   const mod = getModalitaOrdine();
   document.getElementById('mod-btn-classico')?.classList.toggle('active', mod === 'classico');
   document.getElementById('mod-btn-catalogo')?.classList.toggle('active', mod === 'catalogo');
@@ -5099,26 +5241,26 @@ async function saveProfilo() {
 
   // Validazioni base
   if (!nome || !username) {
-    showFeedback(fb, 'âš ï¸ Nome e username sono obbligatori.', 'warning');
+    showFeedback(fb, '⚠️ Nome e username sono obbligatori.', 'warning');
     return;
   }
   if (!passOld) {
-    showFeedback(fb, 'âš ï¸ Inserisci la password attuale per confermare le modifiche.', 'warning');
+    showFeedback(fb, '⚠️ Inserisci la password attuale per confermare le modifiche.', 'warning');
     return;
   }
   if (passNew && passNew !== passNew2) {
-    showFeedback(fb, 'âš ï¸ Le nuove password non coincidono.', 'warning');
+    showFeedback(fb, '⚠️ Le nuove password non coincidono.', 'warning');
     return;
   }
   if (passNew && passNew.length < 4) {
-    showFeedback(fb, 'âš ï¸ La nuova password deve avere almeno 4 caratteri.', 'warning');
+    showFeedback(fb, '⚠️ La nuova password deve avere almeno 4 caratteri.', 'warning');
     return;
   }
 
   // Check username duplicato (escludendo se stesso)
   const dup = state.utenti.find(u => u.username === username && u.id !== state.currentUser.id);
   if (dup) {
-    showFeedback(fb, 'âš ï¸ Username giÃ  in uso da un altro utente.', 'warning');
+    showFeedback(fb, '⚠️ Username già in uso da un altro utente.', 'warning');
     return;
   }
 
@@ -5146,8 +5288,8 @@ async function saveProfilo() {
     // Aggiorna topbar
     document.getElementById('topbar-username').textContent = (nome + ' ' + cognome).trim();
 
-    showFeedback(fb, 'âœ… Profilo aggiornato con successo!', 'success');
-    showToast('Profilo aggiornato âœ…', 'success');
+    showFeedback(fb, '✅ Profilo aggiornato con successo!', 'success');
+    showToast('Profilo aggiornato ✅', 'success');
 
     // Pulisci campi password
     document.getElementById('profilo-pass-old').value = '';
@@ -5159,7 +5301,7 @@ async function saveProfilo() {
   } catch(e) {
     const msg = e.message || 'Errore salvataggio';
     const isWrongPass = msg.toLowerCase().includes('password') || msg.toLowerCase().includes('credenziali');
-    showFeedback(fb, `âš ï¸ ${isWrongPass ? 'Password attuale errata.' : msg}`, 'warning');
+    showFeedback(fb, `⚠️ ${isWrongPass ? 'Password attuale errata.' : msg}`, 'warning');
   }
 }
 
@@ -5180,9 +5322,9 @@ function showFeedback(el, msg, type) {
   }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// MODALITÃ€ ORDINE (preferenza utente)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
+// MODALITÀ ORDINE (preferenza utente)
+// ═══════════════════════════════════════════════
 
 function getModalitaOrdine() {
   const key = 'modalita_ordine_' + (state.currentUser?.id || 'default');
@@ -5197,14 +5339,14 @@ function setModalitaOrdine(val) {
   const fb = document.getElementById('modality-feedback');
   if (fb) {
     fb.textContent = val === 'catalogo'
-      ? 'âœ… ModalitÃ  catalogo attiva â€” il prossimo Nuovo Ordine si aprirÃ  come catalogo.'
-      : 'âœ… ModalitÃ  classica attiva.';
+      ? '✅ Modalità catalogo attiva — il prossimo Nuovo Ordine si aprirà come catalogo.'
+      : '✅ Modalità classica attiva.';
     fb.style.display = 'block';
     setTimeout(() => fb.style.display = 'none', 3000);
   }
 }
 
-// Override openNewOrder per smistare verso la modalitÃ  scelta
+// Override openNewOrder per smistare verso la modalità scelta
 const _openNewOrderClassico = openNewOrder;
 openNewOrder = function() {
   if (getModalitaOrdine() === 'catalogo') {
@@ -5214,20 +5356,20 @@ openNewOrder = function() {
   }
 };
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// MODALITÃ€ CATALOGO â€” flusso a 2 livelli
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
+// MODALITÀ CATALOGO — flusso a 2 livelli
+// ═══════════════════════════════════════════════
 
 // Carrello: { prodId -> { qty, um } }
 let catalogoCart = {};
 let catCategoriaAttiva = null;
 
 const CAT_CONFIG = [
-  { id: 'FORMAGGI',  icon: 'ðŸ§€', label: 'Formaggi',  color: '#fff8e1', border: '#f9a825' },
-  { id: 'RICOTTA',   icon: 'ðŸ¥›', label: 'Ricotta',   color: '#f3e5f5', border: '#8e24aa' },
-  { id: 'CAGLIATA',  icon: 'ðŸ«™', label: 'Cagliata',  color: '#e8f5e9', border: '#2e7d32' },
-  { id: 'PANNA UHT', icon: 'ðŸ¦', label: 'Panna UHT', color: '#e3f2fd', border: '#1565c0' },
-  { id: 'ALTRO',     icon: 'ðŸ“¦', label: 'Altro',     color: '#fafafa', border: '#9e9e9e' },
+  { id: 'FORMAGGI',  icon: '🧀', label: 'Formaggi',  color: '#fff8e1', border: '#f9a825' },
+  { id: 'RICOTTA',   icon: '🥛', label: 'Ricotta',   color: '#f3e5f5', border: '#8e24aa' },
+  { id: 'CAGLIATA',  icon: '🫙', label: 'Cagliata',  color: '#e8f5e9', border: '#2e7d32' },
+  { id: 'PANNA UHT', icon: '🍦', label: 'Panna UHT', color: '#e3f2fd', border: '#1565c0' },
+  { id: 'ALTRO',     icon: '📦', label: 'Altro',     color: '#fafafa', border: '#9e9e9e' },
 ];
 
 function openNewOrderCatalogo() {
@@ -5253,7 +5395,7 @@ function openNewOrderCatalogo() {
   // Agente default
   const agenti = state.utenti.filter(u => u.isAgente);
   const selAg = document.getElementById('cat-agente');
-  selAg.innerHTML = '<option value="">â€” Seleziona agente â€”</option>' +
+  selAg.innerHTML = '<option value="">— Seleziona agente —</option>' +
     agenti.map(a => `<option value="${a.id}" ${a.id === state.currentUser.id && state.currentUser.isAgente ? 'selected' : ''}>${(a.nome + ' ' + (a.cognome || '')).trim()}</option>`).join('');
 
   catShowSchermata('cat');
@@ -5263,7 +5405,7 @@ function openNewOrderCatalogo() {
   // focus rimosso: apriva automaticamente il dropdown cliente
 }
 
-// â”€â”€ Navigazione schermate â”€â”€
+// ── Navigazione schermate ──
 function catShowSchermata(which) {
   // which: 'cat' | 'prod' | 'carrello'
   document.getElementById('cat-screen-cat').style.display      = which === 'cat'      ? '' : 'none';
@@ -5276,7 +5418,7 @@ function catGoToCategoria(catId) {
   const cfg = CAT_CONFIG.find(x => x.id === catId);
   document.getElementById('cat-breadcrumb').style.display = 'inline';
   document.getElementById('cat-breadcrumb').innerHTML =
-    `<span style="opacity:.5;">Categorie</span> â€º <b>${cfg ? cfg.icon + ' ' + cfg.label : catId}</b>`;
+    `<span style="opacity:.5;">Categorie</span> › <b>${cfg ? cfg.icon + ' ' + cfg.label : catId}</b>`;
   document.getElementById('cat-search').value = '';
   catShowSchermata('prod');
   catRenderProdotti();
@@ -5294,7 +5436,7 @@ function catShowCarrello() {
   catRenderCarrello();
 }
 
-// â”€â”€ Schermata 1: Categorie â”€â”€
+// ── Schermata 1: Categorie ──
 function catRenderCategorie() {
   const clienteId = acState['cat-cliente']?.value || null;
 
@@ -5335,7 +5477,7 @@ function catRenderCategorie() {
   }
 }
 
-// â”€â”€ Schermata 2: Prodotti della categoria â”€â”€
+// ── Schermata 2: Prodotti della categoria ──
 function catRenderProdotti() {
   const q = (document.getElementById('cat-search')?.value || '').toLowerCase();
   let prods = state.prodotti.filter(p => p.categoria === catCategoriaAttiva);
@@ -5351,7 +5493,7 @@ function catRenderProdotti() {
   grid.innerHTML = prods.map(p => catCardHtml(p)).join('');
 }
 
-// â”€â”€ Schermata 3: Riepilogo carrello â”€â”€
+// ── Schermata 3: Riepilogo carrello ──
 function catRenderCarrello() {
   const list = document.getElementById('cat-carrello-list');
   const items = Object.entries(catalogoCart);
@@ -5365,10 +5507,10 @@ function catRenderCarrello() {
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
       <div style="flex:1;min-width:0;">
         <div style="font-size:13px;font-weight:600;">${p.nome}</div>
-        <div style="font-size:11px;color:var(--text3);">[${p.codice}] Â· ${p.categoria}</div>
+        <div style="font-size:11px;color:var(--text3);">[${p.codice}] · ${p.categoria}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-        <button class="cat-qty-btn" onclick="catQtyChange(${prodId},-1);catRenderCarrello();catRenderCategorie();">âˆ’</button>
+        <button class="cat-qty-btn" onclick="catQtyChange(${prodId},-1);catRenderCarrello();catRenderCategorie();">−</button>
         <input class="cat-qty-input" type="number" min="1" value="${v.qty}"
           onchange="catQtySet(${prodId},parseInt(this.value)||1);catRenderCarrello();">
         <select class="cat-um-select" onchange="catUmSet(${prodId},this.value);catRenderCarrello();">
@@ -5376,13 +5518,13 @@ function catRenderCarrello() {
         </select>
         <button class="cat-qty-btn" onclick="catQtyChange(${prodId},1);catRenderCarrello();">+</button>
         <button onclick="delete catalogoCart[${prodId}];catRenderCarrello();catRenderCategorie();updateCartBar();"
-          style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--danger);" title="Rimuovi">âœ•</button>
+          style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--danger);" title="Rimuovi">✕</button>
       </div>
     </div>`;
   }).join('');
 }
 
-// â”€â”€ Card prodotto (usata in storico + schermata prodotti) â”€â”€
+// ── Card prodotto (usata in storico + schermata prodotti) ──
 function catCardHtml(p) {
   const item = catalogoCart[p.id];
   const inCart = !!item;
@@ -5395,7 +5537,7 @@ function catCardHtml(p) {
     <div class="cat-card-nome">${p.nome}</div>
     <div class="cat-card-info">${p.packaging || p.um}</div>
     <div class="cat-card-controls">
-      <button class="cat-qty-btn" onclick="catQtyChange(${p.id},-1)">âˆ’</button>
+      <button class="cat-qty-btn" onclick="catQtyChange(${p.id},-1)">−</button>
       <input class="cat-qty-input" type="number" min="1" value="${qty}"
         onchange="catQtySet(${p.id},parseInt(this.value)||1)"
         style="color:${inCart ? 'var(--accent)' : 'var(--text1)'};">
@@ -5406,11 +5548,11 @@ function catCardHtml(p) {
       <button class="cat-qty-btn" onclick="catQtyChange(${p.id},1)"
         style="${inCart ? 'background:var(--accent);color:#fff;border-color:var(--accent);' : ''}">+</button>
     </div>
-    ${p.note ? `<div style="font-size:10px;color:var(--blue);margin-top:4px;">ðŸ“Œ ${p.note}</div>` : ''}
+    ${p.note ? `<div style="font-size:10px;color:var(--blue);margin-top:4px;">📌 ${p.note}</div>` : ''}
   </div>`;
 }
 
-// â”€â”€ Carrello ops â”€â”€
+// ── Carrello ops ──
 function catQtyChange(prodId, delta) {
   const item = catalogoCart[prodId];
   const curQty = item ? item.qty : 0;
@@ -5469,11 +5611,11 @@ function updateCartBar() {
   // Mostra i nomi dei prodotti nel carrello, troncati
   const nomi = items.map(([id, v]) => {
     const p = getProdotto(parseInt(id));
-    return `${v.qty}Ã— ${p.nome.split(' ').slice(0,2).join(' ')}`;
+    return `${v.qty}× ${p.nome.split(' ').slice(0,2).join(' ')}`;
   });
   const MAX = 3;
-  let label = nomi.slice(0, MAX).join(' Â· ');
-  if (nomi.length > MAX) label += ` Â· +${nomi.length - MAX} altri`;
+  let label = nomi.slice(0, MAX).join(' · ');
+  if (nomi.length > MAX) label += ` · +${nomi.length - MAX} altri`;
   const el = document.getElementById('cat-cart-items');
   if (el) el.textContent = label;
 }
@@ -5495,7 +5637,7 @@ async function saveCatalogoOrder() {
 
   if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
   const cliente = getCliente(clienteId);
-  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dallâ€™amministrazione', 'warning'); return; }
+  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
   if (!data)      { showToast('Inserisci la data', 'warning'); return; }
 
   const linee = Object.entries(catalogoCart)
@@ -5522,7 +5664,7 @@ async function saveCatalogoOrder() {
     const saved = await api('POST', '/api/ordini', body);
     state.ordini.unshift(normalizeOrdine(saved));
     closeModal('modal-catalogo');
-    showToast(`Ordine salvato âœ… â€” ${linee.length} prodotti`, 'success');
+    showToast(`Ordine salvato ✅ — ${linee.length} prodotti`, 'success');
     renderPage(state.currentPage);
   } catch(e) {
     showToast(e.message || 'Errore salvataggio', 'warning');
@@ -5573,7 +5715,7 @@ function updatePDFPreview() {
     return au ? (au.nome + ' ' + (au.cognome||'')).trim() : '';
   }
 
-  // â”€â”€ REPORT MAGAZZINO: nome prodotto + qtÃ  + unitÃ  â”€â”€
+  // ── REPORT MAGAZZINO: nome prodotto + qtà + unità ──
   function ordineHtmlMag(o) {
     const cl = getCliente(o.clienteId);
     const linee = o.linee.map(l => {
@@ -5586,22 +5728,22 @@ function updatePDFPreview() {
         <span style="white-space:nowrap;margin-left:8px;font-weight:700;">${qty} ${um}</span>
       </div>`;
     }).join('');
-    const flags = [o.stef ? 'ðŸš› STEF' : '', o.dataNonCerta ? 'âš ï¸' : ''].filter(Boolean).join(' ');
+    const flags = [o.stef ? '🚛 STEF' : '', o.dataNonCerta ? '⚠️' : ''].filter(Boolean).join(' ');
     return `<div style="margin-bottom:10px;padding-bottom:6px;">
       <div style="font-weight:700;font-size:13px;text-decoration:underline;">${cl.nome}${flags ? ' <span style="font-weight:400;font-size:11px;">'+flags+'</span>' : ''}</div>
-      ${o.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">ðŸ“ ${o.note}</div>` : ''}
+      ${o.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">📝 ${o.note}</div>` : ''}
       ${linee || '<div style="font-size:11px;color:#aaa;">nessun prodotto</div>'}
     </div>`;
   }
 
-  // â”€â”€ REPORT FATTURAZIONE: nome prodotto + peso effettivo â”€â”€
+  // ── REPORT FATTURAZIONE: nome prodotto + peso effettivo ──
   function ordineHtmlFatt(o) {
     const cl = getCliente(o.clienteId);
     const linee = o.linee.map(l => {
       const p = getProdotto(l.prodId);
       const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
       const qty = l.qty || 1;
-      const peso = l.pesoEffettivo ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>` : `<span style="color:#bbb;">${qty} ${um} â€” peso da inserire</span>`;
+      const peso = l.pesoEffettivo ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>` : `<span style="color:#bbb;">${qty} ${um} — peso da inserire</span>`;
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
       return `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;border-bottom:1px dotted #eee;">
         <span>${p.nome}${nota}</span>
@@ -5610,7 +5752,7 @@ function updatePDFPreview() {
     }).join('');
     return `<div style="margin-bottom:10px;padding-bottom:6px;">
       <div style="font-weight:700;font-size:13px;text-decoration:underline;">${cl.nome}</div>
-      ${o.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">ðŸ“ ${o.note}</div>` : ''}
+      ${o.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">📝 ${o.note}</div>` : ''}
       ${linee || '<div style="font-size:11px;color:#aaa;">nessun prodotto</div>'}
     </div>`;
   }
@@ -5627,7 +5769,7 @@ function updatePDFPreview() {
     return `<div style="width:${colWidth};padding:0 6px;box-sizing:border-box;vertical-align:top;display:inline-block;">
       <div style="background:#f0f4f0;padding:6px 10px;margin-bottom:8px;border-radius:4px;border-left:3px solid #2e7d32;">
         <div style="font-weight:700;font-size:13px;text-transform:uppercase;">${g}</div>
-        ${aut ? `<div style="font-size:11px;color:#555;">ðŸ‘¤ ${aut}</div>` : ''}
+        ${aut ? `<div style="font-size:11px;color:#555;">👤 ${aut}</div>` : ''}
         <div style="font-size:11px;color:#777;">${ordiniGiro.length} ordine${ordiniGiro.length!==1?'i':''}</div>
       </div>
       ${ordiniGiro.map(ordineHtml).join('')}
@@ -5639,11 +5781,11 @@ function updatePDFPreview() {
 
   preview.innerHTML = `
     <div style="font-weight:700;font-size:15px;text-align:center;margin-bottom:12px;border-bottom:2px solid #333;padding-bottom:6px;">
-      NORBALAT â€” ${titoloTipo} ${formatDate(data)}${giriSel ? ' Â· ' + giriSel.map(g=>g.toUpperCase()).join(', ') : ''}
+      NORBALAT — ${titoloTipo} ${formatDate(data)}${giriSel ? ' · ' + giriSel.map(g=>g.toUpperCase()).join(', ') : ''}
     </div>
     <div style="font-size:0;">${columnsHtml}</div>
     <div style="text-align:right;font-size:11px;color:#666;margin-top:10px;padding-top:8px;border-top:1px solid #ddd;">
-      Ordini: <b>${totOrdini}</b> Â· Righe prodotto: <b>${totLinee}</b> Â· Stampato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}
+      Ordini: <b>${totOrdini}</b> · Righe prodotto: <b>${totLinee}</b> · Stampato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}
     </div>`;
 }
 
@@ -5654,7 +5796,7 @@ function stampaPDFGiornaliero() {
   const content = document.getElementById('pdf-preview').innerHTML;
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <title>Norbalat â€” ${tipo === 'fatturazione' ? 'Fatturazione' : 'Magazzino'} ${data}</title>
+    <title>Norbalat — ${tipo === 'fatturazione' ? 'Fatturazione' : 'Magazzino'} ${data}</title>
     <style>
       * { box-sizing: border-box; }
       body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1814; padding: 14px; margin: 0; }
@@ -5665,9 +5807,9 @@ function stampaPDFGiornaliero() {
   setTimeout(() => win.print(), 300);
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // MODAL HELPERS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function openModal(id) {
   document.getElementById(id).classList.add('open');
@@ -5679,7 +5821,7 @@ function closeModal(id) {
   document.body.style.overflow = '';
 }
 
-// â”€â”€ Custom confirm (window.confirm Ã¨ bloccato negli iframe) â”€â”€
+// ── Custom confirm (window.confirm è bloccato negli iframe) ──
 let _confirmResolve = null;
 
 function customConfirm(message, okLabel = 'Elimina', title = 'Conferma') {
@@ -5700,9 +5842,9 @@ function resolveConfirm(result) {
 // Modal si chiude SOLO con la X, non cliccando fuori
 // (rimosso il listener sull'overlay per evitare chiusure accidentali)
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // TOAST
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function showToast(msg, type = '') {
   const container = document.getElementById('toast-container');
@@ -5713,9 +5855,9 @@ function showToast(msg, type = '') {
   setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(20px)'; toast.style.transition = '0.3s'; setTimeout(() => toast.remove(), 300); }, 2500);
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // INIT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 // Set today's date as default
 document.addEventListener('DOMContentLoaded', () => {
@@ -5723,9 +5865,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (dateInput) dateInput.value = today();
 });
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // IMPORT EXCEL CLIENTI (SheetJS)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 async function importClientiExcel(input) {
   const file = input.files[0];
   if (!file) return;
@@ -5760,13 +5902,13 @@ async function importClientiExcel(input) {
 
   let ok = 0, err = 0, skip = 0;
   const total = rows.slice(1).filter(r => r[0]).length;
-  showToast(`ðŸ“¥ Importazione ${total} clientiâ€¦`);
+  showToast(`📥 Importazione ${total} clienti…`);
 
   for (const row of rows.slice(1)) {
     const nome = (row[0]||'').toString().trim();
     if (!nome) continue;
 
-    // Partita IVA: numero â†’ stringa con zero iniziale se necessario
+    // Partita IVA: numero → stringa con zero iniziale se necessario
     let piva = '';
     if (row[1]) {
       piva = row[1].toString().trim();
@@ -5799,7 +5941,7 @@ async function importClientiExcel(input) {
     } catch(e) { err++; }
   }
 
-  showToast(`âœ… Import completato: ${ok} nuovi, ${skip} aggiornati${err ? ', '+err+' errori' : ''}`, 'success');
+  showToast(`✅ Import completato: ${ok} nuovi, ${skip} aggiornati${err ? ', '+err+' errori' : ''}`, 'success');
   renderClientiTable();
 }
 </script>
@@ -5823,5 +5965,6 @@ async function importClientiExcel(input) {
 
 </body>
 </html>
+
 
 
