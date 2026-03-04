@@ -62,6 +62,7 @@ async function createSchema() {
       e_fornitore      BOOLEAN DEFAULT FALSE,
       classificazione  TEXT DEFAULT '',
       onboarding_stato TEXT DEFAULT 'in_attesa',
+      onboarding_checklist JSONB DEFAULT '{}'::jsonb,
       fido             NUMERIC DEFAULT 0,
       sbloccato        BOOLEAN DEFAULT FALSE,
       onboarding_approvato_da TEXT,
@@ -140,6 +141,19 @@ async function createSchema() {
       ts         TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS clienti_onboarding_log (
+      id          SERIAL PRIMARY KEY,
+      cliente_id  INTEGER NOT NULL REFERENCES clienti(id) ON DELETE CASCADE,
+      user_id     INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      user_name   TEXT NOT NULL,
+      old_stato   TEXT,
+      new_stato   TEXT,
+      old_fido    NUMERIC,
+      new_fido    NUMERIC,
+      note        TEXT DEFAULT '',
+      ts          TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_ordini_data    ON ordini(data);
     CREATE INDEX IF NOT EXISTS idx_ordini_stato   ON ordini(stato);
     CREATE INDEX IF NOT EXISTS idx_ordini_agente  ON ordini(agente_id);
@@ -150,6 +164,7 @@ async function createSchema() {
     -- Migrazioni safe per DB esistenti
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS classificazione TEXT DEFAULT '';
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS onboarding_stato TEXT DEFAULT 'in_attesa';
+    ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS onboarding_checklist JSONB DEFAULT '{}'::jsonb;
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS fido             NUMERIC DEFAULT 0;
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS sbloccato        BOOLEAN DEFAULT FALSE;
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS onboarding_approvato_da TEXT;
@@ -176,15 +191,18 @@ async function createSchema() {
 
     DO $$
     BEGIN
-      IF NOT EXISTS (
+      IF EXISTS (
         SELECT 1 FROM pg_constraint
         WHERE conname = 'clienti_onboarding_stato_check'
           AND conrelid = 'clienti'::regclass
       ) THEN
-        ALTER TABLE clienti
-          ADD CONSTRAINT clienti_onboarding_stato_check
-          CHECK (onboarding_stato IN ('in_attesa','approvato'));
+        ALTER TABLE clienti DROP CONSTRAINT clienti_onboarding_stato_check;
       END IF;
+      ALTER TABLE clienti
+        ADD CONSTRAINT clienti_onboarding_stato_check
+        CHECK (onboarding_stato IN ('bozza','in_attesa','in_verifica','approvato','rifiutato','sospeso'));
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
     END $$;
 
     DO $$
@@ -193,6 +211,7 @@ async function createSchema() {
          AND NOT EXISTS (SELECT 1 FROM clienti WHERE onboarding_stato = 'approvato') THEN
         UPDATE clienti
         SET onboarding_stato = 'approvato',
+            onboarding_checklist = COALESCE(onboarding_checklist, '{}'::jsonb),
             sbloccato = TRUE,
             fido = COALESCE(fido, 0);
       END IF;
@@ -463,6 +482,40 @@ function requireRole(...roles) {
   };
 }
 
+const PERMISSIONS = {
+  'clienti:create': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
+  'clienti:update': ['admin', 'amministrazione', 'direzione'],
+  'clienti:delete': ['admin'],
+  'onboarding:manage': ['admin', 'amministrazione'],
+  'ordini:create': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
+  'ordini:update': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
+  'ordini:delete': ['admin', 'amministrazione'],
+  'ordini:stato': ['admin', 'autista', 'magazzino', 'amministrazione', 'direzione'],
+};
+
+function hasPermission(role, permission) {
+  const allowed = PERMISSIONS[permission] || [];
+  return allowed.includes(role);
+}
+
+function requirePermission(permission) {
+  return (req, res, next) => {
+    if (!hasPermission(req.user.ruolo, permission)) {
+      return res.status(403).json({ error: `Permesso negato: ${permission}` });
+    }
+    next();
+  };
+}
+
+async function logOnboardingChange({ clienteId, reqUser, oldStato, newStato, oldFido, newFido, note = '' }) {
+  const userName = `${reqUser.nome} ${reqUser.cognome || ''}`.trim();
+  await q(
+    `INSERT INTO clienti_onboarding_log (cliente_id,user_id,user_name,old_stato,new_stato,old_fido,new_fido,note)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [clienteId, reqUser.id || null, userName || 'Sistema', oldStato || null, newStato || null, oldFido ?? null, newFido ?? null, note || '']
+  );
+}
+
 // ─── AUTH ROUTES ─────────────────────────────────────────────────
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -597,15 +650,15 @@ app.get('/api/clienti', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/clienti', authMiddleware, async (req, res) => {
+app.post('/api/clienti', authMiddleware, requirePermission('clienti:create'), async (req, res) => {
   try {
     const { nome, localita='', giro='', agente_id=null, autista_di_giro=null,
             note='', piva='', cond_pagamento='', e_fornitore=false, classificazione='' } = req.body;
     if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
     const r = await q(
-      `INSERT INTO clienti (nome,localita,giro,agente_id,autista_di_giro,note,piva,cond_pagamento,e_fornitore,classificazione,onboarding_stato,fido,sbloccato)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'in_attesa',0,FALSE) RETURNING id`,
-      [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, cond_pagamento, e_fornitore, classificazione]
+      `INSERT INTO clienti (nome,localita,giro,agente_id,autista_di_giro,note,piva,cond_pagamento,e_fornitore,classificazione,onboarding_stato,onboarding_checklist,fido,sbloccato)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'in_attesa',$11::jsonb,0,FALSE) RETURNING id`,
+      [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, cond_pagamento, e_fornitore, classificazione, JSON.stringify({})]
     );
     const u = req.user;
     await logDB(u.id, `${u.nome} ${u.cognome||''}`.trim(), 'Nuovo cliente', nome);
@@ -613,7 +666,7 @@ app.post('/api/clienti', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/clienti/:id', authMiddleware, async (req, res) => {
+app.put('/api/clienti/:id', authMiddleware, requirePermission('clienti:update'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { nome, localita='', giro='', agente_id=null, autista_di_giro=null,
@@ -628,25 +681,54 @@ app.put('/api/clienti/:id', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.patch('/api/clienti/:id/onboarding', authMiddleware, requireRole('admin','amministrazione'), async (req, res) => {
+app.patch('/api/clienti/:id/onboarding', authMiddleware, requirePermission('onboarding:manage'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const fidoRaw = req.body?.fido;
-    const fido = Number(fidoRaw);
-    if (!Number.isFinite(fido) || fido < 0) {
-      return res.status(400).json({ error: 'Fido non valido' });
+    const { stato, fido: fidoRaw, checklist = null, note = '' } = req.body || {};
+    const allowedStates = ['bozza','in_attesa','in_verifica','approvato','rifiutato','sospeso'];
+    const { rows: oldRows } = await q(
+      `SELECT id,nome,onboarding_stato,fido,sbloccato,onboarding_checklist
+       FROM clienti WHERE id=$1`, [id]
+    );
+    if (!oldRows.length) return res.status(404).json({ error: 'Cliente non trovato' });
+    const old = oldRows[0];
+
+    const newStato = (stato || old.onboarding_stato || 'in_attesa').toLowerCase();
+    if (!allowedStates.includes(newStato)) {
+      return res.status(400).json({ error: 'Stato onboarding non valido' });
     }
+
+    let newFido = Number(old.fido || 0);
+    if (fidoRaw !== undefined && fidoRaw !== null && fidoRaw !== '') {
+      const parsed = Number(fidoRaw);
+      if (!Number.isFinite(parsed) || parsed < 0) return res.status(400).json({ error: 'Fido non valido' });
+      newFido = parsed;
+    }
+    const checklistObj = (checklist && typeof checklist === 'object') ? checklist : (old.onboarding_checklist || {});
+    const isApproved = newStato === 'approvato';
     const approvatore = `${req.user.nome} ${req.user.cognome||''}`.trim();
     const r = await q(
       `UPDATE clienti
-       SET fido=$1, sbloccato=TRUE, onboarding_stato='approvato',
-           onboarding_approvato_da=$2, onboarding_approvato_at=NOW()
-       WHERE id=$3
-       RETURNING id,nome,fido,sbloccato,onboarding_stato,onboarding_approvato_da,onboarding_approvato_at`,
-      [fido, approvatore, id]
+       SET fido=$1,
+           sbloccato=$2,
+           onboarding_stato=$3,
+           onboarding_checklist=$4::jsonb,
+           onboarding_approvato_da=CASE WHEN $2 THEN $5 ELSE onboarding_approvato_da END,
+           onboarding_approvato_at=CASE WHEN $2 THEN NOW() ELSE onboarding_approvato_at END
+       WHERE id=$6
+       RETURNING id,nome,fido,sbloccato,onboarding_stato,onboarding_checklist,onboarding_approvato_da,onboarding_approvato_at`,
+      [newFido, isApproved, newStato, JSON.stringify(checklistObj), approvatore, id]
     );
-    if (!r.rows.length) return res.status(404).json({ error: 'Cliente non trovato' });
-    await logDB(req.user.id, approvatore, 'Approvazione onboarding cliente', `${r.rows[0].nome} | fido ${fido}`);
+    await logOnboardingChange({
+      clienteId: id,
+      reqUser: req.user,
+      oldStato: old.onboarding_stato,
+      newStato,
+      oldFido: Number(old.fido || 0),
+      newFido,
+      note: note || '',
+    });
+    await logDB(req.user.id, approvatore, 'Onboarding cliente', `${r.rows[0].nome} | ${old.onboarding_stato} -> ${newStato} | fido ${newFido}`);
     res.json(r.rows[0]);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -789,16 +871,16 @@ app.get('/api/ordini/:id', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/ordini', authMiddleware, async (req, res) => {
+app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), async (req, res) => {
   const client = await pool.connect();
   try {
     const { cliente_id, agente_id=null, autista_di_giro=null,
             data, stato='attesa', note='', data_non_certa=false, stef=false, linee=[] } = req.body;
     if (!cliente_id||!data) return res.status(400).json({ error: 'Campi obbligatori mancanti' });
     if (!linee.length) return res.status(400).json({ error: 'Almeno un prodotto richiesto' });
-    const c = await q('SELECT id, sbloccato FROM clienti WHERE id=$1', [cliente_id]);
+    const c = await q('SELECT id, sbloccato, onboarding_stato FROM clienti WHERE id=$1', [cliente_id]);
     if (!c.rows.length) return res.status(400).json({ error: 'Cliente non trovato' });
-    if (!c.rows[0].sbloccato) return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
+    if (!c.rows[0].sbloccato || c.rows[0].onboarding_stato !== 'approvato') return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
 
     await client.query('BEGIN');
     const r = await client.query(
@@ -823,16 +905,16 @@ app.post('/api/ordini', authMiddleware, async (req, res) => {
   } finally { client.release(); }
 });
 
-app.put('/api/ordini/:id', authMiddleware, async (req, res) => {
+app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), async (req, res) => {
   const client = await pool.connect();
   try {
     const id = parseInt(req.params.id);
     const { cliente_id, agente_id=null, autista_di_giro=null,
             data, stato, note='', data_non_certa=false, stef=false, linee=[] } = req.body;
     if (!cliente_id||!data||!stato) return res.status(400).json({ error: 'Campi mancanti' });
-    const c = await q('SELECT id, sbloccato FROM clienti WHERE id=$1', [cliente_id]);
+    const c = await q('SELECT id, sbloccato, onboarding_stato FROM clienti WHERE id=$1', [cliente_id]);
     if (!c.rows.length) return res.status(400).json({ error: 'Cliente non trovato' });
-    if (!c.rows[0].sbloccato) return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
+    if (!c.rows[0].sbloccato || c.rows[0].onboarding_stato !== 'approvato') return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
 
     await client.query('BEGIN');
     await client.query(
@@ -857,7 +939,7 @@ app.put('/api/ordini/:id', authMiddleware, async (req, res) => {
   } finally { client.release(); }
 });
 
-app.patch('/api/ordini/:id/stato', authMiddleware, async (req, res) => {
+app.patch('/api/ordini/:id/stato', authMiddleware, requirePermission('ordini:stato'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { stato } = req.body;
@@ -867,7 +949,7 @@ app.patch('/api/ordini/:id/stato', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/ordini/:id', authMiddleware, async (req, res) => {
+app.delete('/api/ordini/:id', authMiddleware, requirePermission('ordini:delete'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const row = await q(`SELECT o.id, c.nome as cn FROM ordini o JOIN clienti c ON o.cliente_id=c.id WHERE o.id=$1`, [id]);
