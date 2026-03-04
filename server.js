@@ -23,6 +23,11 @@ const PORT        = process.env.PORT       || 3000;
 const JWT_SECRET  = process.env.JWT_SECRET || 'norbalat-secret-change-in-production-2026';
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/norbalat';
 const SALT_ROUNDS = 10;
+const PIVA_LOOKUP_URL = process.env.PIVA_LOOKUP_URL || '';
+const PIVA_LOOKUP_TOKEN = process.env.PIVA_LOOKUP_TOKEN || '';
+const PIVA_LOOKUP_AUTH_HEADER = process.env.PIVA_LOOKUP_AUTH_HEADER || 'Authorization';
+const PIVA_LOOKUP_TOKEN_PREFIX = process.env.PIVA_LOOKUP_TOKEN_PREFIX || 'Bearer ';
+const PIVA_LOOKUP_EXTRA_HEADERS = process.env.PIVA_LOOKUP_EXTRA_HEADERS || '';
 
 const app  = express();
 const pool = new Pool({ connectionString: DATABASE_URL });
@@ -33,6 +38,56 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Helper query
 const q = (text, params) => pool.query(text, params);
+
+function normalizePiva(raw) {
+  return String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function parseExtraHeaders() {
+  if (!PIVA_LOOKUP_EXTRA_HEADERS) return {};
+  try {
+    const parsed = JSON.parse(PIVA_LOOKUP_EXTRA_HEADERS);
+    if (parsed && typeof parsed === 'object') return parsed;
+  } catch (_) {}
+  return {};
+}
+
+function pickFirst(obj, keys) {
+  if (!obj || typeof obj !== 'object') return '';
+  for (const key of keys) {
+    if (obj[key] !== undefined && obj[key] !== null && String(obj[key]).trim() !== '') {
+      return String(obj[key]).trim();
+    }
+  }
+  return '';
+}
+
+function extractLookupFields(payload, piva) {
+  const source = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
+  const nested = [
+    source,
+    source?.impresa,
+    source?.azienda,
+    source?.company,
+    source?.result,
+    source?.results?.[0],
+  ].filter(Boolean);
+  const merged = Object.assign({}, ...nested.reverse());
+  const nome = pickFirst(merged, ['denominazione', 'ragione_sociale', 'company_name', 'name', 'nome']) || '';
+  const localita = pickFirst(merged, ['localita', 'comune', 'sede_comune', 'city', 'indirizzo_comune']) || '';
+  const codiceFiscale = pickFirst(merged, ['codice_fiscale', 'codiceFiscale', 'cf', 'tax_code']) || '';
+  const codiceUnivoco = pickFirst(merged, ['codice_univoco', 'codiceUnivoco', 'sdi', 'codice_destinatario']) || '';
+  const pec = pickFirst(merged, ['pec', 'indirizzo_pec', 'email_pec']) || '';
+  return {
+    nome,
+    localita,
+    piva: pickFirst(merged, ['piva', 'partita_iva', 'vat_code', 'vatNumber']) || piva,
+    codice_fiscale: codiceFiscale,
+    codice_univoco: codiceUnivoco,
+    pec,
+    raw: payload,
+  };
+}
 
 // ─── SCHEMA ──────────────────────────────────────────────────────
 async function createSchema() {
@@ -58,6 +113,9 @@ async function createSchema() {
       autista_di_giro  INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
       note             TEXT DEFAULT '',
       piva             TEXT DEFAULT '',
+      codice_fiscale   TEXT DEFAULT '',
+      codice_univoco   TEXT DEFAULT '',
+      pec              TEXT DEFAULT '',
       cond_pagamento   TEXT DEFAULT '',
       e_fornitore      BOOLEAN DEFAULT FALSE,
       classificazione  TEXT DEFAULT '',
@@ -169,6 +227,9 @@ async function createSchema() {
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS sbloccato        BOOLEAN DEFAULT FALSE;
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS onboarding_approvato_da TEXT;
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS onboarding_approvato_at TIMESTAMPTZ;
+    ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS codice_fiscale   TEXT DEFAULT '';
+    ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS codice_univoco   TEXT DEFAULT '';
+    ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS pec              TEXT DEFAULT '';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS is_pedana      BOOLEAN DEFAULT FALSE;
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS nota_riga      TEXT DEFAULT '';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS unita_misura   TEXT DEFAULT 'pezzi';
@@ -650,19 +711,87 @@ app.get('/api/clienti', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.post('/api/clienti/lookup-piva', authMiddleware, requirePermission('clienti:create'), async (req, res) => {
+  try {
+    const pivaInput = normalizePiva(req.body?.piva || '');
+    if (!pivaInput) return res.status(400).json({ error: 'Partita IVA obbligatoria' });
+
+    if (!PIVA_LOOKUP_URL) {
+      return res.status(503).json({
+        error: 'Lookup P.IVA non configurato sul server',
+        details: 'Imposta PIVA_LOOKUP_URL e PIVA_LOOKUP_TOKEN nel file .env',
+      });
+    }
+
+    const endpoint = PIVA_LOOKUP_URL.includes('{piva}')
+      ? PIVA_LOOKUP_URL.replace('{piva}', encodeURIComponent(pivaInput))
+      : `${PIVA_LOOKUP_URL}${PIVA_LOOKUP_URL.includes('?') ? '&' : '?'}piva=${encodeURIComponent(pivaInput)}`;
+
+    const headers = { Accept: 'application/json', ...parseExtraHeaders() };
+    if (PIVA_LOOKUP_TOKEN) {
+      headers[PIVA_LOOKUP_AUTH_HEADER] = `${PIVA_LOOKUP_TOKEN_PREFIX}${PIVA_LOOKUP_TOKEN}`;
+    }
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    let extRes;
+    try {
+      extRes = await fetch(endpoint, { method: 'GET', headers, signal: ctrl.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const contentType = extRes.headers.get('content-type') || '';
+    const raw = contentType.includes('application/json')
+      ? await extRes.json()
+      : { text: await extRes.text() };
+    if (!extRes.ok) {
+      return res.status(502).json({
+        error: 'Errore servizio lookup P.IVA',
+        status: extRes.status,
+        provider_message: raw?.error || raw?.message || '',
+      });
+    }
+
+    const mapped = extractLookupFields(raw, pivaInput);
+    const found = !!(mapped.nome || mapped.localita || mapped.codice_fiscale || mapped.pec || mapped.codice_univoco);
+    res.json({
+      ok: true,
+      found,
+      piva: pivaInput,
+      data: {
+        nome: mapped.nome,
+        localita: mapped.localita,
+        piva: mapped.piva,
+        codice_fiscale: mapped.codice_fiscale,
+        codice_univoco: mapped.codice_univoco,
+        pec: mapped.pec,
+      },
+      provider: 'configured',
+    });
+  } catch (e) {
+    const msg = e.name === 'AbortError'
+      ? 'Timeout servizio lookup P.IVA'
+      : e.message;
+    res.status(500).json({ error: msg });
+  }
+});
+
 app.post('/api/clienti', authMiddleware, requirePermission('clienti:create'), async (req, res) => {
   try {
     const { nome, localita='', giro='', agente_id=null, autista_di_giro=null,
-            note='', piva='', cond_pagamento='', e_fornitore=false, classificazione='' } = req.body;
+            note='', piva='', codice_fiscale='', codice_univoco='', pec='',
+            cond_pagamento='', e_fornitore=false, classificazione='' } = req.body;
     if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
     const r = await q(
-      `INSERT INTO clienti (nome,localita,giro,agente_id,autista_di_giro,note,piva,cond_pagamento,e_fornitore,classificazione,onboarding_stato,onboarding_checklist,fido,sbloccato)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'in_attesa',$11::jsonb,0,FALSE) RETURNING id`,
-      [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, cond_pagamento, e_fornitore, classificazione, JSON.stringify({})]
+      `INSERT INTO clienti (nome,localita,giro,agente_id,autista_di_giro,note,piva,codice_fiscale,codice_univoco,pec,cond_pagamento,e_fornitore,classificazione,onboarding_stato,onboarding_checklist,fido,sbloccato)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'in_attesa',$14::jsonb,0,FALSE)
+       RETURNING id,nome,localita,giro,piva,codice_fiscale,codice_univoco,pec,onboarding_stato,fido,sbloccato`,
+      [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, JSON.stringify({})]
     );
     const u = req.user;
     await logDB(u.id, `${u.nome} ${u.cognome||''}`.trim(), 'Nuovo cliente', nome);
-    res.json({ id: r.rows[0].id, nome, localita, giro, onboarding_stato: 'in_attesa', fido: 0, sbloccato: false });
+    res.json(r.rows[0]);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -670,12 +799,13 @@ app.put('/api/clienti/:id', authMiddleware, requirePermission('clienti:update'),
   try {
     const id = parseInt(req.params.id);
     const { nome, localita='', giro='', agente_id=null, autista_di_giro=null,
-            note='', piva='', cond_pagamento='', e_fornitore=false, classificazione='' } = req.body;
+            note='', piva='', codice_fiscale='', codice_univoco='', pec='',
+            cond_pagamento='', e_fornitore=false, classificazione='' } = req.body;
     if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
     await q(
       `UPDATE clienti SET nome=$1,localita=$2,giro=$3,agente_id=$4,autista_di_giro=$5,
-       note=$6,piva=$7,cond_pagamento=$8,e_fornitore=$9,classificazione=$10 WHERE id=$11`,
-      [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, cond_pagamento, e_fornitore, classificazione, id]
+       note=$6,piva=$7,codice_fiscale=$8,codice_univoco=$9,pec=$10,cond_pagamento=$11,e_fornitore=$12,classificazione=$13 WHERE id=$14`,
+      [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, id]
     );
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }

@@ -1832,6 +1832,22 @@
           <input type="text" id="cl-piva" placeholder="es. 01234567890" maxlength="16">
         </div>
         <div class="field">
+          <label>&nbsp;</label>
+          <button class="btn btn-outline" type="button" onclick="lookupClienteByPiva()">Compila da P.IVA</button>
+        </div>
+        <div class="field">
+          <label>Codice Fiscale</label>
+          <input type="text" id="cl-cf" placeholder="es. 01234567890" maxlength="16">
+        </div>
+        <div class="field">
+          <label>Codice Univoco (SDI)</label>
+          <input type="text" id="cl-codice-univoco" placeholder="es. ABCD123" maxlength="12">
+        </div>
+        <div class="field">
+          <label>PEC</label>
+          <input type="email" id="cl-pec" placeholder="es. amministrazione@pecazienda.it">
+        </div>
+        <div class="field">
           <label>Condizioni di Pagamento</label>
           <input type="text" id="cl-condpag" placeholder="es. 30gg data fattura, RB 60gg…">
         </div>
@@ -2320,6 +2336,9 @@ function normalizeCliente(c) {
     autistaDiGiro: c.autista_di_giro||null,
     note: c.note||'',
     piva: c.piva||'',
+    codiceFiscale: c.codice_fiscale || c.codiceFiscale || '',
+    codiceUnivoco: c.codice_univoco || c.codiceUnivoco || '',
+    pec: c.pec || '',
     classificazione: c.classificazione||'',
     condPagamento: c.cond_pagamento||'',
     eFornitore: !!c.e_fornitore,
@@ -2825,6 +2844,9 @@ function openNewCliente() {
   document.getElementById('cl-giro').value = '';
   document.getElementById('cl-note').value = '';
   document.getElementById('cl-piva').value = '';
+  document.getElementById('cl-cf').value = '';
+  document.getElementById('cl-codice-univoco').value = '';
+  document.getElementById('cl-pec').value = '';
   document.getElementById('cl-classificazione').value = '';
   document.getElementById('cl-condpag').value = '';
   document.getElementById('cl-fido').value = '';
@@ -2842,6 +2864,9 @@ function openEditCliente(id) {
   document.getElementById('cl-giro').value = c.giro;
   document.getElementById('cl-note').value = c.note || '';
   document.getElementById('cl-piva').value = c.piva || '';
+  document.getElementById('cl-cf').value = c.codiceFiscale || '';
+  document.getElementById('cl-codice-univoco').value = c.codiceUnivoco || '';
+  document.getElementById('cl-pec').value = c.pec || '';
   document.getElementById('cl-classificazione').value = c.classificazione || '';
   document.getElementById('cl-condpag').value = c.condPagamento || '';
   document.getElementById('cl-fido').value = c.fido || 0;
@@ -2857,6 +2882,42 @@ function populateAgenteSelect(selectId, selectedId) {
     agenti.map(a => `<option value="${a.id}" ${a.id==selectedId?'selected':''}>${(a.nome+' '+(a.cognome||'')).trim()}</option>`).join('');
 }
 
+async function lookupClienteByPiva() {
+  const pivaEl = document.getElementById('cl-piva');
+  const piva = (pivaEl?.value || '').replace(/\s+/g, '').toUpperCase();
+  if (!piva) {
+    showToast('Inserisci la Partita IVA', 'warning');
+    return;
+  }
+  const btn = document.querySelector('#modal-cliente .btn.btn-outline[onclick=\"lookupClienteByPiva()\"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Ricerca...'; }
+  try {
+    const r = await api('POST', '/api/clienti/lookup-piva', { piva });
+    if (!r?.found) {
+      showToast('Nessun dato trovato per questa P.IVA', 'warning');
+      return;
+    }
+    const data = r.data || {};
+    const fill = (id, v) => {
+      if (!v) return;
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (!el.value || confirm(`Sostituire il campo ${id} con il valore trovato?`)) el.value = v;
+    };
+    fill('cl-nome', data.nome);
+    fill('cl-localita', data.localita);
+    fill('cl-piva', data.piva);
+    fill('cl-cf', data.codice_fiscale);
+    fill('cl-codice-univoco', data.codice_univoco);
+    fill('cl-pec', data.pec);
+    showToast('Dati da P.IVA caricati', 'success');
+  } catch (e) {
+    showToast(e.message, 'warning');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Compila da P.IVA'; }
+  }
+}
+
 async function saveCliente() {
   const nome  = document.getElementById('cl-nome').value.trim();
   if (!nome) { showToast('Inserisci il nome del cliente', 'warning'); return; }
@@ -2867,6 +2928,9 @@ async function saveCliente() {
     agente_id:      parseInt(document.getElementById('cl-agente').value)||null,
     note:           document.getElementById('cl-note').value.trim(),
     piva:           document.getElementById('cl-piva').value.trim(),
+    codice_fiscale: document.getElementById('cl-cf').value.trim(),
+    codice_univoco: document.getElementById('cl-codice-univoco').value.trim(),
+    pec:            document.getElementById('cl-pec').value.trim(),
     classificazione: document.getElementById('cl-classificazione').value,
     cond_pagamento: document.getElementById('cl-condpag').value.trim(),
     e_fornitore:    document.getElementById('cl-efornitore').checked,

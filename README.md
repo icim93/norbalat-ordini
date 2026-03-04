@@ -55,6 +55,13 @@ Crea un file `.env` (o impostale nel sistema):
 ```
 PORT=3000
 JWT_SECRET=cambia-questo-segreto-in-produzione
+
+# Lookup automatico anagrafica da Partita IVA (opzionale)
+PIVA_LOOKUP_URL=
+PIVA_LOOKUP_TOKEN=
+PIVA_LOOKUP_AUTH_HEADER=Authorization
+PIVA_LOOKUP_TOKEN_PREFIX=Bearer 
+PIVA_LOOKUP_EXTRA_HEADERS=
 ```
 
 ## API principali
@@ -64,6 +71,7 @@ JWT_SECRET=cambia-questo-segreto-in-produzione
 | POST | `/api/auth/login` | Login → JWT |
 | GET | `/api/utenti` | Lista utenti |
 | GET | `/api/clienti` | Lista clienti |
+| POST | `/api/clienti/lookup-piva` | Precompila dati cliente da P.IVA |
 | GET | `/api/prodotti` | Lista prodotti |
 | GET | `/api/ordini` | Lista ordini (filtri: data, stato, giro) |
 | POST | `/api/ordini` | Nuovo ordine |
