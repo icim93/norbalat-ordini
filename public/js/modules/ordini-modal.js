@@ -637,16 +637,6 @@ function populateOrderSelects(clienteId, agenteId) {
 }
 
 
-function addOrderLine() {
-  orderLines.push({ prodId: '', qty: 1 });
-  renderOrderLines();
-}
-
-function removeOrderLine(i) {
-  orderLines.splice(i, 1);
-  renderOrderLines();
-}
-
 async function saveOrder() {
   const clienteId   = parseInt(document.getElementById('ord-cliente').value);
   const agenteId    = parseInt(document.getElementById('ord-agente').value) || null;
