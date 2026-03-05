@@ -751,6 +751,36 @@
   .pedana-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(30,139,195,0.1); }
   .pedana-readonly { font-size: 13px; color: var(--text1); line-height: 1.5; }
   .pedana-empty { color: var(--text3); font-style: italic; }
+  .truck-shell {
+    border: 2px solid #9fb3c8;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #f8fbff 0%, #eef5fb 100%);
+    padding: 12px;
+    position: relative;
+  }
+  .truck-shell::before {
+    content: "";
+    position: absolute;
+    right: -26px;
+    top: 22px;
+    width: 26px;
+    height: 52px;
+    border: 2px solid #9fb3c8;
+    border-left: none;
+    border-radius: 0 12px 12px 0;
+    background: linear-gradient(180deg, #f1f7fd 0%, #e7eff8 100%);
+  }
+  .truck-legend {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text3);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 700;
+  }
   #camion-selector {
     display: flex;
     flex-wrap: wrap;
@@ -1257,6 +1287,7 @@
                 <option value="futuro">Futuri</option>
                 <option value="scaduto">Scaduti</option>
               </select>
+              <button class="btn btn-outline" onclick="exportListiniPdf()">📄 PDF</button>
               <button class="btn btn-green" id="listini-new-btn" onclick="openNewListino()">＋ Nuovo Listino</button>
             </div>
           </div>
@@ -1582,6 +1613,30 @@
           </div>
         </div>
       </div><!-- /page-impostazioni -->
+
+      <!-- ─── PAGE: Sperimentale ─── -->
+      <div class="page" id="page-sperimentale">
+        <div class="page-header">
+          <div class="page-title">Sperimentale</div>
+          <div class="page-sub">Acquisizione dati da sorgente esterna</div>
+        </div>
+        <div class="card" style="max-width:980px;">
+          <div class="card-header">
+            <div class="card-title">🌐 Fonte esterna</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-outline" onclick="loadExperimentalSource()">Aggiorna</button>
+            </div>
+          </div>
+          <div style="padding:16px 20px;">
+            <div class="field form-full">
+              <label>URL sorgente (opzionale)</label>
+              <input type="text" id="experimental-url" placeholder="https://...">
+            </div>
+            <div id="experimental-meta" style="font-size:12px;color:var(--text3);margin:8px 0 10px;"></div>
+            <pre id="experimental-preview" style="white-space:pre-wrap;word-break:break-word;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:420px;overflow:auto;font-size:12px;"></pre>
+          </div>
+        </div>
+      </div>
 
       <!-- ─── PAGE: Il mio profilo ─── -->
       <div class="page" id="page-profilo">
@@ -2024,6 +2079,10 @@
           <label>Prodotto *</label>
           <select id="ls-prodotto"></select>
         </div>
+        <div class="field form-full" id="ls-prodotti-multi-wrap">
+          <label>Applica anche ad altri prodotti (opzionale)</label>
+          <select id="ls-prodotti-multi" multiple style="min-height:110px;"></select>
+        </div>
         <div class="field">
           <label>Ambito</label>
           <select id="ls-scope" onchange="onListinoScopeChange()">
@@ -2045,11 +2104,19 @@
           <label>Giro</label>
           <select id="ls-giro"></select>
         </div>
-        <div class="field">
+        <div class="field" id="ls-cliente-wrap">
           <label>Cliente</label>
           <select id="ls-cliente">
             <option value="">Listino base (tutti)</option>
           </select>
+        </div>
+        <div class="field form-full" id="ls-clienti-multi-wrap" style="display:none;">
+          <label>Clienti (multi selezione)</label>
+          <select id="ls-clienti-multi" multiple style="min-height:110px;"></select>
+        </div>
+        <div class="field form-full">
+          <label>Escludi clienti (opzionale)</label>
+          <select id="ls-clienti-excluded" multiple style="min-height:110px;"></select>
         </div>
         <div class="field" id="ls-base-wrap">
           <label>Prezzo base</label>
@@ -2086,6 +2153,66 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-listini')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: CRM Cliente -->
+<div class="modal-overlay" id="modal-crm-cliente">
+  <div class="modal" style="max-width:920px;">
+    <div class="modal-header">
+      <div class="modal-title" id="crm-cliente-title">CRM Cliente</div>
+      <button class="modal-close" onclick="closeModal('modal-crm-cliente')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="field">
+          <label>Tipo</label>
+          <select id="crm-tipo">
+            <option value="richiesta">Richiesta</option>
+            <option value="passaggio">Passaggio commerciale</option>
+            <option value="mancante">Prodotto non disponibile</option>
+            <option value="rifiuto">Cliente non interessato</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Esito</label>
+          <input type="text" id="crm-esito" placeholder="es. in attesa, da richiamare, chiuso">
+        </div>
+        <div class="field form-full">
+          <label>Richiesta / Dettaglio</label>
+          <input type="text" id="crm-richiesta" placeholder="es. richiesta prodotto X">
+        </div>
+        <div class="field form-full">
+          <label>Motivo eventuale rifiuto/non acquisto</label>
+          <input type="text" id="crm-motivo" placeholder="es. prezzo, tempi, fornitore concorrente">
+        </div>
+        <div class="field form-full">
+          <label>Note</label>
+          <textarea id="crm-note" placeholder="Note operative..." style="min-height:72px;"></textarea>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+        <button class="btn btn-green btn-sm" onclick="saveCrmEvento()">Aggiungi evento CRM</button>
+      </div>
+      <div style="margin-top:12px;border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:320px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Tipo</th>
+              <th>Esito</th>
+              <th>Richiesta</th>
+              <th>Motivo</th>
+              <th>Utente</th>
+            </tr>
+          </thead>
+          <tbody id="crm-eventi-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-crm-cliente')">Chiudi</button>
     </div>
   </div>
 </div>
@@ -2358,6 +2485,8 @@ let state = {
   listinoProdottoId: null,
   emailNotifications: null,
   emailNotificationsLoaded: false,
+  crmClienteId: null,
+  crmEventi: [],
 };
 
 function canSeeDevPanel() {
@@ -2477,10 +2606,11 @@ function getListinoPrezzo(prodottoId, clienteId, dataRif) {
     if (l.scope === 'giro_cliente') return !!clienteId && !!giro && l.clienteId === clienteId && l.giro === giro;
     return false;
   });
-  if (!validi.length) return null;
-  validi.sort((a, b) => (a.validoDal < b.validoDal ? 1 : (a.validoDal > b.validoDal ? -1 : b.id - a.id)));
+  const validiNonEsclusi = validi.filter(l => !(Array.isArray(l.excludedClientIds) && l.excludedClientIds.includes(Number(clienteId))));
+  if (!validiNonEsclusi.length) return null;
+  validiNonEsclusi.sort((a, b) => (a.validoDal < b.validoDal ? 1 : (a.validoDal > b.validoDal ? -1 : b.id - a.id)));
   const best = {};
-  validi.forEach(l => { if (!best[l.scope]) best[l.scope] = l; });
+  validiNonEsclusi.forEach(l => { if (!best[l.scope]) best[l.scope] = l; });
   const chain = ['all', 'giro', 'cliente', 'giro_cliente'];
   let price = null;
   chain.forEach(k => { if (best[k]) price = applyListinoRuleClient(price, best[k]); });
@@ -2610,6 +2740,7 @@ function normalizeListino(l) {
     validoDal: (l.valido_dal || '').substring(0, 10),
     validoAl: l.valido_al ? String(l.valido_al).substring(0, 10) : '',
     note: l.note || '',
+    excludedClientIds: Array.isArray(l.excluded_client_ids) ? l.excluded_client_ids.map(x => Number(x)).filter(Number.isFinite) : [],
     prodottoNome: l.prodotto_nome || '',
     clienteNome: l.cliente_nome || '',
   };
@@ -2629,6 +2760,7 @@ function normalizeOrdine(o) {
     dataNonCerta: !!o.data_non_certa,
     stef: !!o.stef,
     linee: (o.linee||[]).map(l => ({
+      id: l.id,
       prodId: l.prodotto_id,
       qty: l.qty,
       prezzoUnitario: (l.prezzo_unitario !== undefined && l.prezzo_unitario !== null) ? Number(l.prezzo_unitario) : null,
@@ -2742,6 +2874,7 @@ const navConfigs = {
     { page: 'piano', icon: '🚛', label: 'Piano Carico' },
     { page: 'report', icon: '📊', label: 'Report' },
     { page: 'impostazioni', icon: '⚙️', label: 'Impostazioni' },
+    { page: 'sperimentale', icon: '🧪', label: 'Sperimentale' },
     { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
   amministrazione: [
@@ -2766,6 +2899,7 @@ const navConfigs = {
   direzione: [
     { page: 'listini', icon: '💶', label: 'Listini' },
     { page: 'report', icon: '📊', label: 'Report' },
+    { page: 'sperimentale', icon: '🧪', label: 'Sperimentale' },
     { page: 'ordini', icon: '📋', label: 'Ordini' },
     { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
   ],
@@ -2855,6 +2989,7 @@ function renderPage(page) {
   if (page === 'piano') renderPianoPage();
   if (page === 'report') renderReport();
   if (page === 'impostazioni') renderImpostazioni();
+  if (page === 'sperimentale') renderSperimentale();
   if (page === 'profilo') renderProfilo();
 }
 
@@ -2895,6 +3030,16 @@ function formatDate(d) {
   if (!d) return '';
   const [y,m,dd] = d.split('-');
   return `${dd}/${m}/${y}`;
+}
+
+function formatDateTime(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    return `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
+  } catch (_) {
+    return String(ts);
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -3088,6 +3233,7 @@ function renderClientiTable() {
         ${canManageOnboarding ? `<button class="btn btn-green btn-sm" onclick="approveClienteOnboarding(${c.id})">✅</button>` : ''}
         ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" onclick="setClienteOnboardingStatus(${c.id},'rifiutato')">⛔</button>` : ''}
         ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" onclick="setClienteOnboardingStatus(${c.id},'sospeso')">⏸️</button>` : ''}
+        <button class="btn btn-outline btn-sm" onclick="openCrmCliente(${c.id})">📇</button>
         <button class="btn btn-outline btn-sm" onclick="openEditCliente(${c.id})">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="deleteCliente(${c.id})">🗑️</button>
       </td>
@@ -3314,30 +3460,46 @@ function listinoStatoBadge(l) {
 }
 
 function fillListinoSelectors(selectedProdottoId = null) {
+  const prodotti = [...state.prodotti].sort((a, b) => a.nome.localeCompare(b.nome));
+  const clienti = [...state.clienti].sort((a, b) => a.nome.localeCompare(b.nome));
   const selProdotto = document.getElementById('ls-prodotto');
   if (selProdotto) {
-    const prodotti = [...state.prodotti].sort((a, b) => a.nome.localeCompare(b.nome));
     selProdotto.innerHTML = '<option value="">Seleziona prodotto</option>' +
       prodotti.map(p => `<option value="${p.id}">[${p.codice}] ${p.nome}</option>`).join('');
     if (selectedProdottoId) selProdotto.value = String(selectedProdottoId);
   }
+  const selProdMulti = document.getElementById('ls-prodotti-multi');
+  if (selProdMulti) {
+    selProdMulti.innerHTML = prodotti.map(p => `<option value="${p.id}">[${p.codice}] ${p.nome}</option>`).join('');
+  }
   const selCliente = document.getElementById('ls-cliente');
   if (selCliente) {
     selCliente.innerHTML = '<option value="">Seleziona cliente</option>' +
-      state.clienti.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+      clienti.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+  }
+  const selCliMulti = document.getElementById('ls-clienti-multi');
+  if (selCliMulti) {
+    selCliMulti.innerHTML = clienti.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+  }
+  const selCliExc = document.getElementById('ls-clienti-excluded');
+  if (selCliExc) {
+    selCliExc.innerHTML = clienti.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
   }
   const selGiro = document.getElementById('ls-giro');
   if (selGiro) {
-    const giri = [...new Set(state.clienti.map(c => c.giro).filter(Boolean))].sort();
+    const giri = [...new Set(clienti.map(c => c.giro).filter(Boolean))].sort();
     selGiro.innerHTML = '<option value="">Seleziona giro</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
   }
 }
 
 function onListinoScopeChange() {
   const scope = document.getElementById('ls-scope')?.value || 'all';
-  const clienteWrap = document.getElementById('ls-cliente')?.closest('.field');
+  const clienteWrap = document.getElementById('ls-cliente-wrap');
+  const clientiMultiWrap = document.getElementById('ls-clienti-multi-wrap');
   const giroWrap = document.getElementById('ls-giro-wrap');
-  if (clienteWrap) clienteWrap.style.display = (scope === 'cliente' || scope === 'giro_cliente') ? '' : 'none';
+  const needClient = (scope === 'cliente' || scope === 'giro_cliente');
+  if (clienteWrap) clienteWrap.style.display = needClient ? '' : 'none';
+  if (clientiMultiWrap) clientiMultiWrap.style.display = (!editingListinoId && needClient) ? '' : 'none';
   if (giroWrap) giroWrap.style.display = (scope === 'giro' || scope === 'giro_cliente') ? '' : 'none';
 }
 
@@ -3361,6 +3523,14 @@ function listinoScopeLabel(l) {
   return '-';
 }
 
+function listinoExcludedLabel(l) {
+  const ids = Array.isArray(l.excludedClientIds) ? l.excludedClientIds : [];
+  if (!ids.length) return '';
+  const nomi = ids.slice(0, 3).map(id => state.clienti.find(c => c.id === id)?.nome || `#${id}`);
+  const extra = ids.length > 3 ? ` +${ids.length - 3}` : '';
+  return ` | Esclusi: ${nomi.join(', ')}${extra}`;
+}
+
 function listinoRuleLabel(l) {
   if (l.mode === 'base_markup') return `Base ${eur(l.basePrice)} + ${Number(l.markupPct || 0).toFixed(2)}%`;
   if (l.mode === 'discount_pct') return `Sconto ${Number(l.discountPct || 0).toFixed(2)}%`;
@@ -3382,10 +3552,13 @@ function openListiniModal(prodottoId = null) {
   if (!canManageListini()) return;
   editingListinoId = null;
   document.getElementById('modal-listino-title').textContent = 'Nuovo listino';
+  const multiProdWrap = document.getElementById('ls-prodotti-multi-wrap');
+  if (multiProdWrap) multiProdWrap.style.display = '';
   fillListinoSelectors(prodottoId);
   document.getElementById('ls-scope').value = 'all';
   document.getElementById('ls-mode').value = 'base_markup';
   document.getElementById('ls-prodotto').value = prodottoId ? String(prodottoId) : '';
+  document.querySelectorAll('#ls-prodotti-multi option, #ls-clienti-multi option, #ls-clienti-excluded option').forEach(o => o.selected = false);
   document.getElementById('ls-base').value = '';
   document.getElementById('ls-markup').value = '';
   document.getElementById('ls-discount').value = '';
@@ -3406,6 +3579,8 @@ function editListinoEntry(id) {
   if (!l) return;
   fillListinoSelectors(l.prodottoId);
   editingListinoId = id;
+  const multiProdWrap = document.getElementById('ls-prodotti-multi-wrap');
+  if (multiProdWrap) multiProdWrap.style.display = 'none';
   document.getElementById('modal-listino-title').textContent = 'Modifica listino';
   document.getElementById('ls-prodotto').value = l.prodottoId || '';
   document.getElementById('ls-scope').value = l.scope || 'all';
@@ -3419,6 +3594,10 @@ function editListinoEntry(id) {
   document.getElementById('ls-dal').value = l.validoDal || today();
   document.getElementById('ls-al').value = l.validoAl || '';
   document.getElementById('ls-note').value = l.note || '';
+  document.querySelectorAll('#ls-prodotti-multi option').forEach(o => o.selected = false);
+  document.querySelectorAll('#ls-clienti-multi option').forEach(o => o.selected = false);
+  const excluded = new Set(Array.isArray(l.excludedClientIds) ? l.excludedClientIds.map(Number) : []);
+  document.querySelectorAll('#ls-clienti-excluded option').forEach(o => o.selected = excluded.has(Number(o.value)));
   onListinoScopeChange();
   onListinoModeChange();
   openModal('modal-listini');
@@ -3427,9 +3606,14 @@ function editListinoEntry(id) {
 async function saveListinoEntry() {
   if (!canManageListini()) return;
   const prodottoId = document.getElementById('ls-prodotto').value ? parseInt(document.getElementById('ls-prodotto').value) : null;
+  const prodottiExtra = [...document.querySelectorAll('#ls-prodotti-multi option:checked')].map(o => parseInt(o.value)).filter(Number.isFinite);
+  const prodottoIds = [...new Set([prodottoId, ...prodottiExtra].filter(Number.isFinite))];
   const scope = document.getElementById('ls-scope').value;
   const mode = document.getElementById('ls-mode').value;
   const clienteId = document.getElementById('ls-cliente').value ? parseInt(document.getElementById('ls-cliente').value) : null;
+  const clienteIdsMulti = [...document.querySelectorAll('#ls-clienti-multi option:checked')].map(o => parseInt(o.value)).filter(Number.isFinite);
+  const clienteIds = [...new Set([clienteId, ...clienteIdsMulti].filter(Number.isFinite))];
+  const excludedClientIds = [...document.querySelectorAll('#ls-clienti-excluded option:checked')].map(o => parseInt(o.value)).filter(Number.isFinite);
   const giro = (document.getElementById('ls-giro').value || '').trim();
   const basePrice = document.getElementById('ls-base').value !== '' ? parseFloat(document.getElementById('ls-base').value) : null;
   const markupPct = document.getElementById('ls-markup').value !== '' ? parseFloat(document.getElementById('ls-markup').value) : 0;
@@ -3437,7 +3621,7 @@ async function saveListinoEntry() {
   const finalPrice = document.getElementById('ls-final').value !== '' ? parseFloat(document.getElementById('ls-final').value) : null;
   const validoDal = document.getElementById('ls-dal').value;
   const validoAl = document.getElementById('ls-al').value || null;
-  if (!prodottoId || !validoDal) {
+  if (!prodottoIds.length || !validoDal) {
     showToast('Compila i campi obbligatori', 'warning');
     return;
   }
@@ -3445,7 +3629,7 @@ async function saveListinoEntry() {
     showToast('Seleziona il giro', 'warning');
     return;
   }
-  if ((scope === 'cliente' || scope === 'giro_cliente') && !clienteId) {
+  if ((scope === 'cliente' || scope === 'giro_cliente') && !clienteIds.length) {
     showToast('Seleziona il cliente', 'warning');
     return;
   }
@@ -3467,9 +3651,12 @@ async function saveListinoEntry() {
   }
   const body = {
     prodotto_id: prodottoId,
+    prodotto_ids: prodottoIds,
     scope,
     mode,
     cliente_id: clienteId,
+    cliente_ids: clienteIds,
+    excluded_client_ids: excludedClientIds,
     giro,
     prezzo: finalPrice,
     final_price: finalPrice,
@@ -3488,7 +3675,11 @@ async function saveListinoEntry() {
       if (idx !== -1) state.listini[idx] = normalizeListino(saved);
     } else {
       saved = await api('POST', '/api/listini', body);
-      state.listini.push(normalizeListino(saved));
+      if (saved?.rows && Array.isArray(saved.rows)) {
+        state.listini.push(...saved.rows.map(normalizeListino));
+      } else {
+        state.listini.push(normalizeListino(saved));
+      }
     }
     editingListinoId = null;
     closeModal('modal-listini');
@@ -3552,6 +3743,7 @@ function renderListiniPage() {
         p.nome || '',
         p.categoria || '',
         listinoScopeLabel(l),
+        listinoExcludedLabel(l),
         l.note || ''
       ].join(' ').toLowerCase();
       return text.includes(q);
@@ -3577,7 +3769,7 @@ function renderListiniPage() {
     return `
       <tr>
         <td><b>${prodottoLabel}</b></td>
-        <td>${listinoScopeLabel(l)}</td>
+        <td>${listinoScopeLabel(l)}${listinoExcludedLabel(l)}</td>
         <td>${listinoRuleLabel(l)}</td>
         <td style="font-family:'DM Mono',monospace;">${listinoPreviewPrezzo(l)}</td>
         <td>${l.validoDal || '-'}</td>
@@ -3591,6 +3783,68 @@ function renderListiniPage() {
       </tr>
     `;
   }).join('') : '<tr><td colspan="9" style="color:var(--text3);">Nessun listino configurato</td></tr>';
+}
+
+function exportListiniPdf() {
+  const rows = [...state.listini].sort((a, b) => {
+    const pa = getProdotto(a.prodottoId).nome || '';
+    const pb = getProdotto(b.prodottoId).nome || '';
+    if (pa !== pb) return pa.localeCompare(pb);
+    return (a.validoDal || '').localeCompare(b.validoDal || '');
+  });
+  const tableRows = rows.map(l => {
+    const p = getProdotto(l.prodottoId);
+    return `<tr>
+      <td>${p.codice || ''}</td>
+      <td>${p.nome || ''}</td>
+      <td>${listinoScopeLabel(l)}${listinoExcludedLabel(l)}</td>
+      <td>${listinoRuleLabel(l)}</td>
+      <td>${listinoPreviewPrezzo(l)}</td>
+      <td>${l.validoDal || '-'}</td>
+      <td>${l.validoAl || '-'}</td>
+    </tr>`;
+  }).join('');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Listino Norbalat</title>
+    <style>
+      body{font-family:Arial,sans-serif;color:#102a43;margin:24px}
+      h1{margin:0 0 4px;font-size:24px} .sub{color:#486581;font-size:12px;margin-bottom:18px}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th,td{border:1px solid #d9e2ec;padding:6px 8px;vertical-align:top}
+      th{background:#f0f4f8;text-align:left}
+    </style></head><body>
+    <h1>Listino commerciale</h1><div class="sub">Generato il ${new Date().toLocaleString('it-IT')}</div>
+    <table><thead><tr><th>Codice</th><th>Prodotto</th><th>Ambito</th><th>Regola</th><th>Prezzo</th><th>Dal</th><th>Al</th></tr></thead>
+    <tbody>${tableRows || '<tr><td colspan="7">Nessun dato</td></tr>'}</tbody></table>
+    </body></html>`;
+  const w = window.open('', '_blank');
+  if (!w) return showToast('Popup bloccato dal browser', 'warning');
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 250);
+}
+
+async function renderSperimentale() {
+  const pre = document.getElementById('experimental-preview');
+  if (pre && !pre.textContent.trim()) {
+    pre.textContent = 'Premi "Aggiorna" per acquisire i dati.';
+  }
+}
+
+async function loadExperimentalSource() {
+  const url = (document.getElementById('experimental-url')?.value || '').trim();
+  const meta = document.getElementById('experimental-meta');
+  const pre = document.getElementById('experimental-preview');
+  if (meta) meta.textContent = 'Caricamento...';
+  try {
+    const q = url ? `?url=${encodeURIComponent(url)}` : '';
+    const r = await api('GET', `/api/experimental/source${q}`);
+    if (meta) meta.textContent = `${r.source || ''} · ${r.content_type || ''}`;
+    pre.textContent = typeof r.preview === 'string' ? r.preview : JSON.stringify(r.preview, null, 2);
+  } catch (e) {
+    if (meta) meta.textContent = `Errore: ${e.message}`;
+    if (pre) pre.textContent = '';
+  }
 }
 
 function openNewProdotto() {
@@ -3641,6 +3895,65 @@ async function saveProdotto() {
     renderProdottiTable();
     renderListiniPage();
   } catch(e) { showToast(e.message, 'warning'); }
+}
+
+function renderCrmEventiTable() {
+  const body = document.getElementById('crm-eventi-body');
+  if (!body) return;
+  body.innerHTML = state.crmEventi.length ? state.crmEventi.map(e => `
+    <tr>
+      <td>${formatDateTime(e.created_at || e.createdAt)}</td>
+      <td>${e.tipo || ''}</td>
+      <td>${e.esito || ''}</td>
+      <td>${e.richiesta || ''}${e.note ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">${e.note}</div>` : ''}</td>
+      <td>${e.motivo || ''}</td>
+      <td>${e.user_name || ''}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="6" style="color:var(--text3);">Nessun evento CRM</td></tr>';
+}
+
+async function openCrmCliente(clienteId) {
+  state.crmClienteId = clienteId;
+  state.crmEventi = [];
+  const c = getCliente(clienteId);
+  document.getElementById('crm-cliente-title').textContent = `CRM Cliente — ${c.nome}`;
+  ['crm-esito','crm-richiesta','crm-motivo','crm-note'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  try {
+    const rows = await api('GET', `/api/clienti/${clienteId}/crm-eventi`);
+    state.crmEventi = rows || [];
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
+  renderCrmEventiTable();
+  openModal('modal-crm-cliente');
+}
+
+async function saveCrmEvento() {
+  if (!state.crmClienteId) return;
+  const body = {
+    tipo: document.getElementById('crm-tipo').value,
+    esito: document.getElementById('crm-esito').value.trim(),
+    richiesta: document.getElementById('crm-richiesta').value.trim(),
+    motivo: document.getElementById('crm-motivo').value.trim(),
+    note: document.getElementById('crm-note').value.trim(),
+  };
+  if (!body.richiesta && !body.note && !body.motivo) {
+    showToast('Inserisci almeno un dettaglio CRM', 'warning');
+    return;
+  }
+  try {
+    const saved = await api('POST', `/api/clienti/${state.crmClienteId}/crm-eventi`, body);
+    state.crmEventi.unshift(saved);
+    renderCrmEventiTable();
+    ['crm-esito','crm-richiesta','crm-motivo','crm-note'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    showToast('Evento CRM salvato', 'success');
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
 }
 
 async function deleteProdotto(id) {
@@ -4619,6 +4932,7 @@ function openDettaglio(id) {
   footer.innerHTML = `
     <button class="btn btn-outline" onclick="closeModal('modal-dettaglio')">Chiudi</button>
     ${canConferma ? `<button class="btn btn-green" onclick="confermaConsegna(${o.id})">✅ Conferma Consegna</button>` : ''}
+    ${canConferma ? `<button class="btn btn-outline" onclick="consegnaParziale(${o.id})">↪️ Consegna parziale</button>` : ''}
     <button class="btn btn-orange" onclick="closeModal('modal-dettaglio');openEditOrder(${o.id})">✏️ Modifica</button>
   `;
 
@@ -4635,6 +4949,33 @@ async function confermaConsegna(id) {
     closeModal('modal-dettaglio');
     renderPage(state.currentPage);
   } catch(e) { showToast(e.message, 'warning'); }
+}
+
+async function consegnaParziale(id) {
+  const o = state.ordini.find(x => x.id === id);
+  if (!o) return;
+  const delivered = {};
+  for (const l of o.linee) {
+    const p = getProdotto(l.prodId);
+    const v = prompt(`Quantità consegnata per ${p.nome} (ordinata: ${l.qty})`, String(l.qty));
+    if (v === null) return;
+    const n = Number(String(v).replace(',', '.'));
+    if (!Number.isFinite(n) || n < 0 || n > Number(l.qty)) {
+      showToast(`Quantità non valida per ${p.nome}`, 'warning');
+      return;
+    }
+    delivered[l.id] = n;
+  }
+  const note = prompt('Note consegna parziale (opzionale)', '') || '';
+  try {
+    const r = await api('POST', `/api/ordini/${id}/consegna-parziale`, { delivered, note });
+    showToast(`Consegna parziale registrata. Riporto su ordine #${r.new_order_id}`, 'success');
+    await loadAllData();
+    closeModal('modal-dettaglio');
+    renderPage(state.currentPage);
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -4946,8 +5287,14 @@ function renderPianoBody(isEditor, isConferma) {
         <div style="font-size:13px;color:var(--text3);">${pieneCnt} / ${totCnt} pedane occupate</div>
       </div>
       <div style="padding:16px;">
-        <div class="pedane-grid" style="display:grid;grid-template-columns:repeat(${nCols},1fr);gap:10px;">
-          ${pedaneHtml}
+        <div class="truck-shell">
+          <div class="truck-legend">
+            <span>Retro camion</span>
+            <span>Cabina</span>
+          </div>
+          <div class="pedane-grid" style="display:grid;grid-template-columns:repeat(${nCols},1fr);gap:10px;">
+            ${pedaneHtml}
+          </div>
         </div>
       </div>
     </div>

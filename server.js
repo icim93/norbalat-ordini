@@ -38,6 +38,7 @@ const SMTP_FROM = process.env.SMTP_FROM || '';
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'Norbalat Ordini';
 const NOTIFY_EMAIL_TO = process.env.NOTIFY_EMAIL_TO || '';
 const NOTIFY_TIMEZONE = process.env.NOTIFY_TIMEZONE || 'Europe/Rome';
+const EXPERIMENTAL_SOURCE_URL = process.env.EXPERIMENTAL_SOURCE_URL || '';
 
 const app  = express();
 const pool = new Pool({ connectionString: DATABASE_URL });
@@ -409,6 +410,19 @@ async function createSchema() {
       ts          TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS clienti_crm_eventi (
+      id          SERIAL PRIMARY KEY,
+      cliente_id  INTEGER NOT NULL REFERENCES clienti(id) ON DELETE CASCADE,
+      tipo        TEXT NOT NULL DEFAULT 'richiesta',
+      esito       TEXT DEFAULT '',
+      richiesta   TEXT DEFAULT '',
+      motivo      TEXT DEFAULT '',
+      note        TEXT DEFAULT '',
+      user_id     INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      user_name   TEXT NOT NULL DEFAULT 'Sistema',
+      created_at  TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS listini (
       id          SERIAL PRIMARY KEY,
       prodotto_id INTEGER NOT NULL REFERENCES prodotti(id) ON DELETE CASCADE,
@@ -421,6 +435,7 @@ async function createSchema() {
       markup_pct  NUMERIC DEFAULT 0,
       discount_pct NUMERIC DEFAULT 0,
       final_price NUMERIC,
+      excluded_client_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
       valido_dal  DATE NOT NULL DEFAULT CURRENT_DATE,
       valido_al   DATE,
       note        TEXT DEFAULT '',
@@ -467,6 +482,7 @@ async function createSchema() {
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS markup_pct      NUMERIC DEFAULT 0;
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS discount_pct    NUMERIC DEFAULT 0;
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS final_price     NUMERIC;
+    ALTER TABLE listini     ADD COLUMN IF NOT EXISTS excluded_client_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE listini     ALTER COLUMN prezzo DROP NOT NULL;
     UPDATE listini SET scope = CASE WHEN cliente_id IS NULL THEN 'all' ELSE 'cliente' END WHERE scope IS NULL OR scope = '';
     UPDATE listini SET mode = 'final_price' WHERE mode IS NULL OR mode = '';
@@ -855,6 +871,30 @@ function asNum(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+function asIntArray(v) {
+  if (!Array.isArray(v)) return [];
+  return [...new Set(v.map(x => parseInt(x, 10)).filter(Number.isFinite))];
+}
+
+async function getNextDeliveryDate(giro, fromDateStr = null) {
+  const start = fromDateStr ? new Date(fromDateStr) : new Date();
+  const { rows } = await q('SELECT giorni FROM giri_calendario WHERE giro=$1 LIMIT 1', [String(giro || '').trim()]);
+  const giorni = Array.isArray(rows[0]?.giorni) ? rows[0].giorni : [];
+  if (!giorni.length) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+  for (let delta = 1; delta <= 14; delta++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + delta);
+    if (giorni.includes(d.getDay())) return d.toISOString().slice(0, 10);
+  }
+  const fb = new Date(start);
+  fb.setDate(fb.getDate() + 1);
+  return fb.toISOString().slice(0, 10);
+}
+
 function applyListinoRule(currentPrice, rule) {
   const mode = rule.mode || 'final_price';
   if (mode === 'final_price') {
@@ -896,8 +936,13 @@ async function resolvePrezzoUnitario({ prodottoId, clienteId, data, client = nul
   `;
   const { rows } = await run(sql, [prodottoId, data, giro, clienteId]);
   if (!rows.length) return null;
+  const filtered = rows.filter(r => {
+    const excluded = Array.isArray(r.excluded_client_ids) ? r.excluded_client_ids : [];
+    return !excluded.includes(Number(clienteId));
+  });
+  if (!filtered.length) return null;
   const best = {};
-  for (const r of rows) {
+  for (const r of filtered) {
     const key = r.scope || 'all';
     if (!best[key]) best[key] = r;
   }
@@ -1206,6 +1251,38 @@ app.delete('/api/clienti/:id', authMiddleware, requireRole('admin'), async (req,
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/clienti/:id/crm-eventi', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { rows } = await q(
+      `SELECT * FROM clienti_crm_eventi WHERE cliente_id=$1 ORDER BY created_at DESC, id DESC LIMIT 300`,
+      [id]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/clienti/:id/crm-eventi', authMiddleware, requirePermission('clienti:update'), async (req, res) => {
+  try {
+    const clienteId = parseInt(req.params.id);
+    const {
+      tipo = 'richiesta',
+      esito = '',
+      richiesta = '',
+      motivo = '',
+      note = '',
+    } = req.body || {};
+    const userName = `${req.user.nome} ${req.user.cognome || ''}`.trim();
+    const r = await q(
+      `INSERT INTO clienti_crm_eventi (cliente_id,tipo,esito,richiesta,motivo,note,user_id,user_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [clienteId, String(tipo || 'richiesta'), String(esito || ''), String(richiesta || ''), String(motivo || ''), String(note || ''), req.user.id || null, userName || 'Sistema']
+    );
+    await logDB(req.user.id, userName, 'CRM cliente', `cliente #${clienteId} - ${tipo}`);
+    res.json(r.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── PRODOTTI ────────────────────────────────────────────────────
 app.get('/api/prodotti', authMiddleware, async (req, res) => {
   try {
@@ -1286,11 +1363,15 @@ app.get('/api/listini', authMiddleware, requirePermission('listini:view'), async
 app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
   try {
     const {
-      prodotto_id, cliente_id = null, giro = '', scope = 'all', mode = 'final_price',
+      prodotto_id, prodotto_ids = null,
+      cliente_id = null, cliente_ids = null,
+      giro = '', scope = 'all', mode = 'final_price',
       prezzo = null, base_price = null, markup_pct = 0, discount_pct = 0, final_price = null,
+      excluded_client_ids = [],
       valido_dal, valido_al = null, note = '',
     } = req.body || {};
-    if (!prodotto_id || !valido_dal) {
+    const prodotti = asIntArray(prodotto_ids && prodotto_ids.length ? prodotto_ids : [prodotto_id]);
+    if (!prodotti.length || !valido_dal) {
       return res.status(400).json({ error: 'Campi obbligatori mancanti' });
     }
     const allowedScope = ['all', 'giro', 'cliente', 'giro_cliente'];
@@ -1300,9 +1381,11 @@ app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), as
     if ((scope === 'giro' || scope === 'giro_cliente') && !String(giro).trim()) {
       return res.status(400).json({ error: 'Giro obbligatorio per questo scope' });
     }
-    if ((scope === 'cliente' || scope === 'giro_cliente') && !cliente_id) {
+    const clienti = asIntArray(cliente_ids && cliente_ids.length ? cliente_ids : [cliente_id]);
+    if ((scope === 'cliente' || scope === 'giro_cliente') && !clienti.length) {
       return res.status(400).json({ error: 'Cliente obbligatorio per questo scope' });
     }
+    const excluded = asIntArray(excluded_client_ids);
     const base = asNum(base_price);
     const markup = asNum(markup_pct) ?? 0;
     const discount = asNum(discount_pct) ?? 0;
@@ -1317,16 +1400,24 @@ app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), as
       return res.status(400).json({ error: 'Prezzo finale non valido' });
     }
     if (valido_al && valido_al < valido_dal) return res.status(400).json({ error: 'Intervallo date non valido' });
-    const r = await q(
-      `INSERT INTO listini
-       (prodotto_id,cliente_id,giro,scope,mode,prezzo,base_price,markup_pct,discount_pct,final_price,valido_dal,valido_al,note,created_by,updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW()) RETURNING *`,
-      [
-        parseInt(prodotto_id), cliente_id ? parseInt(cliente_id) : null, String(giro || ''),
-        scope, mode, finalP, base, markup, discount, finalP, valido_dal, valido_al || null, note, req.user.id || null,
-      ]
-    );
-    res.json(r.rows[0]);
+    const targets = (scope === 'cliente' || scope === 'giro_cliente') ? clienti : [null];
+    const inserted = [];
+    for (const pid of prodotti) {
+      for (const cid of targets) {
+        const r = await q(
+          `INSERT INTO listini
+           (prodotto_id,cliente_id,giro,scope,mode,prezzo,base_price,markup_pct,discount_pct,final_price,excluded_client_ids,valido_dal,valido_al,note,created_by,updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,NOW()) RETURNING *`,
+          [
+            pid, cid, String(giro || ''),
+            scope, mode, finalP, base, markup, discount, finalP, JSON.stringify(excluded), valido_dal, valido_al || null, note, req.user.id || null,
+          ]
+        );
+        inserted.push(r.rows[0]);
+      }
+    }
+    if (inserted.length === 1) return res.json(inserted[0]);
+    res.json({ created: inserted.length, rows: inserted });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1336,6 +1427,7 @@ app.put('/api/listini/:id', authMiddleware, requirePermission('listini:manage'),
     const {
       cliente_id = null, giro = '', scope = 'all', mode = 'final_price',
       prezzo = null, base_price = null, markup_pct = 0, discount_pct = 0, final_price = null,
+      excluded_client_ids = [],
       valido_dal, valido_al = null, note = '',
     } = req.body || {};
     if (!valido_dal) return res.status(400).json({ error: 'Campi mancanti' });
@@ -1363,16 +1455,17 @@ app.put('/api/listini/:id', authMiddleware, requirePermission('listini:manage'),
       return res.status(400).json({ error: 'Prezzo finale non valido' });
     }
     if (valido_al && valido_al < valido_dal) return res.status(400).json({ error: 'Intervallo date non valido' });
+    const excluded = asIntArray(excluded_client_ids);
     const r = await q(
       `UPDATE listini
        SET cliente_id=$1, giro=$2, scope=$3, mode=$4,
-           prezzo=$5, base_price=$6, markup_pct=$7, discount_pct=$8, final_price=$9,
-           valido_dal=$10, valido_al=$11, note=$12, updated_at=NOW()
-       WHERE id=$13
+           prezzo=$5, base_price=$6, markup_pct=$7, discount_pct=$8, final_price=$9, excluded_client_ids=$10::jsonb,
+           valido_dal=$11, valido_al=$12, note=$13, updated_at=NOW()
+       WHERE id=$14
        RETURNING *`,
       [
         cliente_id ? parseInt(cliente_id) : null, String(giro || ''), scope, mode,
-        finalP, base, markup, discount, finalP,
+        finalP, base, markup, discount, finalP, JSON.stringify(excluded),
         valido_dal, valido_al || null, note, id,
       ]
     );
@@ -1565,6 +1658,88 @@ app.patch('/api/ordini/:id/stato', authMiddleware, requirePermission('ordini:sta
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission('ordini:stato'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const ordineId = parseInt(req.params.id);
+    const deliveredMap = req.body?.delivered || {};
+    const note = String(req.body?.note || '').trim();
+
+    await client.query('BEGIN');
+    const { rows: ordRows } = await client.query('SELECT * FROM ordini WHERE id=$1 FOR UPDATE', [ordineId]);
+    if (!ordRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Ordine non trovato' });
+    }
+    const ordine = ordRows[0];
+    const { rows: linee } = await client.query('SELECT * FROM ordine_linee WHERE ordine_id=$1 ORDER BY id', [ordineId]);
+    if (!linee.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Ordine senza righe' });
+    }
+
+    const residuali = [];
+    for (const l of linee) {
+      const key = String(l.id);
+      const consegnata = Math.max(0, Math.min(Number(l.qty), Number(deliveredMap[key] ?? l.qty)));
+      const residuo = Number(l.qty) - consegnata;
+      if (residuo > 0) {
+        residuali.push({
+          prodotto_id: l.prodotto_id,
+          qty: residuo,
+          is_pedana: !!l.is_pedana,
+          nota_riga: l.nota_riga || '',
+          unita_misura: l.unita_misura || 'pezzi',
+          prezzo_unitario: l.prezzo_unitario,
+        });
+      }
+    }
+    if (!residuali.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Nessun residuo da riportare: usa consegna completa' });
+    }
+
+    const { rows: cRows } = await client.query('SELECT giro FROM clienti WHERE id=$1', [ordine.cliente_id]);
+    const giro = cRows[0]?.giro || '';
+    const nextData = await getNextDeliveryDate(giro, ordine.data);
+
+    const ins = await client.query(
+      `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef,inserted_at,updated_at)
+       VALUES ($1,$2,$3,$4,$5,'attesa',$6,$7,$8,NOW(),NOW()) RETURNING id`,
+      [
+        ordine.cliente_id,
+        ordine.agente_id || null,
+        ordine.autista_di_giro || null,
+        req.user.id || null,
+        nextData,
+        `[RIPORTO PARZIALE da #${ordineId}] ${note}`.trim(),
+        !!ordine.data_non_certa,
+        !!ordine.stef,
+      ]
+    );
+    const newOrdineId = ins.rows[0].id;
+    for (const r of residuali) {
+      await client.query(
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [newOrdineId, r.prodotto_id, r.qty, r.prezzo_unitario, r.is_pedana, r.nota_riga, r.unita_misura]
+      );
+    }
+
+    await client.query(
+      `UPDATE ordini SET stato='consegnato', note=TRIM(BOTH ' ' FROM COALESCE(note,'') || ' [PARZIALE: residuo su #' || $1 || ']'), updated_at=NOW() WHERE id=$2`,
+      [newOrdineId, ordineId]
+    );
+    await client.query('COMMIT');
+    const u = req.user;
+    await logDB(u.id, `${u.nome} ${u.cognome||''}`.trim(), 'Consegna parziale', `ordine #${ordineId} -> riporto #${newOrdineId}`);
+    res.json({ ok: true, new_order_id: newOrdineId, next_date: nextData });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+});
+
 app.delete('/api/ordini/:id', authMiddleware, requirePermission('ordini:delete'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -1755,6 +1930,28 @@ app.get('/api/stats/dashboard', authMiddleware, async (req, res) => {
       topClienti: topClienti.rows,
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/experimental/source', authMiddleware, requireRole('admin','direzione'), async (req, res) => {
+  try {
+    const url = String(req.query.url || EXPERIMENTAL_SOURCE_URL || '').trim();
+    if (!url) return res.status(400).json({ error: 'URL sorgente non configurato' });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    let r;
+    try {
+      r = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json,text/html;q=0.9,*/*;q=0.8' } });
+    } finally {
+      clearTimeout(timer);
+    }
+    const ct = r.headers.get('content-type') || '';
+    const body = ct.includes('application/json') ? await r.json() : await r.text();
+    if (!r.ok) return res.status(502).json({ error: `Sorgente esterna errore ${r.status}` });
+    const preview = typeof body === 'string' ? body.slice(0, 8000) : body;
+    res.json({ ok: true, source: url, content_type: ct, preview });
+  } catch (e) {
+    res.status(500).json({ error: e.name === 'AbortError' ? 'Timeout sorgente esterna' : e.message });
+  }
 });
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '2.0.0' }));
