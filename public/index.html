@@ -2459,6 +2459,7 @@
 // In produzione il frontend è servito dallo stesso server Express,
 // quindi BASE_URL è stringa vuota. In sviluppo separato cambia in 'http://localhost:3000'
 const BASE_URL = '';
+window.BASE_URL = BASE_URL;
 
 // ─── STATO RUNTIME ────────────────────────────────────────────────
 let state = {
@@ -2631,208 +2632,6 @@ async function loadAllData() {
 // AUTH
 // ═══════════════════════════════════════════════
 
-let selectedRole = 'admin';
-
-function selectRole(role, el) {
-  selectedRole = role;
-  document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
-  el.classList.add('active');
-  const hints = {admin:'marco', amministrazione:'marica', autista:'francescoa', magazzino:'gaston', direzione:'francescoc'};
-  document.getElementById('login-user').value = hints[role] || 'admin';
-}
-
-async function doLogin() {
-  const username = document.getElementById('login-user').value.trim();
-  const password = document.getElementById('login-pass').value;
-  if (!username || !password) { showToast('Inserisci username e password', 'warning'); return; }
-
-  const btn = document.querySelector('#screen-login .btn-primary');
-  if (btn) { btn.textContent = 'Accesso...'; btn.disabled = true; }
-
-  try {
-    const data = await fetch(BASE_URL + '/api/auth/login', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ username, password })
-    }).then(async r => {
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Credenziali errate');
-      return d;
-    });
-
-    state.token = data.token;
-    state.currentUser = normalizeUtente(data.user);
-    loadDevErrors();
-    state.devThresholds = loadDevThresholds();
-
-    // Carica tutti i dati
-    await loadAllData();
-
-    document.getElementById('screen-login').style.display = 'none';
-    document.getElementById('screen-app').style.display = 'block';
-    document.getElementById('topbar-username').textContent =
-      (state.currentUser.nome + ' ' + (state.currentUser.cognome||'')).trim();
-    const roleLabels = {admin:'Admin', amministrazione:'Amministrazione', autista:'Autista', magazzino:'Magazzino', direzione:'Direzione'};
-    document.getElementById('topbar-role').textContent = roleLabels[state.currentUser.ruolo];
-    setupNav();
-    const defaultPages = {admin:'dashboard', amministrazione:'clienti', autista:'autista', magazzino:'magazzino', direzione:'report'};
-    goTo(defaultPages[state.currentUser.ruolo] || 'dashboard');
-    startDevMonitor();
-  } catch(e) {
-    showToast(e.message || 'Errore di connessione', 'warning');
-  } finally {
-    if (btn) { btn.textContent = 'Accedi →'; btn.disabled = false; }
-  }
-}
-
-function doLogout() {
-  stopDevMonitor();
-  state.token = null;
-  state.currentUser = null;
-  state.utenti = []; state.clienti = []; state.prodotti = [];
-  state.listini = []; state.listinoProdottoId = null;
-  state.ordini = []; state.camions = []; state.giriCalendario = [];
-  state.devMetrics = null; state.devSmoke = null; state.devErrors = []; state.devThresholds = null;
-  state.emailNotifications = null; state.emailNotificationsLoaded = false;
-  document.getElementById('screen-app').style.display = 'none';
-  document.getElementById('screen-login').style.display = 'flex';
-}
-
-// ═══════════════════════════════════════════════
-// NAVIGATION
-// ═══════════════════════════════════════════════
-
-const navConfigs = {
-  admin: [
-    { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
-    { page: 'ordini', icon: '📋', label: 'Ordini' },
-    { page: 'clienti', icon: '🏢', label: 'Clienti' },
-    { page: 'listini', icon: '💶', label: 'Listini' },
-    { page: 'prodotti', icon: '🧀', label: 'Prodotti' },
-    { page: 'utenti', icon: '👥', label: 'Utenti' },
-    { page: 'piano', icon: '🚛', label: 'Piano Carico' },
-    { page: 'report', icon: '📊', label: 'Report' },
-    { page: 'impostazioni', icon: '⚙️', label: 'Impostazioni' },
-    { page: 'sperimentale', icon: '🧪', label: 'Sperimentale' },
-    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
-  ],
-  amministrazione: [
-    { page: 'clienti', icon: '🏢', label: 'Clienti' },
-    { page: 'listini', icon: '💶', label: 'Listini' },
-    { page: 'ordini', icon: '📋', label: 'Ordini' },
-    { page: 'report', icon: '📊', label: 'Report' },
-    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
-  ],
-  autista: [
-    { page: 'autista', icon: '🚚', label: 'Il mio giro' },
-    { page: 'piano', icon: '🚛', label: 'Piano Carico' },
-    { page: 'ordini', icon: '📋', label: 'Tutti gli ordini' },
-    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
-  ],
-  magazzino: [
-    { page: 'magazzino', icon: '📦', label: 'Da preparare' },
-    { page: 'piano', icon: '🚛', label: 'Piano Carico' },
-    { page: 'ordini', icon: '📋', label: 'Ordini' },
-    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
-  ],
-  direzione: [
-    { page: 'listini', icon: '💶', label: 'Listini' },
-    { page: 'report', icon: '📊', label: 'Report' },
-    { page: 'sperimentale', icon: '🧪', label: 'Sperimentale' },
-    { page: 'ordini', icon: '📋', label: 'Ordini' },
-    { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
-  ],
-};
-
-function setupNav() {
-  const role = state.currentUser.ruolo;
-  const items = navConfigs[role] || navConfigs.admin;
-  const u = state.currentUser;
-  const roleLabels = {admin:'Admin / Ufficio', amministrazione:'Amministrazione', autista:'Autista / Agente', magazzino:'Magazzino', direzione:'Direzione'};
-
-  // Sidebar desktop
-  const sidebar = document.getElementById('sidebar-nav');
-  sidebar.innerHTML = items.map(i => `
-    <button class="nav-item" id="nav-${i.page}" onclick="goTo('${i.page}')">
-      <span class="nav-icon">${i.icon}</span> ${i.label}
-    </button>
-  `).join('');
-
-  // Drawer mobile — tutte le voci
-  const drawerNav = document.getElementById('drawer-nav');
-  if (drawerNav) {
-    drawerNav.innerHTML = items.map(i => `
-      <button class="drawer-nav-item" id="dnav-${i.page}" onclick="goTo('${i.page}');closeDrawer()">
-        <span class="drawer-nav-icon">${i.icon}</span>${i.label}
-      </button>
-    `).join('');
-  }
-  const dn = document.getElementById('drawer-username');
-  const dr = document.getElementById('drawer-role');
-  if (dn) dn.textContent = (u.nome + ' ' + (u.cognome||'')).trim();
-  if (dr) dr.textContent = roleLabels[u.ruolo] || u.ruolo;
-
-  // Bottom nav disattivato da CSS su mobile, mantenuto per compatibilita'
-  const mobileNav = document.getElementById('mobile-nav-items');
-  if (mobileNav) {
-    mobileNav.innerHTML = items.slice(0,4).map(i => `
-      <button class="mobile-nav-item" id="mnav-${i.page}" onclick="goTo('${i.page}')">
-        <span class="mn-icon">${i.icon}</span>${i.label}
-      </button>
-    `).join('');
-  }
-}
-
-function openDrawer() {
-  document.getElementById('drawer').classList.add('open');
-  document.getElementById('drawer-overlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-
-function closeDrawer() {
-  document.getElementById('drawer').classList.remove('open');
-  document.getElementById('drawer-overlay').classList.remove('open');
-  document.body.style.overflow = '';
-}
-
-function goTo(page) {
-  closeDrawer();
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item, .mobile-nav-item, .drawer-nav-item').forEach(n => n.classList.remove('active'));
-  const el = document.getElementById('page-' + page);
-  if (el) el.classList.add('active');
-  const nav = document.getElementById('nav-' + page);
-  if (nav) nav.classList.add('active');
-  const mnav = document.getElementById('mnav-' + page);
-  if (mnav) mnav.classList.add('active');
-  const dnav = document.getElementById('dnav-' + page);
-  if (dnav) dnav.classList.add('active');
-  state.currentPage = page;
-  renderPage(page);
-}
-
-function renderPage(page) {
-  if (page === 'dashboard') renderDashboard();
-  if (page === 'ordini') renderOrdiniTable();
-  if (page === 'clienti') renderClientiTable();
-  if (page === 'listini') renderListiniPage();
-  if (page === 'prodotti') renderProdottiTable();
-  if (page === 'utenti') renderUtentiTable();
-  if (page === 'autista') renderAutistaView();
-  if (page === 'magazzino') {
-    // Imposta la data di default = oggi se non già impostata
-    const dtInput = document.getElementById('filter-magazzino-data');
-    if (dtInput && !dtInput.value) dtInput.value = today();
-    renderMagazzino();
-  }
-  if (page === 'piano') renderPianoPage();
-  if (page === 'report') renderReport();
-  if (page === 'impostazioni') renderImpostazioni();
-  if (page === 'sperimentale') renderSperimentale();
-  if (page === 'profilo') renderProfilo();
-}
-
-// ═══════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════
 
@@ -6378,6 +6177,7 @@ async function importClientiExcel(input) {
 }
 </script>
 <script src="/js/modules/normalizers.js"></script>
+<script src="/js/modules/app-shell.js"></script>
 <script src="/js/modules/piano-layouts.js"></script>
 <script src="/js/modules/sperimentale.js"></script>
 <script src="/js/modules/listini.js"></script>
