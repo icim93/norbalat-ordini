@@ -2488,6 +2488,7 @@ let state = {
   crmClienteId: null,
   crmEventi: [],
 };
+window.state = state;
 
 function canSeeDevPanel() {
   return state.currentUser?.ruolo === 'admin';
@@ -6830,6 +6831,7 @@ async function importClientiExcel(input) {
 </script>
 <script src="/js/modules/piano-layouts.js"></script>
 <script src="/js/modules/sperimentale.js"></script>
+<script src="/js/modules/listini.js"></script>
 <script src="/js/modules/listini-pdf.js"></script>
 <script src="/js/modules/crm.js"></script>
 
