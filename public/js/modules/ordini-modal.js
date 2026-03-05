@@ -790,9 +790,12 @@ async function consegnaParziale(id) {
     delivered[l.id] = n;
   }
   const note = prompt('Note consegna parziale (opzionale)', '') || '';
+  const suggested = window.today();
+  const preferredDateRaw = prompt(`Data riporto residuo (YYYY-MM-DD). Lascia vuoto per prossima consegna automatica`, suggested) || '';
+  const preferredDate = preferredDateRaw.trim() || null;
   try {
-    const r = await api('POST', `/api/ordini/${id}/consegna-parziale`, { delivered, note });
-    showToast(`Consegna parziale registrata. Riporto su ordine #${r.new_order_id}`, 'success');
+    const r = await api('POST', `/api/ordini/${id}/consegna-parziale`, { delivered, note, preferred_date: preferredDate });
+    showToast(`Consegna parziale registrata. Riporto su ordine #${r.new_order_id} (${r.next_date})`, 'success');
     await loadAllData();
     closeModal('modal-dettaglio');
     renderPage(state.currentPage);

@@ -416,9 +416,12 @@ async function createSchema() {
       cliente_id  INTEGER NOT NULL REFERENCES clienti(id) ON DELETE CASCADE,
       tipo        TEXT NOT NULL DEFAULT 'richiesta',
       esito       TEXT DEFAULT '',
+      stato_cliente TEXT DEFAULT '',
       richiesta   TEXT DEFAULT '',
       motivo      TEXT DEFAULT '',
       note        TEXT DEFAULT '',
+      followup_date DATE,
+      priorita    TEXT DEFAULT 'media',
       user_id     INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
       user_name   TEXT NOT NULL DEFAULT 'Sistema',
       created_at  TIMESTAMPTZ DEFAULT NOW()
@@ -459,6 +462,8 @@ async function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_activity_ts    ON activity_log(ts);
     CREATE INDEX IF NOT EXISTS idx_listini_prod_cliente ON listini(prodotto_id,cliente_id);
     CREATE INDEX IF NOT EXISTS idx_listini_validita ON listini(valido_dal,valido_al);
+    CREATE INDEX IF NOT EXISTS idx_crm_cliente_created ON clienti_crm_eventi(cliente_id,created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_crm_followup ON clienti_crm_eventi(followup_date);
 
     -- Migrazioni safe per DB esistenti
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS classificazione TEXT DEFAULT '';
@@ -484,6 +489,10 @@ async function createSchema() {
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS discount_pct    NUMERIC DEFAULT 0;
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS final_price     NUMERIC;
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS excluded_client_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS stato_cliente TEXT DEFAULT '';
+    ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS followup_date DATE;
+    ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS priorita TEXT DEFAULT 'media';
+    UPDATE clienti_crm_eventi SET priorita = 'media' WHERE priorita IS NULL OR priorita = '';
     ALTER TABLE listini     ALTER COLUMN prezzo DROP NOT NULL;
     UPDATE listini SET scope = CASE WHEN cliente_id IS NULL THEN 'all' ELSE 'cliente' END WHERE scope IS NULL OR scope = '';
     UPDATE listini SET mode = 'final_price' WHERE mode IS NULL OR mode = '';
@@ -909,14 +918,18 @@ const zListinoPayload = z.object({
 const zCrmEventoPayload = z.object({
   tipo: z.string().min(1).max(80).optional().default('richiesta'),
   esito: z.string().max(300).optional().default(''),
+  stato_cliente: z.string().max(80).optional().default(''),
   richiesta: z.string().max(2000).optional().default(''),
   motivo: z.string().max(2000).optional().default(''),
   note: z.string().max(3000).optional().default(''),
+  followup_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  priorita: z.string().max(20).optional().default('media'),
 });
 
 const zConsegnaParzialePayload = z.object({
   delivered: z.record(z.coerce.number()).optional().default({}),
   note: z.string().max(2000).optional().default(''),
+  preferred_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
 });
 
 async function getNextDeliveryDate(giro, fromDateStr = null) {
@@ -1305,17 +1318,48 @@ app.get('/api/clienti/:id/crm-eventi', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/clienti/crm-summary', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await q(
+      `SELECT DISTINCT ON (e.cliente_id)
+          e.cliente_id,
+          e.tipo,
+          e.esito,
+          e.stato_cliente,
+          e.followup_date,
+          e.priorita,
+          e.created_at
+       FROM clienti_crm_eventi e
+       ORDER BY e.cliente_id, e.created_at DESC, e.id DESC`
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/clienti/:id/crm-eventi', authMiddleware, requirePermission('clienti:update'), async (req, res) => {
   try {
     const clienteId = parseInt(req.params.id);
     const parsed = zCrmEventoPayload.safeParse(req.body || {});
     if (!parsed.success) return validationError(res, parsed);
-    const { tipo, esito, richiesta, motivo, note } = parsed.data;
+    const { tipo, esito, stato_cliente, richiesta, motivo, note, followup_date, priorita } = parsed.data;
     const userName = `${req.user.nome} ${req.user.cognome || ''}`.trim();
     const r = await q(
-      `INSERT INTO clienti_crm_eventi (cliente_id,tipo,esito,richiesta,motivo,note,user_id,user_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [clienteId, String(tipo || 'richiesta'), String(esito || ''), String(richiesta || ''), String(motivo || ''), String(note || ''), req.user.id || null, userName || 'Sistema']
+      `INSERT INTO clienti_crm_eventi
+        (cliente_id,tipo,esito,stato_cliente,richiesta,motivo,note,followup_date,priorita,user_id,user_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [
+        clienteId,
+        String(tipo || 'richiesta'),
+        String(esito || ''),
+        String(stato_cliente || ''),
+        String(richiesta || ''),
+        String(motivo || ''),
+        String(note || ''),
+        followup_date || null,
+        String(priorita || 'media'),
+        req.user.id || null,
+        userName || 'Sistema',
+      ]
     );
     await logDB(req.user.id, userName, 'CRM cliente', `cliente #${clienteId} - ${tipo}`);
     res.json(r.rows[0]);
@@ -1709,6 +1753,7 @@ app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission(
     if (!parsed.success) return validationError(res, parsed);
     const deliveredMap = parsed.data.delivered || {};
     const note = String(parsed.data.note || '').trim();
+    const preferredDate = parsed.data.preferred_date || null;
 
     await client.query('BEGIN');
     const { rows: ordRows } = await client.query('SELECT * FROM ordini WHERE id=$1 FOR UPDATE', [ordineId]);
@@ -1746,7 +1791,8 @@ app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission(
 
     const { rows: cRows } = await client.query('SELECT giro FROM clienti WHERE id=$1', [ordine.cliente_id]);
     const giro = cRows[0]?.giro || '';
-    const nextData = await getNextDeliveryDate(giro, ordine.data);
+    const autoNextData = await getNextDeliveryDate(giro, ordine.data);
+    const nextData = preferredDate && preferredDate >= autoNextData ? preferredDate : autoNextData;
 
     const ins = await client.query(
       `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef,inserted_at,updated_at)
@@ -1977,12 +2023,93 @@ app.get('/api/stats/dashboard', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+async function getExperimentalSourceConfig() {
+  const defaults = {
+    url: EXPERIMENTAL_SOURCE_URL || '',
+    mode: 'auto',
+    product_selector: '',
+    code_selector: '',
+    name_selector: '',
+    price_selector: '',
+  };
+  try {
+    const { rows } = await q('SELECT value FROM app_settings WHERE key=$1', ['experimental_source']);
+    if (!rows.length) return defaults;
+    const saved = rows[0].value && typeof rows[0].value === 'object' ? rows[0].value : {};
+    return { ...defaults, ...saved };
+  } catch (_) {
+    return defaults;
+  }
+}
+
+async function saveExperimentalSourceConfig(next) {
+  const merged = { ...(await getExperimentalSourceConfig()), ...next };
+  await q(
+    `INSERT INTO app_settings (key,value,updated_at)
+     VALUES ('experimental_source',$1::jsonb,NOW())
+     ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW()`,
+    [JSON.stringify(merged)]
+  );
+  return merged;
+}
+
+function parseExperimentalPreviewFromHtml(html) {
+  const text = String(html || '');
+  const rows = [];
+  const lineRegex = /([A-Z0-9-]{2,})?\s*([A-Za-zÀ-ÿ][^<\n]{2,80}?)\s+([0-9]+(?:[.,][0-9]{1,2})?)\s*(?:€|euro|eur)/gi;
+  let m;
+  while ((m = lineRegex.exec(text)) && rows.length < 200) {
+    rows.push({
+      codice: (m[1] || '').trim(),
+      nome: (m[2] || '').replace(/\s+/g, ' ').trim(),
+      prezzo: Number(String(m[3]).replace(',', '.')),
+    });
+  }
+  return rows;
+}
+
+function normalizeExperimentalPreview(body, contentType) {
+  if (contentType.includes('application/json')) {
+    if (Array.isArray(body)) return body.slice(0, 300);
+    if (body && Array.isArray(body.items)) return body.items.slice(0, 300);
+    return body;
+  }
+  const rows = parseExperimentalPreviewFromHtml(String(body || ''));
+  if (rows.length) return rows;
+  return String(body || '').slice(0, 8000);
+}
+
+app.get('/api/experimental/config', authMiddleware, requireRole('admin','direzione'), async (req, res) => {
+  try {
+    res.json(await getExperimentalSourceConfig());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/experimental/config', authMiddleware, requireRole('admin','direzione'), async (req, res) => {
+  try {
+    const zExperimentalConfig = z.object({
+      url: z.string().url().optional(),
+      mode: z.enum(['auto', 'json', 'html']).optional(),
+      product_selector: z.string().max(200).optional(),
+      code_selector: z.string().max(200).optional(),
+      name_selector: z.string().max(200).optional(),
+      price_selector: z.string().max(200).optional(),
+    });
+    const parsed = zExperimentalConfig.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const saved = await saveExperimentalSourceConfig(parsed.data);
+    res.json(saved);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/experimental/source', authMiddleware, requireRole('admin','direzione'), async (req, res) => {
   try {
-    const zExperimentalQuery = z.object({ url: z.string().url().optional() });
+    const zExperimentalQuery = z.object({ url: z.string().url().optional(), mode: z.enum(['auto', 'json', 'html']).optional() });
     const parsed = zExperimentalQuery.safeParse(req.query || {});
     if (!parsed.success) return validationError(res, parsed);
-    const url = String(parsed.data.url || EXPERIMENTAL_SOURCE_URL || '').trim();
+    const cfg = await getExperimentalSourceConfig();
+    const url = String(parsed.data.url || cfg.url || EXPERIMENTAL_SOURCE_URL || '').trim();
+    const mode = String(parsed.data.mode || cfg.mode || 'auto');
     if (!url) return res.status(400).json({ error: 'URL sorgente non configurato' });
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -1992,11 +2119,12 @@ app.get('/api/experimental/source', authMiddleware, requireRole('admin','direzio
     } finally {
       clearTimeout(timer);
     }
-    const ct = r.headers.get('content-type') || '';
-    const body = ct.includes('application/json') ? await r.json() : await r.text();
     if (!r.ok) return res.status(502).json({ error: `Sorgente esterna errore ${r.status}` });
-    const preview = typeof body === 'string' ? body.slice(0, 8000) : body;
-    res.json({ ok: true, source: url, content_type: ct, preview });
+    const ct = r.headers.get('content-type') || '';
+    const shouldJson = mode === 'json' || (mode === 'auto' && ct.includes('application/json'));
+    const body = shouldJson ? await r.json() : await r.text();
+    const preview = normalizeExperimentalPreview(body, ct);
+    res.json({ ok: true, source: url, mode, content_type: ct, preview });
   } catch (e) {
     res.status(500).json({ error: e.name === 'AbortError' ? 'Timeout sorgente esterna' : e.message });
   }
@@ -2071,6 +2199,30 @@ app.get('/api/dev/smoke', authMiddleware, requireRole('admin'), async (req, res)
   } catch (e) {
     ok = false;
     checks.push({ check: 'orders_last_7d', ok: false, error: e.message });
+  }
+
+  try {
+    const r = await q("SELECT COUNT(*)::int AS n FROM listini WHERE (valido_al IS NULL OR valido_al >= CURRENT_DATE)");
+    checks.push({ check: 'active_listini', ok: true, value: r.rows[0].n });
+  } catch (e) {
+    ok = false;
+    checks.push({ check: 'active_listini', ok: false, error: e.message });
+  }
+
+  try {
+    const r = await q("SELECT COUNT(*)::int AS n FROM clienti_crm_eventi WHERE followup_date IS NOT NULL AND followup_date <= CURRENT_DATE + INTERVAL '7 days'");
+    checks.push({ check: 'crm_followup_next_7d', ok: true, value: r.rows[0].n });
+  } catch (e) {
+    ok = false;
+    checks.push({ check: 'crm_followup_next_7d', ok: false, error: e.message });
+  }
+
+  try {
+    const r = await q("SELECT COUNT(*)::int AS n FROM camions WHERE layout IN ('asym8','sym12','ford5')");
+    checks.push({ check: 'camion_layout_supported', ok: true, value: r.rows[0].n });
+  } catch (e) {
+    ok = false;
+    checks.push({ check: 'camion_layout_supported', ok: false, error: e.message });
   }
 
   res.json({

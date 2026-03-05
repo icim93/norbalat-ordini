@@ -1624,13 +1624,24 @@
           <div class="card-header">
             <div class="card-title">🌐 Fonte esterna</div>
             <div style="display:flex;gap:8px;">
+              <button class="btn btn-outline" onclick="saveExperimentalConfig()">Salva config</button>
               <button class="btn btn-outline" onclick="loadExperimentalSource()">Aggiorna</button>
             </div>
           </div>
           <div style="padding:16px 20px;">
-            <div class="field form-full">
+            <div class="form-row">
+              <div class="field">
               <label>URL sorgente (opzionale)</label>
               <input type="text" id="experimental-url" placeholder="https://...">
+              </div>
+              <div class="field">
+                <label>Modalità parsing</label>
+                <select id="experimental-mode">
+                  <option value="auto">Auto</option>
+                  <option value="json">JSON</option>
+                  <option value="html">HTML</option>
+                </select>
+              </div>
             </div>
             <div id="experimental-meta" style="font-size:12px;color:var(--text3);margin:8px 0 10px;"></div>
             <pre id="experimental-preview" style="white-space:pre-wrap;word-break:break-word;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:420px;overflow:auto;font-size:12px;"></pre>
@@ -2179,6 +2190,22 @@
           <label>Esito</label>
           <input type="text" id="crm-esito" placeholder="es. in attesa, da richiamare, chiuso">
         </div>
+        <div class="field">
+          <label>Stato cliente</label>
+          <input type="text" id="crm-stato-cliente" placeholder="es. caldo, tiepido, perso">
+        </div>
+        <div class="field">
+          <label>Priorità</label>
+          <select id="crm-priorita">
+            <option value="alta">Alta</option>
+            <option value="media" selected>Media</option>
+            <option value="bassa">Bassa</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Follow-up</label>
+          <input type="date" id="crm-followup-date">
+        </div>
         <div class="field form-full">
           <label>Richiesta / Dettaglio</label>
           <input type="text" id="crm-richiesta" placeholder="es. richiesta prodotto X">
@@ -2202,6 +2229,7 @@
               <th>Data</th>
               <th>Tipo</th>
               <th>Esito</th>
+              <th>Stato/FU</th>
               <th>Richiesta</th>
               <th>Motivo</th>
               <th>Utente</th>
@@ -2488,6 +2516,7 @@ let state = {
   emailNotificationsLoaded: false,
   crmClienteId: null,
   crmEventi: [],
+  crmSummary: {},
 };
 window.state = state;
 
@@ -2542,6 +2571,7 @@ async function loadAllData() {
     state.ordini   = (ordini   ||[]).map(normalizeOrdine);
     state.camions  = (camions  ||[]).map(normalizeCamion);
     state.giriCalendario = (giri||[]).map(g => ({...g, giorni: g.giorni||[]}));
+    if (typeof loadCrmSummary === 'function') await loadCrmSummary();
   } catch(e) {
     console.error('loadAllData error:', e);
     showToast('Errore caricamento dati', 'warning');
@@ -2932,7 +2962,8 @@ function renderPianoBody(isEditor, isConferma) {
   if (!body) return;
   const camion = state.camions.find(x => x.id === pianoSelectedCamionId);
   if (!camion) { body.innerHTML = ''; return; }
-  const layout = PIANO_LAYOUTS[camion.layout] || PIANO_LAYOUTS.asym8;
+  const forcedLayout = camion.pedane.length === 12 ? 'sym12' : (camion.pedane.length === 5 ? 'ford5' : 'asym8');
+  const layout = PIANO_LAYOUTS[forcedLayout] || PIANO_LAYOUTS[camion.layout] || PIANO_LAYOUTS.asym8;
   const nCols = layout.cols;
 
   const pedaneHtml = layout.slots.map(slot => {
@@ -3012,7 +3043,7 @@ function renderPianoBody(isEditor, isConferma) {
     </div>
     <div class="card" style="margin-bottom:20px;">
       <div class="card-header">
-        <div class="card-title">📦 Piano di carico</div>
+        <div class="card-title">📦 Piano di carico · template ${totCnt} pedane</div>
         <div style="font-size:13px;color:var(--text3);">${pieneCnt} / ${totCnt} pedane occupate</div>
       </div>
       <div style="padding:16px;">

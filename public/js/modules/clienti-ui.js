@@ -29,6 +29,9 @@ function renderClientiTable() {
     const onboardingBadge = onboardingStatoBadge[c.onboardingStato] || 'badge-gray';
     const fidoTxt = (Number(c.fido || 0)).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
     const canManageOnboarding = canApproveOnboarding();
+    const crm = state.crmSummary?.[c.id];
+    const crmFollowup = crm?.followup_date ? formatDate(String(crm.followup_date).slice(0, 10)) : '';
+    const crmSoon = crm?.followup_date && String(crm.followup_date).slice(0, 10) <= today();
     return `
     <tr>
       <td>
@@ -38,6 +41,7 @@ function renderClientiTable() {
             <b style="font-size:13px;">${c.nome}</b>
             ${c.note ? `<div style="font-size:11px;color:var(--blue);margin-top:1px;">📌 ${c.note.substring(0,50)}${c.note.length>50?'…':''}</div>` : ''}
             ${c.classificazione ? `<div style="font-size:10px;color:var(--text3);margin-top:1px;">${c.classificazione === 'Caseificio' ? '🧀' : c.classificazione === 'Alimentari' ? '🏪' : '🔄'} ${c.classificazione}${c.eFornitore?' · 🔁 Fornitore':''}</div>` : (c.eFornitore ? '<div style="font-size:10px;color:var(--text3);margin-top:1px;">🔁 Fornitore</div>' : '')}
+            ${crm ? `<div style="font-size:10px;color:${crmSoon ? 'var(--danger)' : 'var(--text3)'};margin-top:2px;">CRM: ${crm.esito || crm.stato_cliente || crm.tipo || 'aggiornato'} ${crmFollowup ? `· FU ${crmFollowup}` : ''}</div>` : ''}
           </div>
         </div>
       </td>

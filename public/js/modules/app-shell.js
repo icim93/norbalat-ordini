@@ -120,6 +120,7 @@
     window.state.devThresholds = null;
     window.state.emailNotifications = null;
     window.state.emailNotificationsLoaded = false;
+    window.state.crmSummary = {};
     document.getElementById('screen-app').style.display = 'none';
     document.getElementById('screen-login').style.display = 'flex';
   }
