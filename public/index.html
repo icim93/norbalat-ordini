@@ -1238,34 +1238,43 @@
       <div class="page" id="page-listini">
         <div class="page-header">
           <div class="page-title">Listini</div>
-          <div class="page-sub">Gestione prezzi e regole per prodotto</div>
+          <div class="page-sub">Gestione regole prezzo</div>
         </div>
         <div class="card">
           <div class="card-header">
-            <input type="text" class="search-input" id="search-listini-prodotti" placeholder="🔍 Cerca codice, nome, categoria…" oninput="renderListiniPage()">
+            <input type="text" class="search-input" id="search-listini" placeholder="🔍 Cerca prodotto, ambito, note…" oninput="renderListiniPage()">
             <div style="display:flex;gap:8px;">
-              <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-cat-listini" onchange="renderListiniPage()">
-                <option value="">Tutte le categorie</option>
-                <option value="FORMAGGI">Formaggi</option>
-                <option value="RICOTTA">Ricotta</option>
-                <option value="CAGLIATA">Cagliata</option>
-                <option value="PANNA UHT">Panna UHT</option>
-                <option value="ALTRO">Altro</option>
+              <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-scope-listini" onchange="renderListiniPage()">
+                <option value="">Tutti gli ambiti</option>
+                <option value="all">Tutti</option>
+                <option value="giro">Giro</option>
+                <option value="cliente">Cliente</option>
+                <option value="giro_cliente">Giro + cliente</option>
               </select>
+              <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-stato-listini" onchange="renderListiniPage()">
+                <option value="">Tutti gli stati</option>
+                <option value="attivo">Attivi</option>
+                <option value="futuro">Futuri</option>
+                <option value="scaduto">Scaduti</option>
+              </select>
+              <button class="btn btn-green" id="listini-new-btn" onclick="openNewListino()">＋ Nuovo Listino</button>
             </div>
           </div>
           <div class="table-scroll-wrap"><table>
             <thead>
               <tr>
-                <th>Codice</th>
                 <th>Prodotto</th>
-                <th>Categoria</th>
-                <th>Prezzo base</th>
-                <th>Regole attive</th>
+                <th>Ambito</th>
+                <th>Regola</th>
+                <th>Prezzo</th>
+                <th>Dal</th>
+                <th>Al</th>
+                <th>Stato</th>
+                <th>Note</th>
                 <th>Azioni</th>
               </tr>
             </thead>
-            <tbody id="listini-prodotti-table"></tbody>
+            <tbody id="listini-page-table"></tbody>
           </table></div>
         </div>
       </div>
@@ -1967,16 +1976,19 @@
   </div>
 </div>
 
-<!-- Modal: Listini prodotto -->
+<!-- Modal: Listino -->
 <div class="modal-overlay" id="modal-listini">
-  <div class="modal" style="max-width:860px;">
+  <div class="modal" style="max-width:760px;">
     <div class="modal-header">
-      <div class="modal-title">Listini prodotto</div>
+      <div class="modal-title" id="modal-listino-title">Nuovo listino</div>
       <button class="modal-close" onclick="closeModal('modal-listini')">✕</button>
     </div>
     <div class="modal-body">
-      <div id="listini-prodotto-title" style="font-weight:700;font-size:14px;margin-bottom:10px;"></div>
       <div class="form-row">
+        <div class="field form-full">
+          <label>Prodotto *</label>
+          <select id="ls-prodotto"></select>
+        </div>
         <div class="field">
           <label>Ambito</label>
           <select id="ls-scope" onchange="onListinoScopeChange()">
@@ -2035,22 +2047,6 @@
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:8px;">
         <button class="btn btn-green btn-sm" onclick="saveListinoEntry()">Salva listino</button>
-      </div>
-      <div style="margin-top:12px;border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:300px;">
-        <table>
-          <thead>
-            <tr>
-              <th>Ambito</th>
-              <th>Regola</th>
-              <th>Prezzo</th>
-              <th>Dal</th>
-              <th>Al</th>
-              <th>Note</th>
-              <th>Azioni</th>
-            </tr>
-          </thead>
-          <tbody id="listini-table-body"></tbody>
-        </table>
       </div>
     </div>
     <div class="modal-footer">
@@ -3261,15 +3257,42 @@ async function deleteCliente(id) {
 
 let editingListinoId = null;
 
-function getListiniProdotto(prodottoId) {
-  const rank = { all: 0, giro: 1, cliente: 2, giro_cliente: 3 };
-  return state.listini
-    .filter(l => l.prodottoId === prodottoId)
-    .sort((a, b) => {
-      if ((rank[a.scope] ?? 9) !== (rank[b.scope] ?? 9)) return (rank[a.scope] ?? 9) - (rank[b.scope] ?? 9);
-      if (a.validoDal !== b.validoDal) return a.validoDal < b.validoDal ? 1 : -1;
-      return b.id - a.id;
-    });
+function openNewListino() {
+  openListiniModal();
+}
+
+function getListinoStato(l) {
+  const t = today();
+  if (l.validoDal && l.validoDal > t) return 'futuro';
+  if (l.validoAl && l.validoAl < t) return 'scaduto';
+  return 'attivo';
+}
+
+function listinoStatoBadge(l) {
+  const s = getListinoStato(l);
+  if (s === 'attivo') return '<span class="badge badge-green">Attivo</span>';
+  if (s === 'futuro') return '<span class="badge badge-blue">Futuro</span>';
+  return '<span class="badge badge-red">Scaduto</span>';
+}
+
+function fillListinoSelectors(selectedProdottoId = null) {
+  const selProdotto = document.getElementById('ls-prodotto');
+  if (selProdotto) {
+    const prodotti = [...state.prodotti].sort((a, b) => a.nome.localeCompare(b.nome));
+    selProdotto.innerHTML = '<option value="">Seleziona prodotto</option>' +
+      prodotti.map(p => `<option value="${p.id}">[${p.codice}] ${p.nome}</option>`).join('');
+    if (selectedProdottoId) selProdotto.value = String(selectedProdottoId);
+  }
+  const selCliente = document.getElementById('ls-cliente');
+  if (selCliente) {
+    selCliente.innerHTML = '<option value="">Seleziona cliente</option>' +
+      state.clienti.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+  }
+  const selGiro = document.getElementById('ls-giro');
+  if (selGiro) {
+    const giri = [...new Set(state.clienti.map(c => c.giro).filter(Boolean))].sort();
+    selGiro.innerHTML = '<option value="">Seleziona giro</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
+  }
 }
 
 function onListinoScopeChange() {
@@ -3317,20 +3340,14 @@ function listinoPreviewPrezzo(l) {
   return 'Derivato';
 }
 
-function openListiniModal(prodottoId) {
+function openListiniModal(prodottoId = null) {
   if (!canManageListini()) return;
-  state.listinoProdottoId = prodottoId;
   editingListinoId = null;
-  const p = getProdotto(prodottoId);
-  document.getElementById('listini-prodotto-title').textContent = `[${p.codice}] ${p.nome}`;
-  const selCliente = document.getElementById('ls-cliente');
-  selCliente.innerHTML = '<option value="">Seleziona cliente</option>' +
-    state.clienti.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
-  const selGiro = document.getElementById('ls-giro');
-  const giri = [...new Set(state.clienti.map(c => c.giro).filter(Boolean))].sort();
-  selGiro.innerHTML = '<option value="">Seleziona giro</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
+  document.getElementById('modal-listino-title').textContent = 'Nuovo listino';
+  fillListinoSelectors(prodottoId);
   document.getElementById('ls-scope').value = 'all';
   document.getElementById('ls-mode').value = 'base_markup';
+  document.getElementById('ls-prodotto').value = prodottoId ? String(prodottoId) : '';
   document.getElementById('ls-base').value = '';
   document.getElementById('ls-markup').value = '';
   document.getElementById('ls-discount').value = '';
@@ -3342,35 +3359,17 @@ function openListiniModal(prodottoId) {
   document.getElementById('ls-note').value = '';
   onListinoScopeChange();
   onListinoModeChange();
-  renderListiniTable();
   openModal('modal-listini');
 }
 
-function renderListiniTable() {
-  const prodottoId = state.listinoProdottoId;
-  const body = document.getElementById('listini-table-body');
-  if (!prodottoId || !body) return;
-  const rows = getListiniProdotto(prodottoId);
-  body.innerHTML = rows.length ? rows.map(l => `
-    <tr>
-      <td>${listinoScopeLabel(l)}</td>
-      <td>${listinoRuleLabel(l)}</td>
-      <td style="font-family:'DM Mono',monospace;">${listinoPreviewPrezzo(l)}</td>
-      <td>${l.validoDal || '-'}</td>
-      <td>${l.validoAl || '-'}</td>
-      <td>${l.note || ''}</td>
-      <td>
-        <button class="btn btn-outline btn-sm" onclick="editListinoEntry(${l.id})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteListinoEntry(${l.id})">🗑️</button>
-      </td>
-    </tr>
-  `).join('') : '<tr><td colspan="7" style="color:var(--text3);">Nessuna regola listino</td></tr>';
-}
-
 function editListinoEntry(id) {
+  if (!canManageListini()) return;
   const l = state.listini.find(x => x.id === id);
   if (!l) return;
+  fillListinoSelectors(l.prodottoId);
   editingListinoId = id;
+  document.getElementById('modal-listino-title').textContent = 'Modifica listino';
+  document.getElementById('ls-prodotto').value = l.prodottoId || '';
   document.getElementById('ls-scope').value = l.scope || 'all';
   document.getElementById('ls-mode').value = l.mode || 'final_price';
   document.getElementById('ls-giro').value = l.giro || '';
@@ -3384,11 +3383,12 @@ function editListinoEntry(id) {
   document.getElementById('ls-note').value = l.note || '';
   onListinoScopeChange();
   onListinoModeChange();
+  openModal('modal-listini');
 }
 
 async function saveListinoEntry() {
   if (!canManageListini()) return;
-  const prodottoId = state.listinoProdottoId;
+  const prodottoId = document.getElementById('ls-prodotto').value ? parseInt(document.getElementById('ls-prodotto').value) : null;
   const scope = document.getElementById('ls-scope').value;
   const mode = document.getElementById('ls-mode').value;
   const clienteId = document.getElementById('ls-cliente').value ? parseInt(document.getElementById('ls-cliente').value) : null;
@@ -3453,14 +3453,7 @@ async function saveListinoEntry() {
       state.listini.push(normalizeListino(saved));
     }
     editingListinoId = null;
-    document.getElementById('ls-base').value = '';
-    document.getElementById('ls-markup').value = '';
-    document.getElementById('ls-discount').value = '';
-    document.getElementById('ls-final').value = '';
-    document.getElementById('ls-dal').value = today();
-    document.getElementById('ls-al').value = '';
-    document.getElementById('ls-note').value = '';
-    renderListiniTable();
+    closeModal('modal-listini');
     renderProdottiTable();
     renderListiniPage();
     showToast('Listino salvato', 'success');
@@ -3474,7 +3467,6 @@ async function deleteListinoEntry(id) {
     await api('DELETE', `/api/listini/${id}`);
     state.listini = state.listini.filter(l => l.id !== id);
     if (editingListinoId === id) editingListinoId = null;
-    renderListiniTable();
     renderProdottiTable();
     renderListiniPage();
   } catch (e) { showToast(e.message, 'warning'); }
@@ -3506,27 +3498,61 @@ function renderProdottiTable() {
 }
 
 function renderListiniPage() {
-  const q = (document.getElementById('search-listini-prodotti')?.value || '').toLowerCase();
-  const filterCat = document.getElementById('filter-cat-listini')?.value || '';
-  let list = state.prodotti;
-  if (q) list = list.filter(p => p.nome.toLowerCase().includes(q) || p.codice.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q));
-  if (filterCat) list = list.filter(p => p.categoria === filterCat);
+  const newBtn = document.getElementById('listini-new-btn');
+  if (newBtn) newBtn.style.display = canManageListini() ? '' : 'none';
+  const q = (document.getElementById('search-listini')?.value || '').toLowerCase();
+  const scopeFilter = document.getElementById('filter-scope-listini')?.value || '';
+  const statoFilter = document.getElementById('filter-stato-listini')?.value || '';
+  let rows = [...state.listini];
+  if (scopeFilter) rows = rows.filter(l => l.scope === scopeFilter);
+  if (statoFilter) rows = rows.filter(l => getListinoStato(l) === statoFilter);
+  if (q) {
+    rows = rows.filter(l => {
+      const p = getProdotto(l.prodottoId);
+      const text = [
+        p.codice || '',
+        p.nome || '',
+        p.categoria || '',
+        listinoScopeLabel(l),
+        l.note || ''
+      ].join(' ').toLowerCase();
+      return text.includes(q);
+    });
+  }
+  const statoRank = { attivo: 0, futuro: 1, scaduto: 2 };
+  rows.sort((a, b) => {
+    const sa = statoRank[getListinoStato(a)] ?? 9;
+    const sb = statoRank[getListinoStato(b)] ?? 9;
+    if (sa !== sb) return sa - sb;
+    const pa = getProdotto(a.prodottoId).nome || '';
+    const pb = getProdotto(b.prodottoId).nome || '';
+    if (pa !== pb) return pa.localeCompare(pb);
+    if ((a.validoDal || '') !== (b.validoDal || '')) return (a.validoDal || '') < (b.validoDal || '') ? 1 : -1;
+    return b.id - a.id;
+  });
 
-  const tbody = document.getElementById('listini-prodotti-table');
+  const tbody = document.getElementById('listini-page-table');
   if (!tbody) return;
-  tbody.innerHTML = list.map(p => {
-    const regoleAttive = state.listini.filter(l => l.prodottoId === p.id && (!l.validoAl || l.validoAl >= today())).length;
+  tbody.innerHTML = rows.length ? rows.map(l => {
+    const p = getProdotto(l.prodottoId);
+    const prodottoLabel = p.id ? `[${p.codice}] ${p.nome}` : `Prodotto #${l.prodottoId}`;
     return `
       <tr>
-        <td><span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);">${p.codice}</span></td>
-        <td><b>${p.nome}</b></td>
-        <td><span class="badge badge-gray">${p.categoria}</span></td>
-        <td style="font-family:'DM Mono',monospace;">${eur(getListinoBaseProdotto(p.id))}</td>
-        <td><span class="badge badge-blue">${regoleAttive}</span></td>
-        <td>${canManageListini() ? `<button class="btn btn-outline btn-sm" onclick="openListiniModal(${p.id})">Gestisci</button>` : '-'}</td>
+        <td><b>${prodottoLabel}</b></td>
+        <td>${listinoScopeLabel(l)}</td>
+        <td>${listinoRuleLabel(l)}</td>
+        <td style="font-family:'DM Mono',monospace;">${listinoPreviewPrezzo(l)}</td>
+        <td>${l.validoDal || '-'}</td>
+        <td>${l.validoAl || '-'}</td>
+        <td>${listinoStatoBadge(l)}</td>
+        <td>${l.note || ''}</td>
+        <td>
+          ${canManageListini() ? `<button class="btn btn-outline btn-sm" onclick="editListinoEntry(${l.id})">✏️</button>` : ''}
+          ${canManageListini() ? `<button class="btn btn-danger btn-sm" onclick="deleteListinoEntry(${l.id})">🗑️</button>` : ''}
+        </td>
       </tr>
     `;
-  }).join('');
+  }).join('') : '<tr><td colspan="9" style="color:var(--text3);">Nessun listino configurato</td></tr>';
 }
 
 function openNewProdotto() {
