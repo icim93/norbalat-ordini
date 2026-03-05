@@ -18,6 +18,7 @@ const bcrypt   = require('bcrypt');
 const jwt      = require('jsonwebtoken');
 const cors     = require('cors');
 const nodemailer = require('nodemailer');
+const { z } = require('zod');
 const path     = require('path');
 
 const PORT        = process.env.PORT       || 3000;
@@ -876,6 +877,48 @@ function asIntArray(v) {
   return [...new Set(v.map(x => parseInt(x, 10)).filter(Number.isFinite))];
 }
 
+function validationError(res, parsed) {
+  return res.status(400).json({
+    error: 'Payload non valido',
+    details: parsed.error.issues.map(i => ({
+      path: i.path.join('.'),
+      message: i.message,
+    })),
+  });
+}
+
+const zListinoPayload = z.object({
+  prodotto_id: z.coerce.number().int().positive().optional(),
+  prodotto_ids: z.array(z.coerce.number().int().positive()).optional(),
+  cliente_id: z.coerce.number().int().positive().nullable().optional(),
+  cliente_ids: z.array(z.coerce.number().int().positive()).optional(),
+  giro: z.string().max(120).optional().default(''),
+  scope: z.enum(['all', 'giro', 'cliente', 'giro_cliente']).optional().default('all'),
+  mode: z.enum(['base_markup', 'discount_pct', 'final_price']).optional().default('final_price'),
+  prezzo: z.coerce.number().nullable().optional(),
+  base_price: z.coerce.number().nullable().optional(),
+  markup_pct: z.coerce.number().optional().default(0),
+  discount_pct: z.coerce.number().optional().default(0),
+  final_price: z.coerce.number().nullable().optional(),
+  excluded_client_ids: z.array(z.coerce.number().int().positive()).optional().default([]),
+  valido_dal: z.string().min(1),
+  valido_al: z.string().nullable().optional(),
+  note: z.string().max(3000).optional().default(''),
+});
+
+const zCrmEventoPayload = z.object({
+  tipo: z.string().min(1).max(80).optional().default('richiesta'),
+  esito: z.string().max(300).optional().default(''),
+  richiesta: z.string().max(2000).optional().default(''),
+  motivo: z.string().max(2000).optional().default(''),
+  note: z.string().max(3000).optional().default(''),
+});
+
+const zConsegnaParzialePayload = z.object({
+  delivered: z.record(z.coerce.number()).optional().default({}),
+  note: z.string().max(2000).optional().default(''),
+});
+
 async function getNextDeliveryDate(giro, fromDateStr = null) {
   const start = fromDateStr ? new Date(fromDateStr) : new Date();
   const { rows } = await q('SELECT giorni FROM giri_calendario WHERE giro=$1 LIMIT 1', [String(giro || '').trim()]);
@@ -1265,13 +1308,9 @@ app.get('/api/clienti/:id/crm-eventi', authMiddleware, async (req, res) => {
 app.post('/api/clienti/:id/crm-eventi', authMiddleware, requirePermission('clienti:update'), async (req, res) => {
   try {
     const clienteId = parseInt(req.params.id);
-    const {
-      tipo = 'richiesta',
-      esito = '',
-      richiesta = '',
-      motivo = '',
-      note = '',
-    } = req.body || {};
+    const parsed = zCrmEventoPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const { tipo, esito, richiesta, motivo, note } = parsed.data;
     const userName = `${req.user.nome} ${req.user.cognome || ''}`.trim();
     const r = await q(
       `INSERT INTO clienti_crm_eventi (cliente_id,tipo,esito,richiesta,motivo,note,user_id,user_name)
@@ -1362,6 +1401,8 @@ app.get('/api/listini', authMiddleware, requirePermission('listini:view'), async
 
 app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
   try {
+    const parsed = zListinoPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
     const {
       prodotto_id, prodotto_ids = null,
       cliente_id = null, cliente_ids = null,
@@ -1369,7 +1410,7 @@ app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), as
       prezzo = null, base_price = null, markup_pct = 0, discount_pct = 0, final_price = null,
       excluded_client_ids = [],
       valido_dal, valido_al = null, note = '',
-    } = req.body || {};
+    } = parsed.data;
     const prodotti = asIntArray(prodotto_ids && prodotto_ids.length ? prodotto_ids : [prodotto_id]);
     if (!prodotti.length || !valido_dal) {
       return res.status(400).json({ error: 'Campi obbligatori mancanti' });
@@ -1424,12 +1465,14 @@ app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), as
 app.put('/api/listini/:id', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const parsed = zListinoPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
     const {
       cliente_id = null, giro = '', scope = 'all', mode = 'final_price',
       prezzo = null, base_price = null, markup_pct = 0, discount_pct = 0, final_price = null,
       excluded_client_ids = [],
       valido_dal, valido_al = null, note = '',
-    } = req.body || {};
+    } = parsed.data;
     if (!valido_dal) return res.status(400).json({ error: 'Campi mancanti' });
     const allowedScope = ['all', 'giro', 'cliente', 'giro_cliente'];
     const allowedMode = ['base_markup', 'discount_pct', 'final_price'];
@@ -1662,8 +1705,10 @@ app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission(
   const client = await pool.connect();
   try {
     const ordineId = parseInt(req.params.id);
-    const deliveredMap = req.body?.delivered || {};
-    const note = String(req.body?.note || '').trim();
+    const parsed = zConsegnaParzialePayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const deliveredMap = parsed.data.delivered || {};
+    const note = String(parsed.data.note || '').trim();
 
     await client.query('BEGIN');
     const { rows: ordRows } = await client.query('SELECT * FROM ordini WHERE id=$1 FOR UPDATE', [ordineId]);
@@ -1934,7 +1979,10 @@ app.get('/api/stats/dashboard', authMiddleware, async (req, res) => {
 
 app.get('/api/experimental/source', authMiddleware, requireRole('admin','direzione'), async (req, res) => {
   try {
-    const url = String(req.query.url || EXPERIMENTAL_SOURCE_URL || '').trim();
+    const zExperimentalQuery = z.object({ url: z.string().url().optional() });
+    const parsed = zExperimentalQuery.safeParse(req.query || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const url = String(parsed.data.url || EXPERIMENTAL_SOURCE_URL || '').trim();
     if (!url) return res.status(400).json({ error: 'URL sorgente non configurato' });
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 12000);

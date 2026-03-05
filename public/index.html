@@ -3785,67 +3785,7 @@ function renderListiniPage() {
   }).join('') : '<tr><td colspan="9" style="color:var(--text3);">Nessun listino configurato</td></tr>';
 }
 
-function exportListiniPdf() {
-  const rows = [...state.listini].sort((a, b) => {
-    const pa = getProdotto(a.prodottoId).nome || '';
-    const pb = getProdotto(b.prodottoId).nome || '';
-    if (pa !== pb) return pa.localeCompare(pb);
-    return (a.validoDal || '').localeCompare(b.validoDal || '');
-  });
-  const tableRows = rows.map(l => {
-    const p = getProdotto(l.prodottoId);
-    return `<tr>
-      <td>${p.codice || ''}</td>
-      <td>${p.nome || ''}</td>
-      <td>${listinoScopeLabel(l)}${listinoExcludedLabel(l)}</td>
-      <td>${listinoRuleLabel(l)}</td>
-      <td>${listinoPreviewPrezzo(l)}</td>
-      <td>${l.validoDal || '-'}</td>
-      <td>${l.validoAl || '-'}</td>
-    </tr>`;
-  }).join('');
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Listino Norbalat</title>
-    <style>
-      body{font-family:Arial,sans-serif;color:#102a43;margin:24px}
-      h1{margin:0 0 4px;font-size:24px} .sub{color:#486581;font-size:12px;margin-bottom:18px}
-      table{width:100%;border-collapse:collapse;font-size:12px}
-      th,td{border:1px solid #d9e2ec;padding:6px 8px;vertical-align:top}
-      th{background:#f0f4f8;text-align:left}
-    </style></head><body>
-    <h1>Listino commerciale</h1><div class="sub">Generato il ${new Date().toLocaleString('it-IT')}</div>
-    <table><thead><tr><th>Codice</th><th>Prodotto</th><th>Ambito</th><th>Regola</th><th>Prezzo</th><th>Dal</th><th>Al</th></tr></thead>
-    <tbody>${tableRows || '<tr><td colspan="7">Nessun dato</td></tr>'}</tbody></table>
-    </body></html>`;
-  const w = window.open('', '_blank');
-  if (!w) return showToast('Popup bloccato dal browser', 'warning');
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  setTimeout(() => w.print(), 250);
-}
 
-async function renderSperimentale() {
-  const pre = document.getElementById('experimental-preview');
-  if (pre && !pre.textContent.trim()) {
-    pre.textContent = 'Premi "Aggiorna" per acquisire i dati.';
-  }
-}
-
-async function loadExperimentalSource() {
-  const url = (document.getElementById('experimental-url')?.value || '').trim();
-  const meta = document.getElementById('experimental-meta');
-  const pre = document.getElementById('experimental-preview');
-  if (meta) meta.textContent = 'Caricamento...';
-  try {
-    const q = url ? `?url=${encodeURIComponent(url)}` : '';
-    const r = await api('GET', `/api/experimental/source${q}`);
-    if (meta) meta.textContent = `${r.source || ''} · ${r.content_type || ''}`;
-    pre.textContent = typeof r.preview === 'string' ? r.preview : JSON.stringify(r.preview, null, 2);
-  } catch (e) {
-    if (meta) meta.textContent = `Errore: ${e.message}`;
-    if (pre) pre.textContent = '';
-  }
-}
 
 function openNewProdotto() {
   state.editingId = null;
@@ -3897,64 +3837,7 @@ async function saveProdotto() {
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-function renderCrmEventiTable() {
-  const body = document.getElementById('crm-eventi-body');
-  if (!body) return;
-  body.innerHTML = state.crmEventi.length ? state.crmEventi.map(e => `
-    <tr>
-      <td>${formatDateTime(e.created_at || e.createdAt)}</td>
-      <td>${e.tipo || ''}</td>
-      <td>${e.esito || ''}</td>
-      <td>${e.richiesta || ''}${e.note ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">${e.note}</div>` : ''}</td>
-      <td>${e.motivo || ''}</td>
-      <td>${e.user_name || ''}</td>
-    </tr>
-  `).join('') : '<tr><td colspan="6" style="color:var(--text3);">Nessun evento CRM</td></tr>';
-}
 
-async function openCrmCliente(clienteId) {
-  state.crmClienteId = clienteId;
-  state.crmEventi = [];
-  const c = getCliente(clienteId);
-  document.getElementById('crm-cliente-title').textContent = `CRM Cliente — ${c.nome}`;
-  ['crm-esito','crm-richiesta','crm-motivo','crm-note'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  try {
-    const rows = await api('GET', `/api/clienti/${clienteId}/crm-eventi`);
-    state.crmEventi = rows || [];
-  } catch (e) {
-    showToast(e.message, 'warning');
-  }
-  renderCrmEventiTable();
-  openModal('modal-crm-cliente');
-}
-
-async function saveCrmEvento() {
-  if (!state.crmClienteId) return;
-  const body = {
-    tipo: document.getElementById('crm-tipo').value,
-    esito: document.getElementById('crm-esito').value.trim(),
-    richiesta: document.getElementById('crm-richiesta').value.trim(),
-    motivo: document.getElementById('crm-motivo').value.trim(),
-    note: document.getElementById('crm-note').value.trim(),
-  };
-  if (!body.richiesta && !body.note && !body.motivo) {
-    showToast('Inserisci almeno un dettaglio CRM', 'warning');
-    return;
-  }
-  try {
-    const saved = await api('POST', `/api/clienti/${state.crmClienteId}/crm-eventi`, body);
-    state.crmEventi.unshift(saved);
-    renderCrmEventiTable();
-    ['crm-esito','crm-richiesta','crm-motivo','crm-note'].forEach(id => {
-      const el = document.getElementById(id); if (el) el.value = '';
-    });
-    showToast('Evento CRM salvato', 'success');
-  } catch (e) {
-    showToast(e.message, 'warning');
-  }
-}
 
 async function deleteProdotto(id) {
   id = parseInt(id);
@@ -5116,48 +4999,6 @@ async function confermaConsegnaRapida(id) {
 // ═══════════════════════════════════════════════
 // PIANO DI CARICO
 // ═══════════════════════════════════════════════
-
-// Layout fedeli ai PDF:
-// asym8 (01,02,03): col sx 3 grandi (rs 2+2+1) + col dx 5 piccole  = 8 pedane
-// sym12 (04):       2 col x 6 righe uniformi                        = 12 pedane
-// ford5 (07):       4 grandi (2x2) + 1 larga in fondo               = 5 pedane
-
-const PIANO_LAYOUTS = {
-  asym8: {
-    cols: 2, rows: 5,
-    slots: [
-      { n:1, c:0, r:0, cs:1, rs:2 },  // sin grande alta  (P1)
-      { n:2, c:0, r:2, cs:1, rs:2 },  // sin grande media (P2)
-      { n:3, c:0, r:4, cs:1, rs:1 },  // sin piccola bassa(P3)
-      { n:4, c:1, r:0, cs:1, rs:1 },  // dx 1
-      { n:5, c:1, r:1, cs:1, rs:1 },  // dx 2
-      { n:6, c:1, r:2, cs:1, rs:1 },  // dx 3
-      { n:7, c:1, r:3, cs:1, rs:1 },  // dx 4
-      { n:8, c:1, r:4, cs:1, rs:1 },  // dx 5
-    ]
-  },
-  sym12: {
-    cols: 2, rows: 6,
-    slots: [
-      { n:1,  c:0, r:0, cs:1, rs:1 }, { n:2,  c:1, r:0, cs:1, rs:1 },
-      { n:3,  c:0, r:1, cs:1, rs:1 }, { n:4,  c:1, r:1, cs:1, rs:1 },
-      { n:5,  c:0, r:2, cs:1, rs:1 }, { n:6,  c:1, r:2, cs:1, rs:1 },
-      { n:7,  c:0, r:3, cs:1, rs:1 }, { n:8,  c:1, r:3, cs:1, rs:1 },
-      { n:9,  c:0, r:4, cs:1, rs:1 }, { n:10, c:1, r:4, cs:1, rs:1 },
-      { n:11, c:0, r:5, cs:1, rs:1 }, { n:12, c:1, r:5, cs:1, rs:1 },
-    ]
-  },
-  ford5: {
-    cols: 2, rows: 3,
-    slots: [
-      { n:1, c:0, r:0, cs:1, rs:1 },  // sin 1
-      { n:2, c:1, r:0, cs:1, rs:1 },  // dx 1
-      { n:3, c:0, r:1, cs:1, rs:1 },  // sin 2
-      { n:4, c:1, r:1, cs:1, rs:1 },  // dx 2
-      { n:5, c:0, r:2, cs:2, rs:1 },  // fondo largo (P5 = 1 larga)
-    ]
-  }
-};
 
 let pianoSelectedCamionId = null;
 
@@ -6987,6 +6828,10 @@ async function importClientiExcel(input) {
   renderClientiTable();
 }
 </script>
+<script src="/js/modules/piano-layouts.js"></script>
+<script src="/js/modules/sperimentale.js"></script>
+<script src="/js/modules/listini-pdf.js"></script>
+<script src="/js/modules/crm.js"></script>
 
 
 <!-- Modal: Conferma generica -->
