@@ -2565,18 +2565,6 @@ function canApproveOnboarding() {
 
 
 
-function eur(v) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return '-';
-  return `€ ${n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-
-
-
-
-
-
 function isClienteSbloccato(c) {
   return !!c?.sbloccato || c?.onboardingStato === 'approvato';
 }
@@ -2634,51 +2622,6 @@ async function loadAllData() {
 
 // HELPERS
 // ═══════════════════════════════════════════════
-
-function getCliente(id) { return state.clienti.find(c => c.id === id) || {nome:'?', localita:'', giro:''}; }
-function getAgente(id) {
-  const u = state.utenti.find(u => u.id === id);
-  if (!u) return {nome:'?', cognome:'', nomeCompleto:'?'};
-  return {...u, nomeCompleto: (u.nome + ' ' + (u.cognome||'')).trim()};
-}
-function getProdotto(id) { return state.prodotti.find(p => p.id === id) || {nome:'?',um:''}; }
-
-function today() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
-
-function statoBadge(stato) {
-  const map = {
-    attesa: ['badge-orange','In attesa'],
-    preparazione: ['badge-blue','In preparazione'],
-    consegnato: ['badge-green','Consegnato'],
-    annullato: ['badge-red','Annullato'],
-  };
-  const [cls,label] = map[stato] || ['badge-gray', stato];
-  return `<span class="badge ${cls}">${label}</span>`;
-}
-
-function lineeResume(linee) {
-  return linee.map(l => {
-    const pedana = l.isPedana ? ' <b style="color:var(--accent)">🪵PDN</b>' : '';
-    const p = getProdotto(l.prodId);
-    return `${l.qty} ${p.um} ${p.nome.split(' ').slice(0,3).join(' ')}`;
-  }).join(', ');
-}
-
-function formatDate(d) {
-  if (!d) return '';
-  const [y,m,dd] = d.split('-');
-  return `${dd}/${m}/${y}`;
-}
-
-function formatDateTime(ts) {
-  if (!ts) return '';
-  try {
-    const d = new Date(ts);
-    return `${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
-  } catch (_) {
-    return String(ts);
-  }
-}
 
 // ═══════════════════════════════════════════════
 // DASHBOARD
@@ -6178,6 +6121,7 @@ async function importClientiExcel(input) {
 </script>
 <script src="/js/modules/normalizers.js"></script>
 <script src="/js/modules/app-shell.js"></script>
+<script src="/js/modules/core-utils.js"></script>
 <script src="/js/modules/piano-layouts.js"></script>
 <script src="/js/modules/sperimentale.js"></script>
 <script src="/js/modules/listini.js"></script>
