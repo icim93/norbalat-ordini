@@ -17,6 +17,7 @@ const { Pool } = require('pg');
 const bcrypt   = require('bcrypt');
 const jwt      = require('jsonwebtoken');
 const cors     = require('cors');
+const nodemailer = require('nodemailer');
 const path     = require('path');
 
 const PORT        = process.env.PORT       || 3000;
@@ -28,6 +29,15 @@ const PIVA_LOOKUP_TOKEN = process.env.PIVA_LOOKUP_TOKEN || '';
 const PIVA_LOOKUP_AUTH_HEADER = process.env.PIVA_LOOKUP_AUTH_HEADER || 'Authorization';
 const PIVA_LOOKUP_TOKEN_PREFIX = process.env.PIVA_LOOKUP_TOKEN_PREFIX || 'Bearer ';
 const PIVA_LOOKUP_EXTRA_HEADERS = process.env.PIVA_LOOKUP_EXTRA_HEADERS || '';
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_SECURE = String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
+const SMTP_FROM = process.env.SMTP_FROM || '';
+const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'Norbalat Ordini';
+const NOTIFY_EMAIL_TO = process.env.NOTIFY_EMAIL_TO || '';
+const NOTIFY_TIMEZONE = process.env.NOTIFY_TIMEZONE || 'Europe/Rome';
 
 const app  = express();
 const pool = new Pool({ connectionString: DATABASE_URL });
@@ -89,6 +99,191 @@ function extractLookupFields(payload, piva) {
   };
 }
 
+let smtpTransporter = null;
+let lastDailySummaryKey = null;
+
+function parseEmailList(raw) {
+  return String(raw || '')
+    .split(/[;,]/)
+    .map(x => x.trim())
+    .filter(Boolean);
+}
+
+function getDefaultEmailNotificationSettings() {
+  return {
+    enabled: !!(SMTP_HOST && SMTP_FROM && parseEmailList(NOTIFY_EMAIL_TO).length),
+    recipients: parseEmailList(NOTIFY_EMAIL_TO),
+    on_new_client: true,
+    daily_summary: true,
+    daily_summary_hour: 18,
+    last_daily_sent_key: '',
+  };
+}
+
+async function getEmailNotificationSettings() {
+  const defaults = getDefaultEmailNotificationSettings();
+  try {
+    const { rows } = await q('SELECT value FROM app_settings WHERE key=$1', ['email_notifications']);
+    if (!rows.length) return defaults;
+    const saved = rows[0].value && typeof rows[0].value === 'object' ? rows[0].value : {};
+    const merged = { ...defaults, ...saved };
+    merged.recipients = Array.isArray(merged.recipients) ? merged.recipients.filter(Boolean) : defaults.recipients;
+    merged.daily_summary_hour = Math.min(23, Math.max(0, Number(merged.daily_summary_hour || 18)));
+    merged.enabled = !!merged.enabled;
+    merged.on_new_client = !!merged.on_new_client;
+    merged.daily_summary = !!merged.daily_summary;
+    merged.last_daily_sent_key = String(merged.last_daily_sent_key || '');
+    return merged;
+  } catch (_) {
+    return defaults;
+  }
+}
+
+async function saveEmailNotificationSettings(next) {
+  const payload = {
+    enabled: !!next.enabled,
+    recipients: Array.isArray(next.recipients) ? next.recipients.filter(Boolean) : [],
+    on_new_client: !!next.on_new_client,
+    daily_summary: !!next.daily_summary,
+    daily_summary_hour: Math.min(23, Math.max(0, Number(next.daily_summary_hour || 18))),
+    last_daily_sent_key: String(next.last_daily_sent_key || ''),
+  };
+  await q(
+    `INSERT INTO app_settings (key,value,updated_at)
+     VALUES ($1,$2::jsonb,NOW())
+     ON CONFLICT (key)
+     DO UPDATE SET value=$2::jsonb, updated_at=NOW()`,
+    ['email_notifications', JSON.stringify(payload)]
+  );
+  return payload;
+}
+
+function isSmtpConfigured() {
+  return !!(SMTP_HOST && SMTP_PORT && SMTP_FROM);
+}
+
+function getSmtpTransporter() {
+  if (!isSmtpConfigured()) return null;
+  if (!smtpTransporter) {
+    smtpTransporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
+      auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+    });
+  }
+  return smtpTransporter;
+}
+
+async function sendManagedEmail({ to, subject, text, html }) {
+  const transporter = getSmtpTransporter();
+  if (!transporter) return { ok: false, skipped: true, reason: 'smtp_not_configured' };
+  if (!to || !to.length) return { ok: false, skipped: true, reason: 'no_recipients' };
+  await transporter.sendMail({
+    from: SMTP_FROM_NAME ? `"${SMTP_FROM_NAME}" <${SMTP_FROM}>` : SMTP_FROM,
+    to: to.join(', '),
+    subject,
+    text,
+    html,
+  });
+  return { ok: true };
+}
+
+async function getPendingClientiStatsToday() {
+  const sql = `
+    SELECT
+      COUNT(*) FILTER (
+        WHERE onboarding_stato = 'in_attesa'
+          AND sbloccato = FALSE
+          AND (created_at AT TIME ZONE $1) >= date_trunc('day', NOW() AT TIME ZONE $1)
+          AND (created_at AT TIME ZONE $1) <  date_trunc('day', NOW() AT TIME ZONE $1) + INTERVAL '1 day'
+      )::int AS created_today_pending,
+      COUNT(*) FILTER (
+        WHERE onboarding_stato = 'in_attesa'
+          AND sbloccato = FALSE
+      )::int AS total_pending
+    FROM clienti
+  `;
+  const { rows } = await q(sql, [NOTIFY_TIMEZONE]);
+  return {
+    createdTodayPending: rows[0]?.created_today_pending || 0,
+    totalPending: rows[0]?.total_pending || 0,
+  };
+}
+
+function notifyLog(...args) {
+  console.log('[notifiche-email]', ...args);
+}
+
+async function notifyNewClientePendingApproval(clienteNome, createdByName = 'Sistema') {
+  try {
+    const cfg = await getEmailNotificationSettings();
+    if (!cfg.enabled || !cfg.on_new_client) return;
+    const stats = await getPendingClientiStatsToday();
+    const subject = `Nuovo cliente in attesa approvazione (${stats.createdTodayPending} oggi)`;
+    const text = [
+      `Nuovo cliente inserito: ${clienteNome}`,
+      `Inserito da: ${createdByName}`,
+      `In attesa inseriti oggi: ${stats.createdTodayPending}`,
+      `Totale in attesa approvazione: ${stats.totalPending}`,
+    ].join('\n');
+    const html = `
+      <div style="font-family:Arial,sans-serif;color:#102a43;line-height:1.5;">
+        <h2 style="margin:0 0 10px;">Nuovo cliente in attesa approvazione</h2>
+        <p style="margin:0 0 8px;"><b>Cliente:</b> ${clienteNome}</p>
+        <p style="margin:0 0 8px;"><b>Inserito da:</b> ${createdByName}</p>
+        <p style="margin:0 0 6px;"><b>In attesa inseriti oggi:</b> ${stats.createdTodayPending}</p>
+        <p style="margin:0;"><b>Totale in attesa:</b> ${stats.totalPending}</p>
+      </div>
+    `;
+    const r = await sendManagedEmail({ to: cfg.recipients, subject, text, html });
+    if (!r.ok && !r.skipped) notifyLog('invio fallito su nuovo cliente', clienteNome);
+  } catch (e) {
+    notifyLog('errore nuovo cliente:', e.message);
+  }
+}
+
+async function maybeSendDailyPendingSummary() {
+  try {
+    const cfg = await getEmailNotificationSettings();
+    if (!cfg.enabled || !cfg.daily_summary) return;
+    const nowRome = new Date(new Date().toLocaleString('en-US', { timeZone: NOTIFY_TIMEZONE }));
+    if (nowRome.getMinutes() !== 0 || nowRome.getHours() !== Number(cfg.daily_summary_hour)) return;
+    const dayKey = nowRome.toISOString().slice(0, 10);
+    if (cfg.last_daily_sent_key === dayKey || lastDailySummaryKey === dayKey) return;
+
+    const stats = await getPendingClientiStatsToday();
+    const subject = `Riepilogo onboarding clienti - ${dayKey}`;
+    const text = [
+      `Data: ${dayKey}`,
+      `Nuovi clienti in attesa oggi: ${stats.createdTodayPending}`,
+      `Totale clienti in attesa approvazione: ${stats.totalPending}`,
+    ].join('\n');
+    const html = `
+      <div style="font-family:Arial,sans-serif;color:#102a43;line-height:1.5;">
+        <h2 style="margin:0 0 10px;">Riepilogo onboarding clienti</h2>
+        <p style="margin:0 0 6px;"><b>Data:</b> ${dayKey}</p>
+        <p style="margin:0 0 6px;"><b>Nuovi in attesa oggi:</b> ${stats.createdTodayPending}</p>
+        <p style="margin:0;"><b>Totale in attesa approvazione:</b> ${stats.totalPending}</p>
+      </div>
+    `;
+    const sent = await sendManagedEmail({ to: cfg.recipients, subject, text, html });
+    if (sent.ok) {
+      lastDailySummaryKey = dayKey;
+      await saveEmailNotificationSettings({ ...cfg, last_daily_sent_key: dayKey });
+      notifyLog('riepilogo giornaliero inviato', dayKey);
+    }
+  } catch (e) {
+    notifyLog('errore riepilogo giornaliero:', e.message);
+  }
+}
+
+function startEmailNotificationsScheduler() {
+  setInterval(() => {
+    maybeSendDailyPendingSummary().catch(() => {});
+  }, 60 * 1000);
+}
+
 // ─── SCHEMA ──────────────────────────────────────────────────────
 async function createSchema() {
   await q(`
@@ -124,7 +319,8 @@ async function createSchema() {
       fido             NUMERIC DEFAULT 0,
       sbloccato        BOOLEAN DEFAULT FALSE,
       onboarding_approvato_da TEXT,
-      onboarding_approvato_at TIMESTAMPTZ
+      onboarding_approvato_at TIMESTAMPTZ,
+      created_at       TIMESTAMPTZ DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS prodotti (
@@ -233,6 +429,12 @@ async function createSchema() {
       updated_at  TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key         TEXT PRIMARY KEY,
+      value       JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at  TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_ordini_data    ON ordini(data);
     CREATE INDEX IF NOT EXISTS idx_ordini_stato   ON ordini(stato);
     CREATE INDEX IF NOT EXISTS idx_ordini_agente  ON ordini(agente_id);
@@ -253,6 +455,7 @@ async function createSchema() {
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS codice_fiscale   TEXT DEFAULT '';
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS codice_univoco   TEXT DEFAULT '';
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS pec              TEXT DEFAULT '';
+    ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS created_at       TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS is_pedana      BOOLEAN DEFAULT FALSE;
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS nota_riga      TEXT DEFAULT '';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS unita_misura   TEXT DEFAULT 'pezzi';
@@ -268,6 +471,7 @@ async function createSchema() {
     UPDATE listini SET scope = CASE WHEN cliente_id IS NULL THEN 'all' ELSE 'cliente' END WHERE scope IS NULL OR scope = '';
     UPDATE listini SET mode = 'final_price' WHERE mode IS NULL OR mode = '';
     UPDATE listini SET final_price = COALESCE(final_price, prezzo) WHERE mode = 'final_price';
+    UPDATE clienti SET created_at = NOW() WHERE created_at IS NULL;
 
     DO $$
     BEGIN
@@ -920,7 +1124,9 @@ app.post('/api/clienti', authMiddleware, requirePermission('clienti:create'), as
       [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, JSON.stringify({})]
     );
     const u = req.user;
-    await logDB(u.id, `${u.nome} ${u.cognome||''}`.trim(), 'Nuovo cliente', nome);
+    const creator = `${u.nome} ${u.cognome||''}`.trim();
+    await logDB(u.id, creator, 'Nuovo cliente', nome);
+    notifyNewClientePendingApproval(nome, creator).catch(() => {});
     res.json(r.rows[0]);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -1445,6 +1651,71 @@ app.put('/api/giri/:id', authMiddleware, requireRole('admin'), async (req, res) 
 });
 
 // ─── ACTIVITY LOG ────────────────────────────────────────────────
+app.get('/api/impostazioni/notifiche-email', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const cfg = await getEmailNotificationSettings();
+    res.json({
+      ...cfg,
+      smtp_configured: isSmtpConfigured(),
+      smtp_from: SMTP_FROM || '',
+      timezone: NOTIFY_TIMEZONE,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/impostazioni/notifiche-email', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const cfg = await getEmailNotificationSettings();
+    const next = {
+      ...cfg,
+      enabled: !!body.enabled,
+      recipients: Array.isArray(body.recipients) ? body.recipients.map(x => String(x || '').trim()).filter(Boolean) : cfg.recipients,
+      on_new_client: body.on_new_client !== undefined ? !!body.on_new_client : cfg.on_new_client,
+      daily_summary: body.daily_summary !== undefined ? !!body.daily_summary : cfg.daily_summary,
+      daily_summary_hour: body.daily_summary_hour !== undefined ? Number(body.daily_summary_hour) : cfg.daily_summary_hour,
+      last_daily_sent_key: cfg.last_daily_sent_key || '',
+    };
+    if (!next.recipients.length) return res.status(400).json({ error: 'Inserisci almeno un destinatario' });
+    const saved = await saveEmailNotificationSettings(next);
+    await logDB(
+      req.user.id,
+      `${req.user.nome} ${req.user.cognome || ''}`.trim(),
+      'Impostazioni notifiche email',
+      `destinatari: ${saved.recipients.join(', ')}`
+    );
+    res.json({
+      ...saved,
+      smtp_configured: isSmtpConfigured(),
+      smtp_from: SMTP_FROM || '',
+      timezone: NOTIFY_TIMEZONE,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/impostazioni/notifiche-email/test', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const cfg = await getEmailNotificationSettings();
+    if (!cfg.recipients.length) return res.status(400).json({ error: 'Nessun destinatario configurato' });
+    const now = new Date().toISOString();
+    const sent = await sendManagedEmail({
+      to: cfg.recipients,
+      subject: 'Test notifiche Norbalat Ordini',
+      text: `Test inviato correttamente alle ${now}`,
+      html: `<div style="font-family:Arial,sans-serif;"><h3>Test notifiche</h3><p>Invio riuscito alle <b>${now}</b></p></div>`,
+    });
+    if (sent.skipped && sent.reason === 'smtp_not_configured') {
+      return res.status(400).json({ error: 'SMTP non configurato sul server (.env)' });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.get('/api/activity', authMiddleware, requireRole('admin','direzione','amministrazione'), async (req, res) => {
   try {
     const { rows } = await q('SELECT * FROM activity_log ORDER BY id DESC LIMIT 500');
@@ -1574,6 +1845,7 @@ async function start() {
     console.log('✅ Connesso a PostgreSQL');
     await createSchema();
     await seed();
+    startEmailNotificationsScheduler();
     app.listen(PORT, () => {
       console.log(`\n🧀 Norbalat Ordini v2 — http://localhost:${PORT}`);
       console.log(`   DB: ${DATABASE_URL.replace(/:([^:@]+)@/, ':****@')}\n`);
@@ -1587,3 +1859,4 @@ async function start() {
   }
 }
 start();
+

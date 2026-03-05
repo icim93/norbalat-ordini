@@ -1545,6 +1545,41 @@
             </div>
             <div id="tentata-list" style="padding:0 0 8px;"></div>
           </div>
+          <div class="card" style="margin-bottom:24px;">
+            <div class="card-header">
+              <div class="card-title">✉️ Notifiche email onboarding</div>
+              <div style="font-size:12px;color:var(--text3);" id="email-notify-status">Caricamento...</div>
+            </div>
+            <div style="padding:16px 20px 18px;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="email-notify-enabled" style="width:16px;height:16px;accent-color:var(--accent);">
+                  <span>Abilita notifiche</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="email-notify-new-client" style="width:16px;height:16px;accent-color:var(--accent);">
+                  <span>Invia su nuovo cliente in attesa</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="email-notify-daily" style="width:16px;height:16px;accent-color:var(--accent);">
+                  <span>Invia riepilogo giornaliero</span>
+                </label>
+                <div class="field" style="margin:0;">
+                  <label>Ora riepilogo (0-23)</label>
+                  <input type="number" id="email-notify-hour" min="0" max="23" step="1" placeholder="18">
+                </div>
+              </div>
+              <div class="field form-full" style="margin-top:10px;">
+                <label>Destinatari (separati da virgola)</label>
+                <input type="text" id="email-notify-recipients" placeholder="es. amm@azienda.it, direzione@azienda.it">
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;">
+                <button class="btn btn-green btn-sm" onclick="saveEmailNotificationSettings()">💾 Salva notifiche</button>
+                <button class="btn btn-outline btn-sm" onclick="sendEmailNotificationTest()">🧪 Invia test</button>
+                <span id="email-notify-meta" style="font-size:12px;color:var(--text3);"></span>
+              </div>
+            </div>
+          </div>
         </div>
       </div><!-- /page-impostazioni -->
 
@@ -2321,6 +2356,8 @@ let state = {
   devSmoke: null,
   devThresholds: null,
   listinoProdottoId: null,
+  emailNotifications: null,
+  emailNotificationsLoaded: false,
 };
 
 function canSeeDevPanel() {
@@ -2685,6 +2722,7 @@ function doLogout() {
   state.listini = []; state.listinoProdottoId = null;
   state.ordini = []; state.camions = []; state.giriCalendario = [];
   state.devMetrics = null; state.devSmoke = null; state.devErrors = []; state.devThresholds = null;
+  state.emailNotifications = null; state.emailNotificationsLoaded = false;
   document.getElementById('screen-app').style.display = 'none';
   document.getElementById('screen-login').style.display = 'flex';
 }
@@ -5441,6 +5479,69 @@ function getNextGiroDate(giroName) {
   return null;
 }
 
+async function loadEmailNotificationSettings(force = false) {
+  if (!force && state.emailNotificationsLoaded) return;
+  try {
+    const cfg = await api('GET', '/api/impostazioni/notifiche-email');
+    state.emailNotifications = cfg;
+    state.emailNotificationsLoaded = true;
+    renderEmailNotificationSettings();
+  } catch (e) {
+    state.emailNotificationsLoaded = true;
+    const st = document.getElementById('email-notify-status');
+    if (st) st.textContent = `Errore: ${e.message}`;
+  }
+}
+
+function renderEmailNotificationSettings() {
+  const cfg = state.emailNotifications;
+  if (!cfg) return;
+  const setVal = (id, value) => { const el = document.getElementById(id); if (el) el.value = value; };
+  const setChk = (id, value) => { const el = document.getElementById(id); if (el) el.checked = !!value; };
+  setChk('email-notify-enabled', cfg.enabled);
+  setChk('email-notify-new-client', cfg.on_new_client);
+  setChk('email-notify-daily', cfg.daily_summary);
+  setVal('email-notify-hour', cfg.daily_summary_hour ?? 18);
+  setVal('email-notify-recipients', (cfg.recipients || []).join(', '));
+  const st = document.getElementById('email-notify-status');
+  if (st) st.textContent = cfg.smtp_configured ? `SMTP OK · timezone ${cfg.timezone}` : 'SMTP non configurato sul server';
+  const meta = document.getElementById('email-notify-meta');
+  if (meta) meta.textContent = cfg.smtp_from ? `Mittente: ${cfg.smtp_from}` : '';
+}
+
+function readEmailNotificationForm() {
+  const recipientsRaw = document.getElementById('email-notify-recipients')?.value || '';
+  return {
+    enabled: !!document.getElementById('email-notify-enabled')?.checked,
+    on_new_client: !!document.getElementById('email-notify-new-client')?.checked,
+    daily_summary: !!document.getElementById('email-notify-daily')?.checked,
+    daily_summary_hour: Number(document.getElementById('email-notify-hour')?.value || 18),
+    recipients: recipientsRaw.split(/[;,]/).map(x => x.trim()).filter(Boolean),
+  };
+}
+
+async function saveEmailNotificationSettings() {
+  try {
+    const body = readEmailNotificationForm();
+    const saved = await api('PUT', '/api/impostazioni/notifiche-email', body);
+    state.emailNotifications = saved;
+    state.emailNotificationsLoaded = true;
+    renderEmailNotificationSettings();
+    showToast('Notifiche email aggiornate', 'success');
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
+}
+
+async function sendEmailNotificationTest() {
+  try {
+    await api('POST', '/api/impostazioni/notifiche-email/test', {});
+    showToast('Email di test inviata', 'success');
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
+}
+
 function renderImpostazioni() {
   // Calendario giri
   const el = document.getElementById('giri-calendar-list');
@@ -5487,6 +5588,11 @@ function renderImpostazioni() {
         </select>
       </div>`;
   }).join('');
+
+  renderEmailNotificationSettings();
+  if (!state.emailNotificationsLoaded) {
+    loadEmailNotificationSettings().catch(() => {});
+  }
 }
 
 function toggleGiroGiorno(gi, d, checked) {
