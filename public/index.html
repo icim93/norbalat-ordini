@@ -174,6 +174,9 @@
   }
 
   .topbar-brand { font-weight: 800; font-size: 17px; color: #ffffff; letter-spacing: -0.5px; }
+  .brand-wrap { display:flex; align-items:center; gap:8px; }
+  .brand-logo { width:28px; height:28px; object-fit:contain; border-radius:6px; background:#fff; padding:2px; }
+  .brand-text { font-weight:800; color:#fff; letter-spacing:-0.5px; }
   .topbar-user { display: flex; align-items: center; gap: 12px; }
   .topbar-role {
     font-size: 11px;
@@ -1129,7 +1132,10 @@
           <span style="display:block;width:20px;height:2px;background:currentColor;border-radius:2px;"></span>
         </span>
       </button>
-      <div class="topbar-brand">ðŸ§€ Norbalat Ordini</div>
+      <div class="topbar-brand brand-wrap">
+        <img src="/logo-norbalat.png" alt="Norbalat" class="brand-logo" onerror="this.style.display='none'">
+        <span class="brand-text">Norbalat Ordini</span>
+      </div>
     </div>
     <div class="topbar-user">
       <span id="topbar-username" style="font-size:14px;font-weight:500;color:#c8dff0;"></span>
@@ -1555,8 +1561,8 @@
                 <option value="cliente">Ordina: Cliente</option>
                 <option value="id">Ordina: Numero ordine</option>
               </select>
-              <button class="btn btn-outline btn-sm" onclick="openPDFGiornaliero()">Ã°Å¸â€œâ€ž PDF</button>
-              <button class="btn btn-green btn-sm" onclick="chiudiGiornataMagazzino()">Ã¢Å“â€¦ Conferma giornata</button>
+              <button class="btn btn-outline btn-sm" onclick="openPDFGiornaliero()">PDF</button>
+              <button class="btn btn-green btn-sm" onclick="chiudiGiornataMagazzino()">Conferma giornata</button>
             </div>
           </div>
         </div>
@@ -1821,7 +1827,10 @@
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
   <div class="drawer-header">
-    <div class="drawer-brand">ðŸ§€ Norbalat Ordini</div>
+    <div class="drawer-brand brand-wrap">
+      <img src="/logo-norbalat.png" alt="Norbalat" class="brand-logo" onerror="this.style.display='none'">
+      <span class="brand-text">Norbalat Ordini</span>
+    </div>
     <button class="drawer-close" onclick="closeDrawer()">âœ•</button>
   </div>
   <div class="drawer-user">
@@ -2592,7 +2601,7 @@
   <div class="modal" style="max-width:560px;">
     <div class="modal-header">
       <div class="modal-title" id="modal-scorta-title">Nuova scorta</div>
-      <button class="modal-close" onclick="closeModal('modal-scorta')">Ã¢Å“â€¢</button>
+      <button class="modal-close" onclick="closeModal('modal-scorta')">x</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="scorta-id">
@@ -2606,11 +2615,11 @@
           <input type="text" id="scorta-nome" placeholder="Es. Toscanella">
         </div>
         <div class="field">
-          <label>QuantitÃƒÂ  rimanente *</label>
+          <label>Quantità rimanente *</label>
           <input type="number" step="0.01" min="0" id="scorta-qta">
         </div>
         <div class="field">
-          <label>UnitÃƒÂ  misura</label>
+          <label>Unità misura</label>
           <input type="text" id="scorta-um" placeholder="ct, kg, pz...">
         </div>
         <div class="field form-full">

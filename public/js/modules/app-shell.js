@@ -5,6 +5,8 @@
     admin: [
       { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
+      { page: 'magazzino', icon: '📦', label: 'Magazzino' },
+      { page: 'autista', icon: '🚚', label: 'Vista Autista' },
       { page: 'clienti', icon: '🏢', label: 'Clienti' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },

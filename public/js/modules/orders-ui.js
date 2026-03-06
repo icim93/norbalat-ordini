@@ -21,23 +21,23 @@
       <td><b>${getCliente(o.clienteId).nome}</b></td>
       <td style="color:var(--text2);">${formatDate(o.data)}</td>
       <td>
-        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : 'â€”'; })()}</div>
-        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">ðŸ‘¤ ${getAgente(o.agenteId).nome}</div>` : ''}
+        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : '-'; })()}</div>
+        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">Agente: ${getAgente(o.agenteId).nome}</div>` : ''}
       </td>
       <td>${statoBadge(o.stato)}</td>
       <td>
-        <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">âœï¸</button>
-        <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">ðŸ‘ï¸</button>
-<button class="btn btn-outline btn-sm" title="Vai alla preparazione" aria-label="Vai alla preparazione" onclick="openPreparazioneOrdine(${o.id})">📦</button>
+        <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">Mod</button>
+        <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">Dett</button>
+        <button class="btn btn-outline btn-sm" title="Vai alla preparazione" aria-label="Vai alla preparazione" onclick="openPreparazioneOrdine(${o.id})">Prep</button>
       </td>
     </tr>
   `).join('');
   if (typeof renderScortePanels === 'function') renderScortePanels();
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ================================================
 // ORDINI TABLE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ================================================
 
 function renderOrdiniTable() {
   const q = (document.getElementById('search-ordini')?.value || '').toLowerCase();
@@ -80,17 +80,17 @@ function renderOrdiniTable() {
       <td><b>${getCliente(o.clienteId).nome}</b></td>
       <td>${formatDate(o.data)}</td>
       <td>
-        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : 'â€”'; })()}</div>
-        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">ðŸ‘¤ ${getAgente(o.agenteId).nome}</div>` : ''}
+        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : '-'; })()}</div>
+        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">Agente: ${getAgente(o.agenteId).nome}</div>` : ''}
       </td>
       <td class="col-lines" style="font-size:12px;color:var(--text2);max-width:200px;">${lineeResume(o.linee)}</td>
       <td>${statoBadge(o.stato)}</td>
-      <td class="col-note" style="font-size:13px;color:var(--text2);">${o.note || 'â€”'}</td>
+      <td class="col-note" style="font-size:13px;color:var(--text2);">${o.note || '-'}</td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">âœï¸</button>
-        <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">ðŸ‘ï¸</button>
-<button class="btn btn-outline btn-sm" title="Vai alla preparazione" aria-label="Vai alla preparazione" onclick="openPreparazioneOrdine(${o.id})">📦</button>
-        <button class="btn btn-danger btn-sm" title="Elimina ordine" aria-label="Elimina ordine" onclick="deleteOrder(${o.id})">ðŸ—‘ï¸</button>
+        <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">Mod</button>
+        <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">Dett</button>
+        <button class="btn btn-outline btn-sm" title="Vai alla preparazione" aria-label="Vai alla preparazione" onclick="openPreparazioneOrdine(${o.id})">Prep</button>
+        <button class="btn btn-danger btn-sm" title="Elimina ordine" aria-label="Elimina ordine" onclick="deleteOrder(${o.id})">Del</button>
       </td>
     </tr>`;
   }).join('');
@@ -127,7 +127,7 @@ async function deleteSelectedOrders() {
       ok++;
     } catch(e) { /* ignora singolo errore */ }
   }
-  showToast(`${ok} ordine${ok>1?'i':''} eliminat${ok>1?'i':'o'} âœ…`, 'success');
+  showToast(`${ok} ordine${ok>1?'i':''} eliminat${ok>1?'i':'o'} confermato`, 'success');
   renderOrdiniTable();
 }
 
@@ -146,8 +146,8 @@ function openPreparazioneOrdine(orderId) {
   }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ================================================
 // CLIENTI
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ================================================
 
 
