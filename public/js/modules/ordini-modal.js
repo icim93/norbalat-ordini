@@ -415,9 +415,9 @@ function renderOrderLines() {
           style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
         <div>
           <div style="font-size:11px;color:var(--text3);margin-bottom:2px;">Prezzo €</div>
-          <input type="number" step="0.01" min="0" value="${prezzo !== null ? prezzo.toFixed(2) : ''}"
+          <input type="text" inputmode="decimal" value="${prezzo !== null ? prezzo.toFixed(2) : ''}"
             placeholder="0,00"
-            oninput="const v=String(this.value||'').trim().replace(',','.');orderLines[${i}].prezzoUnitario=(v===''?null:Number(v));renderOrderLines()"
+            oninput="const raw=String(this.value||'').trim();const norm=raw.replace(',','.');const n=Number(norm);orderLines[${i}].prezzoUnitario=(raw===''||!Number.isFinite(n)?null:n);"
             style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
         </div>
       </div>

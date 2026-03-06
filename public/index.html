@@ -35,6 +35,17 @@
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  /* Rimuove le frecce spinner dagli input numerici (pezzi, kg, prezzi, ecc.) */
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
   body {
     font-family: 'DM Sans', sans-serif;
     background: var(--bg);
