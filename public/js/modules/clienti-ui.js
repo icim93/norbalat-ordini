@@ -51,13 +51,13 @@ function renderClientiTable() {
       <td><span style="font-family:'DM Mono',monospace;">€ ${fidoTxt}</span></td>
       <td><span class="badge ${onboardingBadge}">${onboardingLabel}</span></td>
       <td>
-        ${canManageOnboarding ? `<button class="btn btn-outline btn-sm" onclick="setClienteOnboardingStatus(${c.id},'in_verifica')">🔎</button>` : ''}
-        ${canManageOnboarding ? `<button class="btn btn-green btn-sm" onclick="approveClienteOnboarding(${c.id})">✅</button>` : ''}
-        ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" onclick="setClienteOnboardingStatus(${c.id},'rifiutato')">⛔</button>` : ''}
-        ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" onclick="setClienteOnboardingStatus(${c.id},'sospeso')">⏸️</button>` : ''}
-        <button class="btn btn-outline btn-sm" onclick="openCrmCliente(${c.id})">📇</button>
-        <button class="btn btn-outline btn-sm" onclick="openEditCliente(${c.id})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteCliente(${c.id})">🗑️</button>
+        ${canManageOnboarding ? `<button class="btn btn-outline btn-sm" title="Imposta in verifica" aria-label="Imposta in verifica" onclick="setClienteOnboardingStatus(${c.id},'in_verifica')">🔎</button>` : ''}
+        ${canManageOnboarding ? `<button class="btn btn-green btn-sm" title="Approva onboarding" aria-label="Approva onboarding" onclick="approveClienteOnboarding(${c.id})">✅</button>` : ''}
+        ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" title="Rifiuta onboarding" aria-label="Rifiuta onboarding" onclick="setClienteOnboardingStatus(${c.id},'rifiutato')">⛔</button>` : ''}
+        ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" title="Sospendi onboarding" aria-label="Sospendi onboarding" onclick="setClienteOnboardingStatus(${c.id},'sospeso')">⏸️</button>` : ''}
+        <button class="btn btn-outline btn-sm" title="Apri CRM cliente" aria-label="Apri CRM cliente" onclick="openCrmCliente(${c.id})">📇</button>
+        <button class="btn btn-outline btn-sm" title="Modifica cliente" aria-label="Modifica cliente" onclick="openEditCliente(${c.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" title="Elimina cliente" aria-label="Elimina cliente" onclick="deleteCliente(${c.id})">🗑️</button>
       </td>
     </tr>`;
   }).join('');

@@ -16,8 +16,8 @@ function renderProdottiTable() {
       <td><span class="badge ${p.pesoFisso ? 'badge-blue' : 'badge-orange'}">${p.pesoFisso ? 'Fisso' : 'Variabile'}</span></td>
       <td style="font-family:'DM Mono',monospace;">${eur(getListinoBaseProdotto(p.id))}</td>
       <td>
-        <button class="btn btn-outline btn-sm" onclick="openEditProdotto(${p.id})">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteProdotto(${p.id})">🗑️</button>
+        <button class="btn btn-outline btn-sm" title="Modifica prodotto" aria-label="Modifica prodotto" onclick="openEditProdotto(${p.id})">✏️</button>
+        <button class="btn btn-danger btn-sm" title="Elimina prodotto" aria-label="Elimina prodotto" onclick="deleteProdotto(${p.id})">🗑️</button>
       </td>
     </tr>
   `).join('');

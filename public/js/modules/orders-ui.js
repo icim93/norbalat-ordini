@@ -26,8 +26,8 @@ function renderDashboard() {
       </td>
       <td>${statoBadge(o.stato)}</td>
       <td>
-        <button class="btn btn-outline btn-sm" onclick="openEditOrder(${o.id})">✏️</button>
-        <button class="btn btn-outline btn-sm" onclick="openDettaglio(${o.id})">👁️</button>
+        <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">✏️</button>
+        <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">👁️</button>
       </td>
     </tr>
   `).join('');
@@ -85,9 +85,9 @@ function renderOrdiniTable() {
       <td>${statoBadge(o.stato)}</td>
       <td class="col-note" style="font-size:13px;color:var(--text2);">${o.note || '—'}</td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-outline btn-sm" onclick="openEditOrder(${o.id})">✏️</button>
-        <button class="btn btn-outline btn-sm" onclick="openDettaglio(${o.id})">👁️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id})">🗑️</button>
+        <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">✏️</button>
+        <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">👁️</button>
+        <button class="btn btn-danger btn-sm" title="Elimina ordine" aria-label="Elimina ordine" onclick="deleteOrder(${o.id})">🗑️</button>
       </td>
     </tr>`;
   }).join('');
