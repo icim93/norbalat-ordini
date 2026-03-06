@@ -60,7 +60,7 @@ function renderOrdiniTable() {
 
   const tbody = document.getElementById('ordini-table');
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">ðŸ“‹</div><p>Nessun ordine trovato</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">-</div><p>Nessun ordine trovato</p></div></td></tr>`;
     return;
   }
   const allIds = list.map(o => o.id);

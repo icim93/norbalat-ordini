@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Norbalat â€” Gestione Ordini</title>
+<title>Norbalat — Gestione Ordini</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -54,7 +54,7 @@
     font-size: 15px;
   }
 
-  /* â”€â”€ LOGIN â”€â”€ */
+  /* ── LOGIN ── */
   #screen-login {
     min-height: 100vh;
     display: flex;
@@ -156,7 +156,7 @@
   .btn-primary:hover { background: #245a42; }
   .btn-primary:active { transform: scale(0.98); }
 
-  /* â”€â”€ APP SHELL â”€â”€ */
+  /* ── APP SHELL ── */
   #screen-app { display: none; min-height: 100vh; }
 
   .topbar {
@@ -204,7 +204,7 @@
 
   .app-layout { display: flex; min-height: calc(100vh - 60px); }
 
-  /* â”€â”€ SIDEBAR â”€â”€ */
+  /* ── SIDEBAR ── */
   .sidebar {
     width: 220px;
     background: #0f2233;
@@ -236,7 +236,7 @@
   .nav-item.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
   .nav-item .nav-icon { font-size: 18px; flex-shrink: 0; }
 
-  /* â”€â”€ MAIN CONTENT â”€â”€ */
+  /* ── MAIN CONTENT ── */
   .main { flex: 1; padding: 28px; overflow-y: auto; }
 
   .page { display: none; }
@@ -246,7 +246,7 @@
   .page-title { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
   .page-sub { font-size: 14px; color: var(--text2); margin-top: 4px; }
 
-  /* â”€â”€ STATS CARDS â”€â”€ */
+  /* ── STATS CARDS ── */
   .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -271,7 +271,7 @@
   .stat-card.blue .stat-value { color: var(--blue); }
   .stat-card.red .stat-value { color: var(--danger); }
 
-  /* â”€â”€ TABLE â”€â”€ */
+  /* ── TABLE ── */
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -361,7 +361,7 @@
   .badge-red { background: var(--danger-light); color: var(--danger); }
   .badge-gray { background: var(--surface2); color: var(--text3); }
 
-  /* â”€â”€ MODAL â”€â”€ */
+  /* ── MODAL ── */
   .modal-overlay {
     display: none;
     position: fixed;
@@ -468,7 +468,7 @@
   .line-delete { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 16px; padding: 4px; border-radius: 4px; }
   .line-delete:hover { background: var(--danger-light); color: var(--danger); }
 
-  /* â”€â”€ MOBILE VIEW (autista) â”€â”€ */
+  /* ── MOBILE VIEW (autista) ── */
   .mobile-view { max-width: 440px; margin: 0 auto; }
 
   .mobile-order-card {
@@ -494,7 +494,7 @@
   .mob-actions { display: flex; gap: 8px; margin-top: 12px; }
   .mob-actions .btn { flex: 1; justify-content: center; padding: 10px; font-size: 14px; }
 
-  /* â”€â”€ MAGAZZINO â”€â”€ */
+  /* ── MAGAZZINO ── */
   .warehouse-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -514,7 +514,7 @@
   .wh-detail { font-size: 13px; color: var(--text2); margin-top: 2px; }
   .wh-status { display: flex; align-items: center; gap: 10px; }
 
-  /* â”€â”€ REPORT â”€â”€ */
+  /* ── REPORT ── */
   .report-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -548,7 +548,7 @@
   .bar-label { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; }
   .bar-val { font-size: 10px; color: var(--accent); font-weight: 600; font-family: 'DM Mono', monospace; }
 
-  /* â”€â”€ CATALOGO ORDINE â”€â”€ */
+  /* ── CATALOGO ORDINE ── */
   .catalogo-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -663,8 +663,8 @@
   .modality-btn .mod-label { font-size: 13px; font-weight: 700; color: var(--text1); }
   .modality-btn .mod-desc { font-size: 11px; color: var(--text3); margin-top: 3px; }
 
-  /* â”€â”€ FINE CATALOGO â”€â”€ */
-  /* â”€â”€ TOAST â”€â”€ */
+  /* ── FINE CATALOGO ── */
+  /* ── TOAST ── */
   .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
   .toast {
     background: var(--text1);
@@ -683,10 +683,10 @@
   .toast.success { background: var(--accent); }
   .toast.warning { background: var(--accent2); }
 
-  /* â”€â”€ RESPONSIVE â”€â”€ */
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-     RESPONSIVE â€” TABLET & MOBILE
-     â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  /* ── RESPONSIVE ── */
+  /* ══════════════════════════════════
+     RESPONSIVE — TABLET & MOBILE
+     ══════════════════════════════════ */
 
   /* Piano di carico: griglia pedane */
   .pedane-grid {
@@ -836,7 +836,7 @@
     .report-filters { grid-template-columns: 1fr 1fr 1fr; }
   }
 
-  /* â”€â”€ MOBILE NAV (bottom) â”€â”€ */
+  /* ── MOBILE NAV (bottom) ── */
   .mobile-nav {
     display: none;
     position: fixed;
@@ -870,7 +870,7 @@
   .mobile-nav-item .mn-icon { font-size: 20px; }
   .mobile-nav-item.active { color: var(--accent); }
 
-    /* â”€â”€ HAMBURGER + DRAWER â”€â”€ */
+    /* ── HAMBURGER + DRAWER ── */
   .hamburger-btn {
     display: none;
     background: none;
@@ -992,12 +992,12 @@
     #page-documenti .doc-layout { grid-template-columns: 1fr; }
   }
 
-  /* â”€â”€ EMPTY STATE â”€â”€ */
+  /* ── EMPTY STATE ── */
   .empty-state { text-align: center; padding: 48px 24px; color: var(--text3); }
   .empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; }
   .empty-state p { font-size: 15px; }
 
-  /* â”€â”€ ANAGRAFICA â”€â”€ */
+  /* ── ANAGRAFICA ── */
   .anag-avatar {
     width: 36px; height: 36px;
     border-radius: 50%;
@@ -1012,7 +1012,7 @@
   .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 6px; }
   .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.4s; }
 
-  /* â”€â”€ AUTOCOMPLETE â”€â”€ */
+  /* ── AUTOCOMPLETE ── */
   .ac-wrap { position: relative; }
   .ac-input {
     width: 100%;
@@ -1079,7 +1079,7 @@
 </head>
 <body>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• LOGIN â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ LOGIN ══════════════════ -->
 <div id="screen-login">
   <div class="login-card">
     <div class="login-logo">
@@ -1091,19 +1091,19 @@
       <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Accedi come</div>
       <div class="login-roles">
         <button class="role-btn active" onclick="selectRole('admin',this)">
-          <span class="role-icon">ðŸ–¥ï¸</span>Admin / Ufficio
+          <span class="role-icon">🖥️</span>Admin / Ufficio
         </button>
         <button class="role-btn" onclick="selectRole('amministrazione',this)">
-          <span class="role-icon">ðŸ§¾</span>Amministrazione
+          <span class="role-icon">🧾</span>Amministrazione
         </button>
         <button class="role-btn" onclick="selectRole('autista',this)">
-          <span class="role-icon">ðŸšš</span>Autista / Agente
+          <span class="role-icon">🚚</span>Autista / Agente
         </button>
         <button class="role-btn" onclick="selectRole('magazzino',this)">
-          <span class="role-icon">ðŸ“¦</span>Magazzino
+          <span class="role-icon">📦</span>Magazzino
         </button>
         <button class="role-btn" onclick="selectRole('direzione',this)">
-          <span class="role-icon">ðŸ“Š</span>Direzione
+          <span class="role-icon">📊</span>Direzione
         </button>
       </div>
     </div>
@@ -1114,13 +1114,13 @@
     </div>
     <div class="field">
       <label>Password</label>
-      <input type="password" id="login-pass" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢">
+      <input type="password" id="login-pass" placeholder="••••••••">
     </div>
-    <button class="btn-primary" onclick="doLogin()">Accedi â†’</button>
+    <button class="btn-primary" onclick="doLogin()">Accedi →</button>
   </div>
 </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• APP â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ APP ══════════════════ -->
 <div id="screen-app">
   <!-- Top bar -->
   <div class="topbar">
@@ -1153,7 +1153,7 @@
     <!-- Main content -->
     <div class="main" id="main-content">
 
-      <!-- â”€â”€â”€ PAGE: Dashboard Admin â”€â”€â”€ -->
+      <!-- ─── PAGE: Dashboard Admin ─── -->
       <div class="page" id="page-dashboard">
         <div class="page-header">
           <div class="page-title">Dashboard</div>
@@ -1187,7 +1187,7 @@
           <div class="table-scroll-wrap"><table>
             <thead>
               <tr>
-                <th>NÂ°</th>
+                <th>N°</th>
                 <th>Cliente</th>
                 <th>Data</th>
                 <th>Inserito da</th>
@@ -1206,7 +1206,7 @@
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Tutti gli Ordini â”€â”€â”€ -->
+      <!-- ─── PAGE: Tutti gli Ordini ─── -->
       <div class="page" id="page-ordini">
         <div class="page-header">
           <div class="page-title">Ordini</div>
@@ -1214,7 +1214,7 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <input type="text" class="search-input" id="search-ordini" placeholder="ðŸ” Cerca cliente, agenteâ€¦" oninput="renderOrdiniTable()">
+            <input type="text" class="search-input" id="search-ordini" placeholder="🔍 Cerca cliente, agente…" oninput="renderOrdiniTable()">
             <div style="display:flex;gap:8px;">
               <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-stato" onchange="renderOrdiniTable()">
                 <option value="">Tutti gli stati</option>
@@ -1228,14 +1228,14 @@
           </div>
           <div id="bulk-toolbar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--accent-light);border:1.5px solid var(--accent);border-radius:8px;margin-bottom:10px;">
             <span id="bulk-count" style="font-weight:600;color:var(--accent);font-size:13px;"></span>
-            <button class="btn btn-danger btn-sm" onclick="deleteSelectedOrders()">ðŸ—‘ï¸ Elimina selezionati</button>
-            <button class="btn btn-outline btn-sm" onclick="selectedOrders.clear();renderOrdiniTable()">âœ• Deseleziona tutto</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteSelectedOrders()">🗑️ Elimina selezionati</button>
+            <button class="btn btn-outline btn-sm" onclick="selectedOrders.clear();renderOrdiniTable()">✕ Deseleziona tutto</button>
           </div>
           <div class="table-scroll-wrap"><table>
             <thead>
               <tr>
                 <th style="width:36px;padding:8px 6px;"><input type="checkbox" id="th-select-all" onchange="selectAllOrders(this.checked)" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;" title="Seleziona tutti"></th>
-                <th>NÂ°</th>
+                <th>N°</th>
                 <th>Cliente</th>
                 <th>Data</th>
                 <th>Inserito da</th>
@@ -1250,7 +1250,7 @@
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Clienti â”€â”€â”€ -->
+      <!-- ─── PAGE: Clienti ─── -->
       <div class="page" id="page-clienti">
         <div class="page-header">
           <div class="page-title">Clienti</div>
@@ -1258,7 +1258,7 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <input type="text" class="search-input" id="search-clienti" placeholder="ðŸ” Cercaâ€¦" oninput="renderClientiTable()">
+            <input type="text" class="search-input" id="search-clienti" placeholder="🔍 Cerca…" oninput="renderClientiTable()">
             <div style="display:flex;gap:8px;">
               <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-giro" onchange="renderClientiTable()">
                 <option value="">Tutti i giri</option>
@@ -1272,7 +1272,7 @@
                 <option value="diretto">Diretto</option>
               </select>
               <button class="btn btn-green" onclick="openNewCliente()">ï¼‹ Nuovo Cliente</button>
-              <button class="btn btn-outline" onclick="document.getElementById('import-clienti-file').click()" title="Importa/aggiorna clienti da Excel">ðŸ“¥ Excel</button>
+              <button class="btn btn-outline" onclick="document.getElementById('import-clienti-file').click()" title="Importa/aggiorna clienti da Excel">📥 Excel</button>
               <input type="file" id="import-clienti-file" accept=".xlsx,.xls" style="display:none" onchange="importClientiExcel(this)">
             </div>
           </div>
@@ -1280,7 +1280,7 @@
             <thead>
               <tr>
                 <th>Cliente</th>
-                <th>LocalitÃ </th>
+                <th>Località</th>
                 <th>Giro</th>
                 <th>Ordini</th>
                 <th>Fido</th>
@@ -1293,7 +1293,7 @@
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Listini â”€â”€â”€ -->
+      <!-- ─── PAGE: Listini ─── -->
       <div class="page" id="page-documenti">
         <div class="page-header">
           <div class="page-title">Documenti utili</div>
@@ -1355,7 +1355,7 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <input type="text" class="search-input" id="search-listini" placeholder="ðŸ” Cerca prodotto, ambito, noteâ€¦" oninput="renderListiniPage()">
+            <input type="text" class="search-input" id="search-listini" placeholder="🔍 Cerca prodotto, ambito, note…" oninput="renderListiniPage()">
             <div style="display:flex;gap:8px;">
               <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-scope-listini" onchange="renderListiniPage()">
                 <option value="">Tutti gli ambiti</option>
@@ -1370,7 +1370,7 @@
                 <option value="futuro">Futuri</option>
                 <option value="scaduto">Scaduti</option>
               </select>
-              <button class="btn btn-outline" onclick="exportListiniPdf()">ðŸ“„ PDF</button>
+              <button class="btn btn-outline" onclick="exportListiniPdf()">📄 PDF</button>
               <button class="btn btn-green" id="listini-new-btn" onclick="openNewListino()">ï¼‹ Nuovo Listino</button>
             </div>
           </div>
@@ -1393,7 +1393,7 @@
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Prodotti â”€â”€â”€ -->
+      <!-- ─── PAGE: Prodotti ─── -->
       <div class="page" id="page-prodotti">
         <div class="page-header">
           <div class="page-title">Prodotti</div>
@@ -1401,7 +1401,7 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <input type="text" class="search-input" id="search-prodotti" placeholder="ðŸ” Cerca codice, nomeâ€¦" oninput="renderProdottiTable()">
+            <input type="text" class="search-input" id="search-prodotti" placeholder="🔍 Cerca codice, nome…" oninput="renderProdottiTable()">
             <div style="display:flex;gap:8px;">
               <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-cat-prodotti" onchange="renderProdottiTable()">
                 <option value="">Tutte le categorie</option>
@@ -1432,7 +1432,7 @@
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Utenti â”€â”€â”€ -->
+      <!-- ─── PAGE: Utenti ─── -->
       <div class="page" id="page-utenti">
         <div class="page-header">
           <div class="page-title">Utenti</div>
@@ -1457,7 +1457,7 @@
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Vista Autista â”€â”€â”€ -->
+      <!-- ─── PAGE: Vista Autista ─── -->
       <div class="page" id="page-autista">
         <div class="page-header">
           <div class="page-title" id="autista-title">Buongiorno!</div>
@@ -1482,7 +1482,7 @@
         <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
           <div style="font-weight:600;font-size:15px;">Giro consegne di oggi</div>
           <div style="display:flex;gap:8px;">
-            <button class="btn" style="background:var(--accent2-light);color:var(--accent2);border:1px solid #f5d7a0;" onclick="openTentataVendita()">ðŸšš Tentata Vendita</button>
+            <button class="btn" style="background:var(--accent2-light);color:var(--accent2);border:1px solid #f5d7a0;" onclick="openTentataVendita()">🚚 Tentata Vendita</button>
             <button class="btn btn-green" onclick="openNewOrder()">ï¼‹ Nuovo ordine</button>
           </div>
         </div>
@@ -1492,7 +1492,7 @@
 
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Piano di Carico â”€â”€â”€ -->
+      <!-- ─── PAGE: Piano di Carico ─── -->
       <div class="page" id="page-piano">
         <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
           <div>
@@ -1515,17 +1515,17 @@
         <!-- Sezione conferma carico (visibile a magazzino e admin) -->
         <div id="piano-conferma-section" style="display:none;margin-top:20px;">
           <div class="card" style="padding:20px;">
-            <div style="font-size:15px;font-weight:700;margin-bottom:12px;">âœ… Conferma Carico</div>
+            <div style="font-size:15px;font-weight:700;margin-bottom:12px;">✅ Conferma Carico</div>
             <div id="piano-conferma-checklist" style="margin-bottom:16px;"></div>
             <button class="btn btn-green" style="width:100%;font-size:15px;padding:14px;" onclick="confermaCarico()">
-              âœ… Confermo: tutti gli ordini del giro sono caricati
+              ✅ Confermo: tutti gli ordini del giro sono caricati
             </button>
             <div id="piano-conferma-stato" style="margin-top:12px;font-size:13px;"></div>
           </div>
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Magazzino â”€â”€â”€ -->
+      <!-- ─── PAGE: Magazzino ─── -->
       <div class="page" id="page-magazzino">
         <div class="page-header">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
@@ -1535,7 +1535,7 @@
             </div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <div style="display:flex;align-items:center;gap:6px;">
-                <label style="font-size:13px;font-weight:600;color:var(--text2);">ðŸ“…</label>
+                <label style="font-size:13px;font-weight:600;color:var(--text2);">📅</label>
                 <input type="date" id="filter-magazzino-data" onchange="renderMagazzino()"
                   style="padding:8px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text1);font-family:inherit;cursor:pointer;">
               </div>
@@ -1570,7 +1570,7 @@
         <!-- Piano di carico (view per magazzino) -->
         <div class="card" style="margin-top:20px;" id="piano-carico-magaz-card">
           <div class="card-header">
-            <div class="card-title">ðŸšš Piano di Carico Camion</div>
+            <div class="card-title">🚚 Piano di Carico Camion</div>
             <div style="font-size:13px;color:var(--text2);">Aggiornato dagli autisti</div>
           </div>
           <div id="piano-carico-magaz-body" style="padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:20px;"></div>
@@ -1585,36 +1585,36 @@
 
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Report â”€â”€â”€ -->
+      <!-- ─── PAGE: Report ─── -->
       <div class="page" id="page-report">
         <div class="page-header">
           <div class="page-title">Report & Statistiche</div>
           <div style="display:flex;align-items:center;gap:12px;">
             <div class="page-sub">Andamento ordini e consegne</div>
-            <button class="btn" style="background:var(--accent-light);color:var(--accent);border:1px solid var(--border);" onclick="openPDFGiornaliero()">ðŸ“„ PDF Giornaliero</button>
+            <button class="btn" style="background:var(--accent-light);color:var(--accent);border:1px solid var(--border);" onclick="openPDFGiornaliero()">📄 PDF Giornaliero</button>
           </div>
         </div>
         <div class="report-grid" style="margin-bottom:20px;">
           <div class="chart-placeholder">
-            <div class="chart-title">ðŸ“ˆ Ordini ultimi 7 giorni</div>
+            <div class="chart-title">📈 Ordini ultimi 7 giorni</div>
             <div class="bar-chart" id="chart-week"></div>
           </div>
           <div class="chart-placeholder">
-            <div class="chart-title">ðŸ‘¤ Ordini per agente</div>
+            <div class="chart-title">👤 Ordini per agente</div>
             <div id="chart-agenti"></div>
           </div>
         </div>
         <div class="report-grid" style="margin-bottom:20px;">
           <div class="card">
             <div class="card-header">
-              <div class="card-title">ðŸ† Prodotti piÃ¹ venduti</div>
-              <div style="font-size:12px;color:var(--text3);">Top 10 per quantitÃ </div>
+              <div class="card-title">🏆 Prodotti più venduti</div>
+              <div style="font-size:12px;color:var(--text3);">Top 10 per quantità</div>
             </div>
             <div id="report-top-prodotti" style="padding:4px 16px 12px;"></div>
           </div>
           <div class="card">
             <div class="card-header">
-              <div class="card-title">ðŸ—ºï¸ Ordini per giro</div>
+              <div class="card-title">🗺️ Ordini per giro</div>
               <div style="font-size:12px;color:var(--text3);">Distribuzione per zona</div>
             </div>
             <div id="report-giri" style="padding:4px 16px 12px;"></div>
@@ -1623,32 +1623,32 @@
         <div class="report-grid" style="margin-bottom:20px;">
           <div class="card">
             <div class="card-header">
-              <div class="card-title">âš ï¸ Clienti senza ordini recenti</div>
+              <div class="card-title">⚠️ Clienti senza ordini recenti</div>
               <div style="font-size:12px;color:var(--text3);">Ultimi 30 giorni</div>
             </div>
             <div id="report-clienti-inattivi" style="padding:4px 16px 12px;"></div>
           </div>
           <div class="chart-placeholder">
-            <div class="chart-title">ðŸ¢ Clienti per agente</div>
+            <div class="chart-title">🏢 Clienti per agente</div>
             <div id="report-agenti-clienti"></div>
           </div>
         </div>
         <div class="report-grid" style="margin-bottom:20px;">
           <div class="card">
-            <div class="card-header"><div class="card-title">ðŸ† Classifica clienti</div></div>
+            <div class="card-header"><div class="card-title">🏆 Classifica clienti</div></div>
             <div class="table-scroll-wrap">
-              <table><thead><tr><th>Cliente</th><th>LocalitÃ </th><th>Giro</th><th>Ordini</th><th>%</th></tr></thead>
+              <table><thead><tr><th>Cliente</th><th>Località</th><th>Giro</th><th>Ordini</th><th>%</th></tr></thead>
               <tbody id="report-clienti-table"></tbody></table>
             </div>
           </div>
           <div class="card" id="card-activity-log">
-            <div class="card-header"><div class="card-title">ðŸ“‹ Log attivitÃ </div></div>
+            <div class="card-header"><div class="card-title">📋 Log attività</div></div>
             <div id="activity-log-list" style="max-height:320px;overflow-y:auto;padding:4px 0;"></div>
           </div>
         </div>
       </div><!-- /page-report-end -->
 
-      <!-- â”€â”€â”€ PAGE: Impostazioni (Admin) â”€â”€â”€ -->
+      <!-- ─── PAGE: Impostazioni (Admin) ─── -->
       <div class="page" id="page-impostazioni">
         <div class="page-header">
           <div class="page-title">Impostazioni</div>
@@ -1657,30 +1657,30 @@
         <div style="max-width:900px;">
           <div class="card" style="margin-bottom:24px;">
             <div class="card-header">
-              <div class="card-title">ðŸ“… Calendario Giri Fissi</div>
+              <div class="card-title">📅 Calendario Giri Fissi</div>
               <div style="font-size:13px;color:var(--text3);">Configura i giorni di consegna per ogni giro</div>
             </div>
             <div id="giri-calendar-list" style="padding:0 4px 8px;"></div>
           </div>
           <div class="card" style="margin-bottom:24px;border-color:var(--accent);background:var(--accent-light);">
             <div style="padding:16px 20px;display:flex;align-items:flex-start;gap:14px;">
-              <div style="font-size:28px;flex-shrink:0;">ðŸš›</div>
+              <div style="font-size:28px;flex-shrink:0;">🚛</div>
               <div>
                 <div style="font-weight:700;font-size:15px;color:var(--accent-dark);margin-bottom:4px;">Spedizione STEF</div>
-                <div style="font-size:13px;color:var(--text2);">Gli ordini contrassegnati con STEF vengono gestiti tramite corriere esterno. Seleziona âœ… STEF al momento della creazione dell'ordine.</div>
+                <div style="font-size:13px;color:var(--text2);">Gli ordini contrassegnati con STEF vengono gestiti tramite corriere esterno. Seleziona ✅ STEF al momento della creazione dell'ordine.</div>
               </div>
             </div>
           </div>
           <div class="card" style="margin-bottom:24px;">
             <div class="card-header">
-              <div class="card-title">ðŸšš Tentata Vendita</div>
+              <div class="card-title">🚚 Tentata Vendita</div>
               <div><button class="btn btn-green btn-sm" onclick="openNuovaTentata()">+ Nuova</button></div>
             </div>
             <div id="tentata-list" style="padding:0 0 8px;"></div>
           </div>
           <div class="card" style="margin-bottom:24px;">
             <div class="card-header">
-              <div class="card-title">âœ‰ï¸ Notifiche email onboarding</div>
+              <div class="card-title">✉️ Notifiche email onboarding</div>
               <div style="font-size:12px;color:var(--text3);" id="email-notify-status">Caricamento...</div>
             </div>
             <div style="padding:16px 20px 18px;">
@@ -1707,8 +1707,8 @@
                 <input type="text" id="email-notify-recipients" placeholder="es. amm@azienda.it, direzione@azienda.it">
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;">
-                <button class="btn btn-green btn-sm" onclick="saveEmailNotificationSettings()">ðŸ’¾ Salva notifiche</button>
-                <button class="btn btn-outline btn-sm" onclick="sendEmailNotificationTest()">ðŸ§ª Invia test</button>
+                <button class="btn btn-green btn-sm" onclick="saveEmailNotificationSettings()">💾 Salva notifiche</button>
+                <button class="btn btn-outline btn-sm" onclick="sendEmailNotificationTest()">🧪 Invia test</button>
                 <span id="email-notify-meta" style="font-size:12px;color:var(--text3);"></span>
               </div>
             </div>
@@ -1716,7 +1716,7 @@
         </div>
       </div><!-- /page-impostazioni -->
 
-      <!-- â”€â”€â”€ PAGE: Sperimentale â”€â”€â”€ -->
+      <!-- ─── PAGE: Sperimentale ─── -->
       <div class="page" id="page-sperimentale">
         <div class="page-header">
           <div class="page-title">Sperimentale</div>
@@ -1724,7 +1724,7 @@
         </div>
         <div class="card" style="max-width:980px;">
           <div class="card-header">
-            <div class="card-title">ðŸŒ Fonte esterna</div>
+            <div class="card-title">🌐 Fonte esterna</div>
             <div style="display:flex;gap:8px;">
               <button class="btn btn-outline" onclick="saveExperimentalConfig()">Salva config</button>
               <button class="btn btn-outline" onclick="loadExperimentalSource()">Aggiorna</button>
@@ -1737,7 +1737,7 @@
               <input type="text" id="experimental-url" placeholder="https://...">
               </div>
               <div class="field">
-                <label>ModalitÃ  parsing</label>
+                <label>Modalità parsing</label>
                 <select id="experimental-mode">
                   <option value="auto">Auto</option>
                   <option value="json">JSON</option>
@@ -1751,7 +1751,7 @@
         </div>
       </div>
 
-      <!-- â”€â”€â”€ PAGE: Il mio profilo â”€â”€â”€ -->
+      <!-- ─── PAGE: Il mio profilo ─── -->
       <div class="page" id="page-profilo">
         <div class="page-header">
           <div class="page-title">Il mio profilo</div>
@@ -1772,7 +1772,7 @@
           <!-- 2 colonne -->
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
             <div class="card">
-              <div class="card-header"><div class="card-title">âœï¸ Informazioni personali</div></div>
+              <div class="card-header"><div class="card-title">✏️ Informazioni personali</div></div>
               <div style="padding:16px 20px 20px;">
                 <div class="field" style="margin-bottom:12px;"><label>Nome *</label><input type="text" id="profilo-nome" placeholder="Il tuo nome"></div>
                 <div class="field" style="margin-bottom:12px;"><label>Cognome</label><input type="text" id="profilo-cognome" placeholder="Il tuo cognome"></div>
@@ -1780,34 +1780,34 @@
               </div>
             </div>
             <div class="card">
-              <div class="card-header"><div class="card-title">ðŸ”’ Cambio password</div></div>
+              <div class="card-header"><div class="card-title">🔒 Cambio password</div></div>
               <div style="padding:16px 20px 20px;">
-                <div class="field" style="margin-bottom:12px;"><label>Password attuale *</label><input type="password" id="profilo-pass-old" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="current-password"></div>
-                <div class="field" style="margin-bottom:12px;"><label>Nuova password</label><input type="password" id="profilo-pass-new" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="new-password"></div>
-                <div class="field" style="margin-bottom:10px;"><label>Conferma nuova password</label><input type="password" id="profilo-pass-new2" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="new-password"></div>
+                <div class="field" style="margin-bottom:12px;"><label>Password attuale *</label><input type="password" id="profilo-pass-old" placeholder="••••••" autocomplete="current-password"></div>
+                <div class="field" style="margin-bottom:12px;"><label>Nuova password</label><input type="password" id="profilo-pass-new" placeholder="••••••" autocomplete="new-password"></div>
+                <div class="field" style="margin-bottom:10px;"><label>Conferma nuova password</label><input type="password" id="profilo-pass-new2" placeholder="••••••" autocomplete="new-password"></div>
                 <div style="font-size:12px;color:var(--text3);">Lascia vuoto se non vuoi cambiare la password.</div>
               </div>
             </div>
           </div>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
-            <button class="btn btn-green" onclick="saveProfilo()">ðŸ’¾ Salva modifiche</button>
-            <button class="btn btn-outline" onclick="renderProfilo()">â†©ï¸ Annulla</button>
+            <button class="btn btn-green" onclick="saveProfilo()">💾 Salva modifiche</button>
+            <button class="btn btn-outline" onclick="renderProfilo()">↩️ Annulla</button>
           </div>
           <div id="profilo-feedback" style="display:none;margin-bottom:20px;font-size:13px;border-radius:8px;padding:10px 14px;"></div>
           <!-- Preferenze -->
           <div class="card">
-            <div class="card-header"><div class="card-title">ðŸ–¥ï¸ Preferenze visualizzazione</div></div>
+            <div class="card-header"><div class="card-title">🖥️ Preferenze visualizzazione</div></div>
             <div style="padding:16px 20px 20px;">
               <div style="font-size:13px;color:var(--text2);margin-bottom:14px;">Scegli come vuoi inserire i nuovi ordini. La preferenza viene salvata su questo dispositivo.</div>
               <div class="modality-toggle" id="modality-toggle">
                 <button class="modality-btn" id="mod-btn-classico" onclick="setModalitaOrdine('classico')">
-                  <span class="mod-icon">ðŸ“‹</span>
-                  <span class="mod-label">ModalitÃ  classica</span>
+                  <span class="mod-icon">📋</span>
+                  <span class="mod-label">Modalità classica</span>
                   <span class="mod-desc">Cerca prodotto, aggiungi riga per riga</span>
                 </button>
                 <button class="modality-btn" id="mod-btn-catalogo" onclick="setModalitaOrdine('catalogo')">
-                  <span class="mod-icon">ðŸ›’</span>
-                  <span class="mod-label">ModalitÃ  catalogo</span>
+                  <span class="mod-icon">🛒</span>
+                  <span class="mod-label">Modalità catalogo</span>
                   <span class="mod-desc">Griglia per categoria, aggiungi al carrello</span>
                 </button>
               </div>
@@ -1823,7 +1823,7 @@
   </div>
 </div>
 
-<!-- â•â•â•â•â•â• DRAWER MOBILE â•â•â•â•â•â• -->
+<!-- ══════ DRAWER MOBILE ══════ -->
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="drawer">
   <div class="drawer-header">
@@ -1831,7 +1831,7 @@
       <img src="/logo-norbalat.png" alt="Norbalat" class="brand-logo" onerror="this.style.display='none'">
       <span class="brand-text">Norbalat Ordini</span>
     </div>
-    <button class="drawer-close" onclick="closeDrawer()">âœ•</button>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
   </div>
   <div class="drawer-user">
     <div class="drawer-user-name" id="drawer-username"></div>
@@ -1840,26 +1840,26 @@
   <nav class="drawer-nav" id="drawer-nav"></nav>
   <div class="drawer-footer">
     <button class="btn btn-outline" style="width:100%;justify-content:center;" onclick="closeDrawer();doLogout()">
-      ðŸšª Esci
+      🚪 Esci
     </button>
   </div>
 </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• MODALS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ MODALS ══════════════════ -->
 
 <!-- Modal: Nuovo/Modifica Ordine -->
 <div class="modal-overlay" id="modal-ordine">
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modal-ordine-title">Nuovo Ordine</div>
-      <button class="modal-close" onclick="closeModal('modal-ordine')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-ordine')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
         <div class="field form-full">
           <label>Cliente *</label>
           <div class="ac-wrap" id="ac-cliente-wrap">
-            <input type="text" class="ac-input" id="ac-cliente-input" placeholder="Cerca clienteâ€¦" autocomplete="off" oninput="acFilter('cliente')" onfocus="acOpen('cliente')" onkeydown="acKey(event,'cliente')">
+            <input type="text" class="ac-input" id="ac-cliente-input" placeholder="Cerca cliente…" autocomplete="off" oninput="acFilter('cliente')" onfocus="acOpen('cliente')" onkeydown="acKey(event,'cliente')">
             <input type="hidden" id="ord-cliente">
             <div class="ac-dropdown" id="ac-cliente-dd"></div>
           </div>
@@ -1871,7 +1871,7 @@
         <div class="field">
           <label>Consegnatario</label>
           <div id="ord-consegnatario-box" style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:8px;">
-            <span>ðŸšš</span><span id="ord-consegnatario-nome">â€”</span>
+            <span>🚚</span><span id="ord-consegnatario-nome">—</span>
             <span style="font-size:11px;color:var(--text3);margin-left:auto;">auto dal giro</span>
           </div>
           <input type="hidden" id="ord-autista-di-giro">
@@ -1887,11 +1887,11 @@
           <div style="display:flex;gap:16px;margin-top:6px;">
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
               <input type="checkbox" id="ord-data-non-certa" style="width:15px;height:15px;">
-              âš ï¸ Data non certa
+              ⚠️ Data non certa
             </label>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
               <input type="checkbox" id="ord-stef" style="width:15px;height:15px;">
-              ðŸš› Spedizione STEF
+              🚛 Spedizione STEF
             </label>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
               <input type="checkbox" id="ord-altro-vettore" style="width:15px;height:15px;">
@@ -1912,7 +1912,7 @@
 
       <!-- Note fisse cliente (readonly, informative) -->
       <div id="ord-cliente-note-box" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--blue-light);border:1px solid #b3d4f0;border-radius:8px;font-size:13px;color:var(--blue);">
-        <b>ðŸ“Œ Note cliente:</b> <span id="ord-cliente-note-text"></span>
+        <b>📌 Note cliente:</b> <span id="ord-cliente-note-text"></span>
       </div>
 
       <div class="field">
@@ -1924,17 +1924,17 @@
 
       <div class="field" style="margin-top:12px;">
         <label>Note ordine</label>
-        <textarea id="ord-note" placeholder="Istruzioni di consegna, orari particolariâ€¦"></textarea>
+        <textarea id="ord-note" placeholder="Istruzioni di consegna, orari particolari…"></textarea>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-ordine')">Annulla</button>
-      <button class="btn btn-green" onclick="saveOrder()">ðŸ’¾ Salva Ordine</button>
+      <button class="btn btn-green" onclick="saveOrder()">💾 Salva Ordine</button>
     </div>
   </div>
 </div>
 
-<!-- Modal: Nuovo Ordine â€” MODALITÃ€ CATALOGO -->
+<!-- Modal: Nuovo Ordine — MODALITÀ CATALOGO -->
 <div class="modal-overlay" id="modal-catalogo">
   <div class="modal" style="max-width:680px;">
     <div class="modal-header">
@@ -1943,7 +1943,7 @@
         <!-- breadcrumb categoria -->
         <div id="cat-breadcrumb" style="display:none;font-size:13px;color:var(--text2);"></div>
       </div>
-      <button class="modal-close" onclick="closeModal('modal-catalogo')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-catalogo')">✕</button>
     </div>
     <div class="modal-body" style="padding-top:12px;">
 
@@ -1953,7 +1953,7 @@
           <label>Cliente *</label>
           <div class="ac-wrap" id="ac-cat-cliente-wrap">
             <input type="text" class="ac-input" id="ac-cat-cliente-input"
-              placeholder="Cerca clienteâ€¦" autocomplete="off"
+              placeholder="Cerca cliente…" autocomplete="off"
               oninput="acFilter('cat-cliente')"
               onfocus="acOpen('cat-cliente')"
               onkeydown="acKey(event,'cat-cliente')">
@@ -1976,29 +1976,29 @@
         </div>
         <div class="field" style="display:flex;align-items:flex-end;gap:12px;padding-bottom:2px;">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
-            <input type="checkbox" id="cat-stef" style="width:15px;height:15px;">ðŸš› STEF
+            <input type="checkbox" id="cat-stef" style="width:15px;height:15px;">🚛 STEF
           </label>
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
             <input type="checkbox" id="cat-altro-vettore" style="width:15px;height:15px;">Altro vettore
           </label>
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
-            <input type="checkbox" id="cat-data-non-certa" style="width:15px;height:15px;">âš ï¸ Data incerta
+            <input type="checkbox" id="cat-data-non-certa" style="width:15px;height:15px;">⚠️ Data incerta
           </label>
         </div>
       </div>
 
       <!-- Note cliente -->
       <div id="cat-cliente-note-box" style="display:none;margin-bottom:10px;padding:8px 12px;background:var(--blue-light);border:1px solid #b3d4f0;border-radius:8px;font-size:13px;color:var(--blue);">
-        <b>ðŸ“Œ Note cliente:</b> <span id="cat-cliente-note-text"></span>
+        <b>📌 Note cliente:</b> <span id="cat-cliente-note-text"></span>
       </div>
 
       <!-- Riepilogo carrello (sempre visibile se ci sono prodotti) -->
       <div id="cat-cart-bar" style="display:none;margin-bottom:10px;">
         <div class="cat-cart-summary">
-          <span>ðŸ›’</span>
+          <span>🛒</span>
           <span id="cat-cart-items" style="font-size:13px;flex:1;"></span>
-          <button class="btn btn-outline btn-sm" onclick="catShowCarrello()" style="white-space:nowrap;">ðŸ‘ï¸ Vedi tutto</button>
-          <button class="btn btn-danger btn-sm" onclick="resetCatalogo()">ðŸ—‘ï¸</button>
+          <button class="btn btn-outline btn-sm" onclick="catShowCarrello()" style="white-space:nowrap;">👁️ Vedi tutto</button>
+          <button class="btn btn-danger btn-sm" onclick="resetCatalogo()">🗑️</button>
         </div>
       </div>
 
@@ -2008,16 +2008,16 @@
         <div id="cat-cat-buttons" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;"></div>
         <!-- Storico cliente (se selezionato) -->
         <div id="cat-storico-section" style="display:none;margin-top:16px;">
-          <div class="cat-section-title" style="color:var(--accent);">â­ GiÃ  ordinati da questo cliente</div>
+          <div class="cat-section-title" style="color:var(--accent);">⭐ Già ordinati da questo cliente</div>
           <div id="cat-storico-grid" class="catalogo-grid" style="margin-top:8px;"></div>
         </div>
       </div>
 
       <!-- SCHERMATA 2: Prodotti della categoria -->
       <div id="cat-screen-prod" style="display:none;">
-        <button class="btn btn-outline btn-sm" onclick="catBackToCategorie()" style="margin-bottom:12px;">â† Categorie</button>
+        <button class="btn btn-outline btn-sm" onclick="catBackToCategorie()" style="margin-bottom:12px;">← Categorie</button>
         <div style="margin-bottom:10px;">
-          <input type="text" id="cat-search" placeholder="ðŸ” Cerca prodottoâ€¦"
+          <input type="text" id="cat-search" placeholder="🔍 Cerca prodotto…"
             oninput="catRenderProdotti()"
             style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:var(--surface2);">
         </div>
@@ -2026,19 +2026,19 @@
 
       <!-- SCHERMATA 3: Riepilogo carrello completo -->
       <div id="cat-screen-carrello" style="display:none;">
-        <button class="btn btn-outline btn-sm" onclick="catBackToCategorie()" style="margin-bottom:12px;">â† Continua a ordinare</button>
+        <button class="btn btn-outline btn-sm" onclick="catBackToCategorie()" style="margin-bottom:12px;">← Continua a ordinare</button>
         <div id="cat-carrello-list" style="max-height:320px;overflow-y:auto;"></div>
       </div>
 
       <!-- Note ordine -->
       <div class="field" style="margin-top:12px;">
         <label>Note ordine</label>
-        <textarea id="cat-note" placeholder="Istruzioni di consegna, orari particolariâ€¦" style="min-height:52px;"></textarea>
+        <textarea id="cat-note" placeholder="Istruzioni di consegna, orari particolari…" style="min-height:52px;"></textarea>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-catalogo')">Annulla</button>
-      <button class="btn btn-green" onclick="saveCatalogoOrder()">ðŸ’¾ Conferma ordine</button>
+      <button class="btn btn-green" onclick="saveCatalogoOrder()">💾 Conferma ordine</button>
     </div>
   </div>
 </div>
@@ -2048,7 +2048,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modal-cliente-title">Nuovo Cliente</div>
-      <button class="modal-close" onclick="closeModal('modal-cliente')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-cliente')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
@@ -2057,13 +2057,13 @@
           <input type="text" id="cl-nome" placeholder="es. CASEIFICIO ROSSI SRL">
         </div>
         <div class="field">
-          <label>LocalitÃ </label>
+          <label>Località</label>
           <input type="text" id="cl-localita" placeholder="es. BARI">
         </div>
         <div class="field">
           <label>Giro</label>
           <select id="cl-giro">
-            <option value="">â€” Non assegnato â€”</option>
+            <option value="">— Non assegnato —</option>
             <option value="bari nord">Bari Nord / Andria</option>
             <option value="bari/foggia">Bari / Foggia</option>
             <option value="murgia">Murgia</option>
@@ -2085,20 +2085,20 @@
         <div class="field form-full">
           <label>Agente di default</label>
           <select id="cl-agente">
-            <option value="">â€” Nessuno â€”</option>
+            <option value="">— Nessuno —</option>
           </select>
         </div>
         <div class="field form-full">
-          <label>ðŸ“Œ Note fisse cliente</label>
-          <textarea id="cl-note" placeholder="Es: Consegnare solo il martedÃ¬ mattina, campanello interno 3â€¦" style="min-height:70px;"></textarea>
+          <label>📌 Note fisse cliente</label>
+          <textarea id="cl-note" placeholder="Es: Consegnare solo il martedì mattina, campanello interno 3…" style="min-height:70px;"></textarea>
         </div>
         <div class="field">
           <label>Classificazione</label>
           <select id="cl-classificazione">
-            <option value="">â€” Non specificata â€”</option>
-            <option value="Caseificio">ðŸ§€ Caseificio</option>
-            <option value="Alimentari">ðŸª Alimentari</option>
-            <option value="Rivenditori">ðŸ”„ Rivenditori</option>
+            <option value="">— Non specificata —</option>
+            <option value="Caseificio">🧀 Caseificio</option>
+            <option value="Alimentari">🏪 Alimentari</option>
+            <option value="Rivenditori">🔄 Rivenditori</option>
           </select>
         </div>
         <div class="field">
@@ -2123,19 +2123,19 @@
         </div>
         <div class="field">
           <label>Condizioni di Pagamento</label>
-          <input type="text" id="cl-condpag" placeholder="es. 30gg data fattura, RB 60ggâ€¦">
+          <input type="text" id="cl-condpag" placeholder="es. 30gg data fattura, RB 60gg…">
         </div>
         <div class="field form-full">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
             <input type="checkbox" id="cl-efornitore" style="width:16px;height:16px;">
-            <span>ðŸ”„ Questo cliente Ã¨ anche <b>fornitore</b></span>
+            <span>🔄 Questo cliente è anche <b>fornitore</b></span>
           </label>
         </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-cliente')">Annulla</button>
-      <button class="btn btn-green" onclick="saveCliente()">ðŸ’¾ Salva</button>
+      <button class="btn btn-green" onclick="saveCliente()">💾 Salva</button>
     </div>
   </div>
 </div>
@@ -2145,7 +2145,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="modal-prodotto-title">Nuovo Prodotto</div>
-      <button class="modal-close" onclick="closeModal('modal-prodotto')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-prodotto')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
@@ -2168,7 +2168,7 @@
           <input type="text" id="pr-nome" placeholder="es. CACIO PICCANTE">
         </div>
         <div class="field">
-          <label>UnitÃ  di misura</label>
+          <label>Unità di misura</label>
           <select id="pr-um">
             <option value="kg">kg</option>
             <option value="pz">pz</option>
@@ -2187,14 +2187,14 @@
           <input type="text" id="pr-packaging" placeholder="es. 1pz=1,5kg circa">
         </div>
         <div class="field form-full">
-          <label>ðŸ“Œ Note fisse prodotto</label>
-          <textarea id="pr-note" placeholder="Es: Conservare a 4Â°C, prodotto stagionaleâ€¦" style="min-height:60px;"></textarea>
+          <label>📌 Note fisse prodotto</label>
+          <textarea id="pr-note" placeholder="Es: Conservare a 4°C, prodotto stagionale…" style="min-height:60px;"></textarea>
         </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-prodotto')">Annulla</button>
-      <button class="btn btn-green" onclick="saveProdotto()">ðŸ’¾ Salva</button>
+      <button class="btn btn-green" onclick="saveProdotto()">💾 Salva</button>
     </div>
   </div>
 </div>
@@ -2204,7 +2204,7 @@
   <div class="modal" style="max-width:760px;">
     <div class="modal-header">
       <div class="modal-title" id="modal-listino-title">Nuovo listino</div>
-      <button class="modal-close" onclick="closeModal('modal-listini')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-listini')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
@@ -2295,7 +2295,7 @@
   <div class="modal" style="max-width:920px;">
     <div class="modal-header">
       <div class="modal-title" id="crm-cliente-title">CRM Cliente</div>
-      <button class="modal-close" onclick="closeModal('modal-crm-cliente')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-crm-cliente')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
@@ -2317,7 +2317,7 @@
           <input type="text" id="crm-stato-cliente" placeholder="es. caldo, tiepido, perso">
         </div>
         <div class="field">
-          <label>PrioritÃ </label>
+          <label>Priorità</label>
           <select id="crm-priorita">
             <option value="alta">Alta</option>
             <option value="media" selected>Media</option>
@@ -2372,7 +2372,7 @@
   <div class="modal" style="max-width:540px;">
     <div class="modal-header">
       <div class="modal-title" id="modal-utente-title">Nuovo Utente</div>
-      <button class="modal-close" onclick="closeModal('modal-utente')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-utente')">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
@@ -2396,7 +2396,7 @@
         </div>
         <div class="field">
           <label>Qualifica</label>
-          <input type="text" id="ut-tipo" placeholder="es. Commerciale, CEOâ€¦">
+          <input type="text" id="ut-tipo" placeholder="es. Commerciale, CEO…">
         </div>
         <div class="field">
           <label>Username *</label>
@@ -2404,25 +2404,25 @@
         </div>
         <div class="field">
           <label>Password *</label>
-          <input type="password" id="ut-password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="new-password">
+          <input type="password" id="ut-password" placeholder="••••••" autocomplete="new-password">
         </div>
       </div>
       <!-- Checkbox isAgente -->
       <div class="field form-full" style="margin-top:4px;">
         <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;">
           <input type="checkbox" id="ut-isagente" style="width:16px;height:16px;accent-color:var(--accent);">
-          Ãˆ un agente commerciale (puÃ² essere assegnato agli ordini)
+          È un agente commerciale (può essere assegnato agli ordini)
         </label>
       </div>
       <!-- Giri assegnati (solo autisti) -->
       <div id="ut-giri-section" style="display:none;margin-top:8px;">
-        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">ðŸ—ºï¸ Giri assegnati</label>
+        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px;">🗺️ Giri assegnati</label>
         <div id="ut-giri-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-utente')">Annulla</button>
-      <button class="btn btn-green" onclick="saveUtente()">ðŸ’¾ Salva</button>
+      <button class="btn btn-green" onclick="saveUtente()">💾 Salva</button>
     </div>
   </div>
 </div>
@@ -2432,7 +2432,7 @@
   <div class="modal" style="max-width:400px;">
     <div class="modal-header">
       <div class="modal-title" id="modal-cred-title">Modifica Credenziali</div>
-      <button class="modal-close" onclick="closeModal('modal-credenziali')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-credenziali')">✕</button>
     </div>
     <div class="modal-body">
       <div class="field">
@@ -2445,16 +2445,16 @@
       </div>
       <div class="field">
         <label>Nuova Password <span style="color:var(--text3);font-weight:400;">(lascia vuoto per non cambiare)</span></label>
-        <input type="password" id="cred-pass" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢">
+        <input type="password" id="cred-pass" placeholder="••••••">
       </div>
       <div class="field">
         <label>Conferma Password</label>
-        <input type="password" id="cred-pass2" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢">
+        <input type="password" id="cred-pass2" placeholder="••••••">
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-credenziali')">Annulla</button>
-      <button class="btn btn-green" onclick="saveCredenziali()">ðŸ’¾ Salva</button>
+      <button class="btn btn-green" onclick="saveCredenziali()">💾 Salva</button>
     </div>
   </div>
 </div>
@@ -2464,7 +2464,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title" id="det-title">Dettaglio Ordine</div>
-      <button class="modal-close" onclick="closeModal('modal-dettaglio')">âœ•</button>
+      <button class="modal-close" onclick="closeModal('modal-dettaglio')">✕</button>
     </div>
     <div class="modal-body" id="det-body"></div>
     <div class="modal-footer" id="det-footer"></div>
@@ -2475,17 +2475,17 @@
 <div class="modal-overlay" id="modal-tentata">
   <div class="modal" style="max-width:600px;">
     <div class="modal-header">
-      <div class="modal-title">ðŸšš Tentata Vendita</div>
-      <button class="modal-close" onclick="closeModal('modal-tentata')">âœ•</button>
+      <div class="modal-title">🚚 Tentata Vendita</div>
+      <button class="modal-close" onclick="closeModal('modal-tentata')">✕</button>
     </div>
     <div class="modal-body">
       <div style="background:var(--accent2-light);border:1px solid #f5d7a0;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--accent2);">
-        <b>Carico predefinito per il tuo mezzo.</b> Modifica le quantitÃ  prima di confermare. L'ordine sarÃ  registrato come "tentata vendita".
+        <b>Carico predefinito per il tuo mezzo.</b> Modifica le quantità prima di confermare. L'ordine sarà registrato come "tentata vendita".
       </div>
       <div class="field">
         <label>Cliente</label>
         <div class="ac-wrap" id="ac-tentata-wrap">
-          <input type="text" class="ac-input" id="ac-tentata-input" placeholder="Cerca clienteâ€¦" autocomplete="off" oninput="acFilter('tentata')" onfocus="acOpen('tentata')" onkeydown="acKey(event,'tentata')">
+          <input type="text" class="ac-input" id="ac-tentata-input" placeholder="Cerca cliente…" autocomplete="off" oninput="acFilter('tentata')" onfocus="acOpen('tentata')" onkeydown="acKey(event,'tentata')">
           <input type="hidden" id="tentata-cliente">
           <div class="ac-dropdown" id="ac-tentata-dd"></div>
         </div>
@@ -2497,12 +2497,12 @@
       </div>
       <div class="field">
         <label>Note</label>
-        <textarea id="tentata-note" placeholder="Es: cliente non trovato, rifornimento scorteâ€¦"></textarea>
+        <textarea id="tentata-note" placeholder="Es: cliente non trovato, rifornimento scorte…"></textarea>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-tentata')">Annulla</button>
-      <button class="btn btn-green" onclick="saveTentataVendita()">âœ… Registra Tentata Vendita</button>
+      <button class="btn btn-green" onclick="saveTentataVendita()">✅ Registra Tentata Vendita</button>
     </div>
   </div>
 </div>
@@ -2511,8 +2511,8 @@
 <div class="modal-overlay" id="modal-pdf-giornaliero">
   <div class="modal" style="max-width:760px;">
     <div class="modal-header">
-      <div class="modal-title">ðŸ“„ Report Giornaliero</div>
-      <button class="modal-close" onclick="closeModal('modal-pdf-giornaliero')">âœ•</button>
+      <div class="modal-title">📄 Report Giornaliero</div>
+      <button class="modal-close" onclick="closeModal('modal-pdf-giornaliero')">✕</button>
     </div>
     <div class="modal-body">
       <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px;">
@@ -2578,11 +2578,11 @@
           <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
               <input type="radio" name="pdf-tipo" value="magazzino" checked onchange="updatePDFPreview()" style="accent-color:var(--accent);">
-              <span>ðŸ“¦ Magazzino <span style="font-size:11px;color:var(--text3);">(pezzi da preparare)</span></span>
+              <span>📦 Magazzino <span style="font-size:11px;color:var(--text3);">(pezzi da preparare)</span></span>
             </label>
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;">
               <input type="radio" name="pdf-tipo" value="fatturazione" onchange="updatePDFPreview()" style="accent-color:var(--accent);">
-              <span>ðŸ’¶ Fatturazione <span style="font-size:11px;color:var(--text3);">(pesi effettivi)</span></span>
+              <span>💶 Fatturazione <span style="font-size:11px;color:var(--text3);">(pesi effettivi)</span></span>
             </label>
           </div>
         </div>
@@ -2591,8 +2591,8 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-pdf-giornaliero')">Chiudi</button>
-      <button class="btn" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="updatePDFPreview()">ðŸ”„ Aggiorna anteprima</button>
-      <button class="btn btn-green" onclick="stampaPDFGiornaliero()">ðŸ–¨ï¸ Stampa / Salva PDF</button>
+      <button class="btn" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="updatePDFPreview()">🔄 Aggiorna anteprima</button>
+      <button class="btn btn-green" onclick="stampaPDFGiornaliero()">🖨️ Stampa / Salva PDF</button>
     </div>
   </div>
 </div>
@@ -2643,17 +2643,17 @@
 <div class="toast-container" id="toast-container"></div>
 
 <script>
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // DATA STORE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
-// â”€â”€â”€ API BASE URL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// In produzione il frontend Ã¨ servito dallo stesso server Express,
-// quindi BASE_URL Ã¨ stringa vuota. In sviluppo separato cambia in 'http://localhost:3000'
+// ─── API BASE URL ─────────────────────────────────────────────────
+// In produzione il frontend è servito dallo stesso server Express,
+// quindi BASE_URL è stringa vuota. In sviluppo separato cambia in 'http://localhost:3000'
 const BASE_URL = '';
 window.BASE_URL = BASE_URL;
 
-// â”€â”€â”€ STATO RUNTIME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── STATO RUNTIME ────────────────────────────────────────────────
 let state = {
   currentUser: null,
   currentPage: null,
@@ -2712,7 +2712,7 @@ function getOrdineGiroEffettivo(o) {
   return (o.giroOverride || getCliente(o.clienteId).giro || '').trim();
 }
 
-// â”€â”€â”€ HTTP HELPER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── HTTP HELPER ──────────────────────────────────────────────────
 async function api(method, path, body = null) {
   const opts = {
     method,
@@ -2732,7 +2732,7 @@ async function api(method, path, body = null) {
   return data;
 }
 
-// â”€â”€â”€ CARICAMENTO DATI INIZIALI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── CARICAMENTO DATI INIZIALI ────────────────────────────────────
 async function loadAllData() {
   try {
     if (!state.pianoData) state.pianoData = today();
@@ -2769,17 +2769,17 @@ async function loadAllData() {
   }
 }
 
-// â”€â”€â”€ NORMALIZZATORI snake_case â†’ camelCase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ─── NORMALIZZATORI snake_case → camelCase ─────────────────────────
+// ═══════════════════════════════════════════════
 // AUTH
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 // HELPERS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // DASHBOARD
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function renderUtentiTable() {
   const roleLabels = {admin:'Admin/Ufficio', amministrazione:'Amministrazione', autista:'Autista/Agente', magazzino:'Magazzino', direzione:'Direzione'};
@@ -2806,8 +2806,8 @@ function renderUtentiTable() {
         ${giriTag}
       </td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-outline btn-sm" onclick="openEditUtente(${u.id})">âœï¸ Modifica</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteUtente(${u.id})">ðŸ—‘ï¸</button>
+        <button class="btn btn-outline btn-sm" onclick="openEditUtente(${u.id})">✏️ Modifica</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUtente(${u.id})">🗑️</button>
       </td>
     </tr>`;
   }).join('');
@@ -2816,7 +2816,7 @@ function renderUtentiTable() {
 function openCredenziali(id) {
   const u = state.utenti.find(x => x.id === id);
   state.editingId = id;
-  document.getElementById('modal-cred-title').textContent = `Modifica â€” ${u.nome} ${u.cognome||''}`.trim();
+  document.getElementById('modal-cred-title').textContent = `Modifica — ${u.nome} ${u.cognome||''}`.trim();
   document.getElementById('cred-nome').value = (u.nome + ' ' + (u.cognome||'')).trim();
   document.getElementById('cred-username').value = u.username;
   document.getElementById('cred-pass').value = '';
@@ -2836,14 +2836,14 @@ function saveCredenziali() {
   // Check username duplicato
   const uname = (username || '').toLowerCase();
   const dup = state.utenti.find(u => String(u.username || '').toLowerCase() === uname && u.id !== state.editingId);
-  if (dup) { showToast('Username giÃ  in uso', 'warning'); return; }
+  if (dup) { showToast('Username già in uso', 'warning'); return; }
 
   const u = state.utenti.find(x => x.id === state.editingId);
   u.nome = nome;
   u.username = username;
   if (pass) u.password = pass;
 
-  // Aggiorna topbar se Ã¨ l'utente corrente
+  // Aggiorna topbar se è l'utente corrente
   if (state.currentUser.id === u.id) {
     state.currentUser.nome = nome;
     state.currentUser.username = username;
@@ -2933,19 +2933,19 @@ async function saveUtente() {
       state.utenti.push(normalizeUtente({...saved, giri_consegna: giriConsegna}));
     }
     closeModal('modal-utente');
-    showToast(state.editingId ? 'Utente aggiornato âœ…' : 'Utente salvato âœ…', 'success');
+    showToast(state.editingId ? 'Utente aggiornato ✅' : 'Utente salvato ✅', 'success');
     state.editingId = null;
     renderUtentiTable();
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // ACTIVITY LOG
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function logActivity(action, detail = '') {
   // Il backend logga automaticamente le azioni CRUD
-  // Questa funzione Ã¨ mantenuta per compatibilitÃ 
+  // Questa funzione è mantenuta per compatibilità
 }
 
 function reassignClientiGiri() {
@@ -2971,9 +2971,9 @@ async function deleteUtente(id) {
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // ORDINI MODAL
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function renderActivityLog() {
   const isAdmin = state.currentUser?.ruolo === 'admin' || state.currentUser?.ruolo === 'amministrazione' || state.currentUser?.ruolo === 'direzione';
@@ -2984,26 +2984,26 @@ function renderActivityLog() {
 
   const body = document.getElementById('activity-log-list');
   if (!state.activityLog.length) {
-    body.innerHTML = '<div style="padding:20px;color:var(--text2);font-size:13px;text-align:center;">Nessuna attivitÃ  registrata</div>';
+    body.innerHTML = '<div style="padding:20px;color:var(--text2);font-size:13px;text-align:center;">Nessuna attività registrata</div>';
     return;
   }
 
   const actionIcons = {
-    'Nuovo ordine': 'ðŸŸ¢',
-    'Modifica ordine': 'âœï¸',
-    'Eliminazione ordine': 'ðŸ”´',
-    'Nuovo cliente': 'ðŸ¢',
-    'Modifica cliente': 'âœï¸',
-    'Eliminazione cliente': 'ðŸ”´',
-    'Nuovo utente': 'ðŸ‘¤',
-    'Modifica utente': 'âœï¸',
+    'Nuovo ordine': '🟢',
+    'Modifica ordine': '✏️',
+    'Eliminazione ordine': '🔴',
+    'Nuovo cliente': '🏢',
+    'Modifica cliente': '✏️',
+    'Eliminazione cliente': '🔴',
+    'Nuovo utente': '👤',
+    'Modifica utente': '✏️',
   };
 
   body.innerHTML = state.activityLog.map(log => {
     const d = new Date(log.ts);
     const dateStr = d.toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit',year:'numeric'});
     const timeStr = d.toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'});
-    const icon = actionIcons[log.action] || 'ðŸ“Œ';
+    const icon = actionIcons[log.action] || '📌';
     const isDelete = log.action.startsWith('Eliminazione');
     const isNew = log.action.startsWith('Nuovo');
     const color = isDelete ? 'var(--danger)' : isNew ? 'var(--success)' : 'var(--text1)';
@@ -3016,7 +3016,7 @@ function renderActivityLog() {
           <span style="font-size:12px;color:var(--text2);">${log.detail}</span>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:3px;">
-          ðŸ‘¤ <b>${log.userName}</b> Â· ${dateStr} ${timeStr}
+          👤 <b>${log.userName}</b> · ${dateStr} ${timeStr}
         </div>
       </div>
     </div>`;
@@ -3024,7 +3024,7 @@ function renderActivityLog() {
 }
 
 async function clearActivityLog() {
-  if (!await customConfirm('Svuotare il registro attivitÃ ?', 'Svuota', 'Registro AttivitÃ ')) return;
+  if (!await customConfirm('Svuotare il registro attività?', 'Svuota', 'Registro Attività')) return;
   try {
     await api('DELETE', '/api/activity');
     state.activityLog = [];
@@ -3040,8 +3040,8 @@ function renderAutistaView() {
   const ordini = state.ordini.filter(o => o.autistaDiGiro === uid && o.data === t);
 
   const nome = state.currentUser.nome;
-  document.getElementById('autista-title').textContent = `Ciao, ${nome}! ðŸ‘‹`;
-  document.getElementById('autista-sub').textContent = `Giro di oggi â€” ${new Date().toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long'})}`;
+  document.getElementById('autista-title').textContent = `Ciao, ${nome}! 👋`;
+  document.getElementById('autista-sub').textContent = `Giro di oggi — ${new Date().toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long'})}`;
 
   const daCons = ordini.filter(o => o.stato !== 'consegnato' && o.stato !== 'annullato').length;
   const cons = ordini.filter(o => o.stato === 'consegnato').length;
@@ -3051,7 +3051,7 @@ function renderAutistaView() {
 
   const container = document.getElementById('autista-orders');
   if (!ordini.length) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">ðŸŽ‰</div><p>Nessun ordine assegnato oggi!</p></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🎉</div><p>Nessun ordine assegnato oggi!</p></div>`;
     return;
   }
 
@@ -3069,7 +3069,7 @@ function renderAutistaView() {
       <div class="mob-header">
         <div>
           <div class="mob-client">${c.nome}</div>
-          <div style="font-size:12px;color:var(--text2);">ðŸ“ ${c.localita}</div>
+          <div style="font-size:12px;color:var(--text2);">📍 ${c.localita}</div>
         </div>
         <div style="text-align:right;">
           ${statoBadge(o.stato)}
@@ -3084,14 +3084,14 @@ function renderAutistaView() {
           return `<div class="mob-line"><span>${nome}</span><span class="mob-line-qty">${l.qty} ${um}</span></div>`;
         }).join('')}
       </div>
-      ${o.note ? `<div style="font-size:12px;color:var(--text2);padding:6px 8px;background:var(--surface2);border-radius:6px;margin-bottom:8px;">ðŸ“ ${o.note}</div>` : ''}
+      ${o.note ? `<div style="font-size:12px;color:var(--text2);padding:6px 8px;background:var(--surface2);border-radius:6px;margin-bottom:8px;">📝 ${o.note}</div>` : ''}
       <div class="mob-actions">
         ${!isConsegnato
-          ? `<button class="btn btn-green" onclick="confermaConsegnaRapida(${o.id})">âœ… Consegnato</button>`
-          : `<button class="btn btn-outline" disabled style="opacity:0.5;">âœ… Consegnato</button>`
+          ? `<button class="btn btn-green" onclick="confermaConsegnaRapida(${o.id})">✅ Consegnato</button>`
+          : `<button class="btn btn-outline" disabled style="opacity:0.5;">✅ Consegnato</button>`
         }
-        <button class="btn btn-outline" onclick="openDettaglio(${o.id})">ðŸ‘ï¸ Dettagli</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id})" title="Elimina ordine">ðŸ—‘ï¸</button>
+        <button class="btn btn-outline" onclick="openDettaglio(${o.id})">👁️ Dettagli</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id})" title="Elimina ordine">🗑️</button>
       </div>
     </div>`;
   }).join('');
@@ -3103,14 +3103,14 @@ async function confermaConsegnaRapida(id) {
     await api('PATCH', `/api/ordini/${id}/stato`, { stato: 'consegnato' });
     const o = state.ordini.find(x => x.id === id);
     if (o) o.stato = 'consegnato';
-    showToast('Consegna confermata! âœ…', 'success');
+    showToast('Consegna confermata! ✅', 'success');
     renderAutistaView();
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // PIANO DI CARICO
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 let pianoSelectedCamionId = null;
 
@@ -3158,17 +3158,17 @@ async function renderPianoPage() {
 
   sel.innerHTML = state.camions.map(c => {
     const autistaInUso = c.autistaInUso ? state.utenti.find(u => u.id === c.autistaInUso) : null;
-    const nomeAut = autistaInUso ? autistaInUso.nome : 'â€”';
+    const nomeAut = autistaInUso ? autistaInUso.nome : '—';
     const isSelected = pianoSelectedCamionId === c.id;
     return `<button
       class="btn ${isSelected ? 'btn-green' : 'btn-outline'}"
       style="position:relative;padding:12px 18px 10px 14px;min-width:130px;border-radius:10px;box-shadow:${isSelected?'0 8px 18px rgba(30,139,195,0.22)':'none'};"
       onclick="selectCamionePiano(${c.id})">
-      ðŸš› <b style="font-size:13px;">${c.targa}</b>
+      🚛 <b style="font-size:13px;">${c.targa}</b>
       <span style="display:block;font-size:11px;font-weight:400;color:${isSelected?'rgba(255,255,255,0.75)':'var(--text3)'};">
-        ${c.pedane.length}p Â· ${nomeAut}
+        ${c.pedane.length}p · ${nomeAut}
       </span>
-      ${c.confermato ? '<span style="position:absolute;top:4px;right:6px;">âœ…</span>' : ''}
+      ${c.confermato ? '<span style="position:absolute;top:4px;right:6px;">✅</span>' : ''}
     </button>`;
   }).join('');
 
@@ -3203,21 +3203,21 @@ function renderPianoBody(isEditor, isConferma) {
       return `<div class="pedana-card ${filled?'has-content':''}" style="${spanStyle}min-height:${minH}px;display:flex;flex-direction:column;gap:4px;">
         <div class="pedana-label">
           <span>P${slot.n}</span>
-          <span class="pedana-status">${filled?'â— occupata':'vuota'}</span>
+          <span class="pedana-status">${filled?'● occupata':'vuota'}</span>
         </div>
         <textarea class="pedana-input" id="pedana-txt-${camion.id}-${slot.n}"
-          placeholder="Contenuto pedanaâ€¦" style="flex:1;min-height:56px;resize:none;"
+          placeholder="Contenuto pedana…" style="flex:1;min-height:56px;resize:none;"
           oninput="livePedanaUpdate(${camion.id},${slot.n-1},this.value);
             this.closest('.pedana-card').classList.toggle('has-content',this.value.trim().length>0);
-            this.previousElementSibling.querySelector('.pedana-status').textContent=this.value.trim()?'â— occupata':'vuota';"
+            this.previousElementSibling.querySelector('.pedana-status').textContent=this.value.trim()?'● occupata':'vuota';"
         >${nota}</textarea>
       </div>`;
     } else {
       return `<div class="pedana-card ${filled?'has-content':''}" style="${spanStyle}min-height:${minH}px;">
         <div class="pedana-label">
-          <span>P${slot.n}</span><span class="pedana-status">${filled?'â— occupata':'vuota'}</span>
+          <span>P${slot.n}</span><span class="pedana-status">${filled?'● occupata':'vuota'}</span>
         </div>
-        <div class="pedana-readonly ${filled?'':'pedana-empty'}">${filled?nota.replace(/\n/g,'<br>'):'â€”'}</div>
+        <div class="pedana-readonly ${filled?'':'pedana-empty'}">${filled?nota.replace(/\n/g,'<br>'):'—'}</div>
       </div>`;
     }
   }).join('');
@@ -3234,8 +3234,8 @@ function renderPianoBody(isEditor, isConferma) {
   body.innerHTML = `
     <div style="background:linear-gradient(135deg,#0f2233,#1e3a52);border-radius:var(--radius);padding:20px 24px;margin-bottom:20px;color:#fff;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
       <div>
-        <div style="font-size:24px;font-weight:800;letter-spacing:-0.5px;">ðŸš› ${camion.targa}</div>
-        <div style="font-size:13px;opacity:0.6;margin-top:2px;">${camion.nome} Â· ${totCnt} pedane totali Â· ${state.pianoData}</div>
+        <div style="font-size:24px;font-weight:800;letter-spacing:-0.5px;">🚛 ${camion.targa}</div>
+        <div style="font-size:13px;opacity:0.6;margin-top:2px;">${camion.nome} · ${totCnt} pedane totali · ${state.pianoData}</div>
       </div>
       <div style="display:flex;gap:20px;">
         <div style="text-align:center;"><div style="font-size:28px;font-weight:800;color:#60c8f0;">${pieneCnt}</div><div style="font-size:11px;opacity:0.5;text-transform:uppercase;letter-spacing:0.5px;">occupate</div></div>
@@ -3253,12 +3253,12 @@ function renderPianoBody(isEditor, isConferma) {
     </div>
     <div class="card" style="margin-bottom:20px;">
       <div style="padding:16px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-        <div style="width:42px;height:42px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">ðŸ‘¤</div>
+        <div style="width:42px;height:42px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">👤</div>
         <div style="flex:1;min-width:160px;">
           <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Autista al volante oggi</div>
           <select id="autista-inuso-sel" style="width:100%;font-size:14px;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);font-weight:600;color:var(--text1);"
             onchange="setAutistaInUso(${camion.id}, parseInt(this.value)||null)">
-            <option value="">â€” non assegnato â€”</option>
+            <option value="">— non assegnato —</option>
             ${autisti.map(a=>`<option value="${a.id}" ${camion.autistaInUso===a.id?'selected':''}>${a.nome} ${a.cognome||''}</option>`).join('')}
           </select>
         </div>
@@ -3270,7 +3270,7 @@ function renderPianoBody(isEditor, isConferma) {
     </div>
     <div class="card" style="margin-bottom:20px;">
       <div class="card-header">
-        <div class="card-title">ðŸ“¦ Piano di carico Â· template ${totCnt} pedane</div>
+        <div class="card-title">📦 Piano di carico · template ${totCnt} pedane</div>
         <div style="font-size:13px;color:var(--text3);">${pieneCnt} / ${totCnt} pedane occupate</div>
       </div>
       <div style="padding:16px;">
@@ -3287,18 +3287,18 @@ function renderPianoBody(isEditor, isConferma) {
     </div>
     ${isEditor?`
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
-      <button class="btn btn-green" onclick="salvaPianoCamion(${camion.id})">ðŸ’¾ Salva piano</button>
-      <button class="btn btn-outline" onclick="resetPianoCamion(${camion.id})">ðŸ”„ Reset pedane</button>
+      <button class="btn btn-green" onclick="salvaPianoCamion(${camion.id})">💾 Salva piano</button>
+      <button class="btn btn-outline" onclick="resetPianoCamion(${camion.id})">🔄 Reset pedane</button>
     </div>
-    <div id="piano-save-ok-${camion.id}" style="display:none;font-size:13px;color:var(--accent);margin-bottom:12px;">âœ… Salvato</div>`:''}
+    <div id="piano-save-ok-${camion.id}" style="display:none;font-size:13px;color:var(--accent);margin-bottom:12px;">✅ Salvato</div>`:''}
     ${camion.confermato?`
     <div style="display:flex;align-items:center;gap:14px;padding:16px 20px;background:var(--success-light);border:2px solid var(--success);border-radius:var(--radius);flex-wrap:wrap;">
-      <span style="font-size:28px;">âœ…</span>
+      <span style="font-size:28px;">✅</span>
       <div>
         <div style="font-weight:700;color:var(--success);">Carico confermato da ${camion.confermatoDa}</div>
         <div style="font-size:12px;color:var(--text2);">${new Date(camion.confermatoAt).toLocaleDateString('it-IT')} alle ${new Date(camion.confermatoAt).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}</div>
       </div>
-      ${(state.currentUser.ruolo==='magazzino'||state.currentUser.ruolo==='admin')?`<button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="annullaConfermaCarico(${camion.id})">â†©ï¸ Annulla</button>`:''}
+      ${(state.currentUser.ruolo==='magazzino'||state.currentUser.ruolo==='admin')?`<button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="annullaConfermaCarico(${camion.id})">↩️ Annulla</button>`:''}
     </div>`:''}
   `;
 
@@ -3309,13 +3309,13 @@ function renderPianoBody(isEditor, isConferma) {
     confSection.style.display = mostra ? 'block' : 'none';
     if (mostra && confChecklist) {
       if (!autistaInUso) {
-        confChecklist.innerHTML = `<div style="font-size:13px;color:var(--orange);">âš ï¸ Seleziona prima un autista.</div>`;
+        confChecklist.innerHTML = `<div style="font-size:13px;color:var(--orange);">⚠️ Seleziona prima un autista.</div>`;
       } else if (!ordiniGiro.length) {
         confChecklist.innerHTML = `<div style="font-size:13px;color:var(--text3);">Nessun ordine per <b>${nomeAut}</b> oggi.</div>`;
       } else {
         const daCons = ordiniGiro.filter(o=>o.stato!=='consegnato').length;
-        confChecklist.innerHTML = `<div style="font-size:13px;color:var(--text2);margin-bottom:10px;"><b>${nomeAut}</b> â€” ${ordiniGiro.length} ordini Â· <span style="color:var(--accent);font-weight:600;">${daCons} da consegnare</span></div>
-          ${ordiniGiro.map(o=>{const cl=state.clienti.find(x=>x.id===o.clienteId);const icon=o.stato==='consegnato'?'âœ…':o.stato==='preparazione'?'ðŸ”µ':'ðŸŸ¡';return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;"><span>${icon}</span><span><b>#${o.id}</b> ${cl?cl.nome:'?'}</span><span style="margin-left:auto;color:var(--text3);font-size:11px;">${getOrdineGiroEffettivo(o)}</span></div>`;}).join('')}`;
+        confChecklist.innerHTML = `<div style="font-size:13px;color:var(--text2);margin-bottom:10px;"><b>${nomeAut}</b> — ${ordiniGiro.length} ordini · <span style="color:var(--accent);font-weight:600;">${daCons} da consegnare</span></div>
+          ${ordiniGiro.map(o=>{const cl=state.clienti.find(x=>x.id===o.clienteId);const icon=o.stato==='consegnato'?'✅':o.stato==='preparazione'?'🔵':'🟡';return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;"><span>${icon}</span><span><b>#${o.id}</b> ${cl?cl.nome:'?'}</span><span style="margin-left:auto;color:var(--text3);font-size:11px;">${getOrdineGiroEffettivo(o)}</span></div>`;}).join('')}`;
       }
     }
   }
@@ -3354,7 +3354,7 @@ async function salvaPianoCamion(camionId) {
     camion.confermato = false; camion.confermatoDa = null; camion.confermatoAt = null;
     const fb = document.getElementById(`piano-save-ok-${camionId}`);
     if (fb) { fb.style.display = 'block'; setTimeout(() => fb.style.display='none', 3000); }
-    showToast(`Piano ${camion.targa} salvato! ðŸ’¾`, 'success');
+    showToast(`Piano ${camion.targa} salvato! 💾`, 'success');
     renderPianoPage();
   } catch(e) { showToast(e.message, 'warning'); }
 }
@@ -3385,7 +3385,7 @@ async function confermaCarico(camionId) {
     camion.confermato = true;
     camion.confermatoDa = (u.nome + ' ' + (u.cognome||'')).trim();
     camion.confermatoAt = new Date().toISOString();
-    showToast(`âœ… Carico ${camion.targa} confermato!`, 'success');
+    showToast(`✅ Carico ${camion.targa} confermato!`, 'success');
     renderPianoPage();
   } catch(e) { showToast(e.message, 'warning'); }
 }
@@ -3401,9 +3401,9 @@ async function annullaConfermaCarico(camionId) {
   } catch(e) { showToast(e.message, 'warning'); }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // MAGAZZINO
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function getMagazzinoSortPreference() {
   const key = 'magazzino_sort_' + (state.currentUser?.id || 'default');
@@ -3744,9 +3744,9 @@ async function chiudiGiornataMagazzino() {
   }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // REPORT
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 async function loadEmailNotificationSettings(force = false) {
   if (!force && state.emailNotificationsLoaded) return;
@@ -3773,7 +3773,7 @@ function renderEmailNotificationSettings() {
   setVal('email-notify-hour', cfg.daily_summary_hour ?? 18);
   setVal('email-notify-recipients', (cfg.recipients || []).join(', '));
   const st = document.getElementById('email-notify-status');
-  if (st) st.textContent = cfg.smtp_configured ? `SMTP OK Â· timezone ${cfg.timezone}` : 'SMTP non configurato sul server';
+  if (st) st.textContent = cfg.smtp_configured ? `SMTP OK · timezone ${cfg.timezone}` : 'SMTP non configurato sul server';
   const meta = document.getElementById('email-notify-meta');
   if (meta) meta.textContent = cfg.smtp_from ? `Mittente: ${cfg.smtp_from}` : '';
 }
@@ -3824,7 +3824,7 @@ function renderImpostazioni() {
         <span style="font-size:11px;font-weight:500;">${GIORNI_NOMI[d]}</span>
       </label>`).join('');
     const prossima = getNextGiroDate(g.giro);
-    const prossimaLabel = prossima ? ` <span style="font-size:11px;color:var(--accent);">â†’ prossima: ${formatDate(prossima)}</span>` : '';
+    const prossimaLabel = prossima ? ` <span style="font-size:11px;color:var(--accent);">→ prossima: ${formatDate(prossima)}</span>` : '';
     return `
       <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);">
         <div style="min-width:110px;font-weight:600;font-size:13px;text-transform:capitalize;">${g.giro} ${prossimaLabel}</div>
@@ -3844,15 +3844,15 @@ function renderImpostazioni() {
         <span style="flex:1;">[${p.codice}] ${p.nome}</span>
         <input type="number" value="${l.qty}" min="1" style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:12px;"
           onchange="updateCaricoTentata(${a.id},${li},'qty',parseInt(this.value)||1)">
-        <button onclick="removeCaricoTentataLine(${a.id},${li})" style="background:none;border:none;cursor:pointer;color:var(--danger);">âœ•</button>
+        <button onclick="removeCaricoTentataLine(${a.id},${li})" style="background:none;border:none;cursor:pointer;color:var(--danger);">✕</button>
       </div>`;
     }).join('');
     return `
       <div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px;">
-        <div style="font-weight:600;margin-bottom:8px;">ðŸšš ${(a.nome+' '+(a.cognome||'')).trim()}</div>
+        <div style="font-weight:600;margin-bottom:8px;">🚚 ${(a.nome+' '+(a.cognome||'')).trim()}</div>
         ${lineeHtml || '<div style="font-size:13px;color:var(--text3);margin-bottom:8px;">Nessun prodotto nel carico predefinito</div>'}
         <select onchange="addCaricoTentataLine(${a.id},parseInt(this.value));this.value=''" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:5px;margin-top:4px;">
-          <option value="">ï¼‹ Aggiungi prodottoâ€¦</option>
+          <option value="">ï¼‹ Aggiungi prodotto…</option>
           ${state.prodotti.map(p => `<option value="${p.id}">[${p.codice}] ${p.nome}</option>`).join('')}
         </select>
       </div>`;
@@ -3890,9 +3890,9 @@ function updateCaricoTentata(userId, li, field, val) {
   if (carico) carico.linee[li][field] = val;
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // TENTATA VENDITA (AUTISTA)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 let tentataLines = [];
 
@@ -3914,8 +3914,8 @@ function renderTentataLines() {
     const p = getProdotto(l.prodId);
     return `<div class="order-line">
       <div style="flex:1;font-size:13px;">[${p.codice}] ${p.nome}</div>
-      <input type="number" class="qty-input" value="${l.qty}" min="1" onchange="tentataLines[${i}].qty=parseInt(this.value)||1" placeholder="QtÃ ">
-      <button class="line-delete" onclick="tentataLines.splice(${i},1);renderTentataLines()">âœ•</button>
+      <input type="number" class="qty-input" value="${l.qty}" min="1" onchange="tentataLines[${i}].qty=parseInt(this.value)||1" placeholder="Qtà">
+      <button class="line-delete" onclick="tentataLines.splice(${i},1);renderTentataLines()">✕</button>
     </div>`;
   }).join('') || '<div style="padding:8px;font-size:13px;color:var(--text3);">Nessun prodotto</div>';
 }
@@ -3931,7 +3931,7 @@ async function saveTentataVendita() {
   const validLines = tentataLines.filter(l => l.prodId);
   if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
   const cliente = getCliente(clienteId);
-  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dallâ€™amministrazione', 'warning'); return; }
+  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
   if (!validLines.length) { showToast('Aggiungi almeno un prodotto', 'warning'); return; }
 
   const body = {
@@ -3954,13 +3954,13 @@ async function saveTentataVendita() {
 // Aggiungo tentata all'acState e al sistema AC
 acState.tentata = { value: null, query: '', focusIdx: -1 };
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // PDF RIEPILOGATIVO GIORNALIERO
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // IL MIO PROFILO
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 function renderProfilo() {
   const u = state.currentUser;
@@ -3994,7 +3994,7 @@ function renderProfilo() {
   ensureDevPanelDom();
   renderDevPanel();
 
-  // ModalitÃ  ordine
+  // Modalità ordine
   const mod = getModalitaOrdine();
   document.getElementById('mod-btn-classico')?.classList.toggle('active', mod === 'classico');
   document.getElementById('mod-btn-catalogo')?.classList.toggle('active', mod === 'catalogo');
@@ -4011,19 +4011,19 @@ async function saveProfilo() {
 
   // Validazioni base
   if (!nome || !username) {
-    showFeedback(fb, 'âš ï¸ Nome e username sono obbligatori.', 'warning');
+    showFeedback(fb, '⚠️ Nome e username sono obbligatori.', 'warning');
     return;
   }
   if (!passOld) {
-    showFeedback(fb, 'âš ï¸ Inserisci la password attuale per confermare le modifiche.', 'warning');
+    showFeedback(fb, '⚠️ Inserisci la password attuale per confermare le modifiche.', 'warning');
     return;
   }
   if (passNew && passNew !== passNew2) {
-    showFeedback(fb, 'âš ï¸ Le nuove password non coincidono.', 'warning');
+    showFeedback(fb, '⚠️ Le nuove password non coincidono.', 'warning');
     return;
   }
   if (passNew && passNew.length < 4) {
-    showFeedback(fb, 'âš ï¸ La nuova password deve avere almeno 4 caratteri.', 'warning');
+    showFeedback(fb, '⚠️ La nuova password deve avere almeno 4 caratteri.', 'warning');
     return;
   }
 
@@ -4031,7 +4031,7 @@ async function saveProfilo() {
   const uname = (username || '').toLowerCase();
   const dup = state.utenti.find(u => String(u.username || '').toLowerCase() === uname && u.id !== state.currentUser.id);
   if (dup) {
-    showFeedback(fb, 'âš ï¸ Username giÃ  in uso da un altro utente.', 'warning');
+    showFeedback(fb, '⚠️ Username già in uso da un altro utente.', 'warning');
     return;
   }
 
@@ -4059,8 +4059,8 @@ async function saveProfilo() {
     // Aggiorna topbar
     document.getElementById('topbar-username').textContent = (nome + ' ' + cognome).trim();
 
-    showFeedback(fb, 'âœ… Profilo aggiornato con successo!', 'success');
-    showToast('Profilo aggiornato âœ…', 'success');
+    showFeedback(fb, '✅ Profilo aggiornato con successo!', 'success');
+    showToast('Profilo aggiornato ✅', 'success');
 
     // Pulisci campi password
     document.getElementById('profilo-pass-old').value = '';
@@ -4072,7 +4072,7 @@ async function saveProfilo() {
   } catch(e) {
     const msg = e.message || 'Errore salvataggio';
     const isWrongPass = msg.toLowerCase().includes('password') || msg.toLowerCase().includes('credenziali');
-    showFeedback(fb, `âš ï¸ ${isWrongPass ? 'Password attuale errata.' : msg}`, 'warning');
+    showFeedback(fb, `⚠️ ${isWrongPass ? 'Password attuale errata.' : msg}`, 'warning');
   }
 }
 
@@ -4093,9 +4093,9 @@ function showFeedback(el, msg, type) {
   }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// MODALITÃ€ ORDINE (preferenza utente)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
+// MODALITÀ ORDINE (preferenza utente)
+// ═══════════════════════════════════════════════
 
 function getModalitaOrdine() {
   const key = 'modalita_ordine_' + (state.currentUser?.id || 'default');
@@ -4110,28 +4110,28 @@ function setModalitaOrdine(val) {
   const fb = document.getElementById('modality-feedback');
   if (fb) {
     fb.textContent = val === 'catalogo'
-      ? 'âœ… ModalitÃ  catalogo attiva â€” il prossimo Nuovo Ordine si aprirÃ  come catalogo.'
-      : 'âœ… ModalitÃ  classica attiva.';
+      ? '✅ Modalità catalogo attiva — il prossimo Nuovo Ordine si aprirà come catalogo.'
+      : '✅ Modalità classica attiva.';
     fb.style.display = 'block';
     setTimeout(() => fb.style.display = 'none', 3000);
   }
 }
 
-// Override openNewOrder per smistare verso la modalitÃ  scelta
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// MODALITÃ€ CATALOGO â€” flusso a 2 livelli
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Override openNewOrder per smistare verso la modalità scelta
+// ═══════════════════════════════════════════════
+// MODALITÀ CATALOGO — flusso a 2 livelli
+// ═══════════════════════════════════════════════
 
 // Carrello: { prodId -> { qty, um } }
 let catalogoCart = {};
 let catCategoriaAttiva = null;
 
 const CAT_CONFIG = [
-  { id: 'FORMAGGI',  icon: 'ðŸ§€', label: 'Formaggi',  color: '#fff8e1', border: '#f9a825' },
-  { id: 'RICOTTA',   icon: 'ðŸ¥›', label: 'Ricotta',   color: '#f3e5f5', border: '#8e24aa' },
-  { id: 'CAGLIATA',  icon: 'ðŸ«™', label: 'Cagliata',  color: '#e8f5e9', border: '#2e7d32' },
-  { id: 'PANNA UHT', icon: 'ðŸ¦', label: 'Panna UHT', color: '#e3f2fd', border: '#1565c0' },
-  { id: 'ALTRO',     icon: 'ðŸ“¦', label: 'Altro',     color: '#fafafa', border: '#9e9e9e' },
+  { id: 'FORMAGGI',  icon: '🧀', label: 'Formaggi',  color: '#fff8e1', border: '#f9a825' },
+  { id: 'RICOTTA',   icon: '🥛', label: 'Ricotta',   color: '#f3e5f5', border: '#8e24aa' },
+  { id: 'CAGLIATA',  icon: '🫙', label: 'Cagliata',  color: '#e8f5e9', border: '#2e7d32' },
+  { id: 'PANNA UHT', icon: '🍦', label: 'Panna UHT', color: '#e3f2fd', border: '#1565c0' },
+  { id: 'ALTRO',     icon: '📦', label: 'Altro',     color: '#fafafa', border: '#9e9e9e' },
 ];
 
 function openNewOrderCatalogo() {
@@ -4164,7 +4164,7 @@ function openNewOrderCatalogo() {
   // Agente default
   const agenti = state.utenti.filter(u => u.isAgente);
   const selAg = document.getElementById('cat-agente');
-  selAg.innerHTML = '<option value="">â€” Seleziona agente â€”</option>' +
+  selAg.innerHTML = '<option value="">— Seleziona agente —</option>' +
     agenti.map(a => `<option value="${a.id}" ${a.id === state.currentUser.id && state.currentUser.isAgente ? 'selected' : ''}>${(a.nome + ' ' + (a.cognome || '')).trim()}</option>`).join('');
 
   catShowSchermata('cat');
@@ -4174,7 +4174,7 @@ function openNewOrderCatalogo() {
   // focus rimosso: apriva automaticamente il dropdown cliente
 }
 
-// â”€â”€ Navigazione schermate â”€â”€
+// ── Navigazione schermate ──
 function catShowSchermata(which) {
   // which: 'cat' | 'prod' | 'carrello'
   document.getElementById('cat-screen-cat').style.display      = which === 'cat'      ? '' : 'none';
@@ -4187,7 +4187,7 @@ function catGoToCategoria(catId) {
   const cfg = CAT_CONFIG.find(x => x.id === catId);
   document.getElementById('cat-breadcrumb').style.display = 'inline';
   document.getElementById('cat-breadcrumb').innerHTML =
-    `<span style="opacity:.5;">Categorie</span> â€º <b>${cfg ? cfg.icon + ' ' + cfg.label : catId}</b>`;
+    `<span style="opacity:.5;">Categorie</span> › <b>${cfg ? cfg.icon + ' ' + cfg.label : catId}</b>`;
   document.getElementById('cat-search').value = '';
   catShowSchermata('prod');
   catRenderProdotti();
@@ -4205,7 +4205,7 @@ function catShowCarrello() {
   catRenderCarrello();
 }
 
-// â”€â”€ Schermata 1: Categorie â”€â”€
+// ── Schermata 1: Categorie ──
 function catRenderCategorie() {
   const clienteId = acState['cat-cliente']?.value || null;
 
@@ -4246,7 +4246,7 @@ function catRenderCategorie() {
   }
 }
 
-// â”€â”€ Schermata 2: Prodotti della categoria â”€â”€
+// ── Schermata 2: Prodotti della categoria ──
 function catRenderProdotti() {
   const q = (document.getElementById('cat-search')?.value || '').toLowerCase();
   let prods = state.prodotti.filter(p => p.categoria === catCategoriaAttiva);
@@ -4262,7 +4262,7 @@ function catRenderProdotti() {
   grid.innerHTML = prods.map(p => catCardHtml(p)).join('');
 }
 
-// â”€â”€ Schermata 3: Riepilogo carrello â”€â”€
+// ── Schermata 3: Riepilogo carrello ──
 function catRenderCarrello() {
   const list = document.getElementById('cat-carrello-list');
   const items = Object.entries(catalogoCart);
@@ -4276,10 +4276,10 @@ function catRenderCarrello() {
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
       <div style="flex:1;min-width:0;">
         <div style="font-size:13px;font-weight:600;">${p.nome}</div>
-        <div style="font-size:11px;color:var(--text3);">[${p.codice}] Â· ${p.categoria}</div>
+        <div style="font-size:11px;color:var(--text3);">[${p.codice}] · ${p.categoria}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-        <button class="cat-qty-btn" onclick="catQtyChange(${prodId},-1);catRenderCarrello();catRenderCategorie();">âˆ’</button>
+        <button class="cat-qty-btn" onclick="catQtyChange(${prodId},-1);catRenderCarrello();catRenderCategorie();">−</button>
         <input class="cat-qty-input" type="number" min="1" value="${v.qty}"
           onchange="catQtySet(${prodId},parseInt(this.value)||1);catRenderCarrello();">
         <select class="cat-um-select" onchange="catUmSet(${prodId},this.value);catRenderCarrello();">
@@ -4287,13 +4287,13 @@ function catRenderCarrello() {
         </select>
         <button class="cat-qty-btn" onclick="catQtyChange(${prodId},1);catRenderCarrello();">+</button>
         <button onclick="delete catalogoCart[${prodId}];catRenderCarrello();catRenderCategorie();updateCartBar();"
-          style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--danger);" title="Rimuovi">âœ•</button>
+          style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--danger);" title="Rimuovi">✕</button>
       </div>
     </div>`;
   }).join('');
 }
 
-// â”€â”€ Card prodotto (usata in storico + schermata prodotti) â”€â”€
+// ── Card prodotto (usata in storico + schermata prodotti) ──
 function catCardHtml(p) {
   const item = catalogoCart[p.id];
   const inCart = !!item;
@@ -4306,7 +4306,7 @@ function catCardHtml(p) {
     <div class="cat-card-nome">${p.nome}</div>
     <div class="cat-card-info">${p.packaging || p.um}</div>
     <div class="cat-card-controls">
-      <button class="cat-qty-btn" onclick="catQtyChange(${p.id},-1)">âˆ’</button>
+      <button class="cat-qty-btn" onclick="catQtyChange(${p.id},-1)">−</button>
       <input class="cat-qty-input" type="number" min="1" value="${qty}"
         onchange="catQtySet(${p.id},parseInt(this.value)||1)"
         style="color:${inCart ? 'var(--accent)' : 'var(--text1)'};">
@@ -4317,11 +4317,11 @@ function catCardHtml(p) {
       <button class="cat-qty-btn" onclick="catQtyChange(${p.id},1)"
         style="${inCart ? 'background:var(--accent);color:#fff;border-color:var(--accent);' : ''}">+</button>
     </div>
-    ${p.note ? `<div style="font-size:10px;color:var(--blue);margin-top:4px;">ðŸ“Œ ${p.note}</div>` : ''}
+    ${p.note ? `<div style="font-size:10px;color:var(--blue);margin-top:4px;">📌 ${p.note}</div>` : ''}
   </div>`;
 }
 
-// â”€â”€ Carrello ops â”€â”€
+// ── Carrello ops ──
 function catQtyChange(prodId, delta) {
   const item = catalogoCart[prodId];
   const curQty = item ? item.qty : 0;
@@ -4380,11 +4380,11 @@ function updateCartBar() {
   // Mostra i nomi dei prodotti nel carrello, troncati
   const nomi = items.map(([id, v]) => {
     const p = getProdotto(parseInt(id));
-    return `${v.qty}Ã— ${p.nome.split(' ').slice(0,2).join(' ')}`;
+    return `${v.qty}× ${p.nome.split(' ').slice(0,2).join(' ')}`;
   });
   const MAX = 3;
-  let label = nomi.slice(0, MAX).join(' Â· ');
-  if (nomi.length > MAX) label += ` Â· +${nomi.length - MAX} altri`;
+  let label = nomi.slice(0, MAX).join(' · ');
+  if (nomi.length > MAX) label += ` · +${nomi.length - MAX} altri`;
   const el = document.getElementById('cat-cart-items');
   if (el) el.textContent = label;
 }
@@ -4408,7 +4408,7 @@ async function saveCatalogoOrder() {
 
   if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
   const cliente = getCliente(clienteId);
-  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dallâ€™amministrazione', 'warning'); return; }
+  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
   if (!data)      { showToast('Inserisci la data', 'warning'); return; }
 
   const linee = Object.entries(catalogoCart)
@@ -4435,7 +4435,7 @@ async function saveCatalogoOrder() {
     const saved = await api('POST', '/api/ordini', body);
     state.ordini.unshift(normalizeOrdine(saved));
     closeModal('modal-catalogo');
-    showToast(`Ordine salvato âœ… â€” ${linee.length} prodotti`, 'success');
+    showToast(`Ordine salvato ✅ — ${linee.length} prodotti`, 'success');
     renderPage(state.currentPage);
   } catch(e) {
     showToast(e.message || 'Errore salvataggio', 'warning');
@@ -4486,7 +4486,7 @@ function updatePDFPreview() {
     return au ? (au.nome + ' ' + (au.cognome||'')).trim() : '';
   }
 
-  // â”€â”€ REPORT MAGAZZINO: nome prodotto + qtÃ  + unitÃ  â”€â”€
+  // ── REPORT MAGAZZINO: nome prodotto + qtà + unità ──
   function ordineHtmlMag(o) {
     const cl = getCliente(o.clienteId);
     const linee = o.linee.map(l => {
@@ -4500,15 +4500,15 @@ function updatePDFPreview() {
         <span style="white-space:nowrap;margin-left:8px;font-weight:700;">${qty} ${um}</span>
       </div>`;
     }).join('');
-    const flags = [o.stef ? 'ðŸš› STEF' : '', o.altroVettore ? 'ðŸšš Altro vettore' : '', o.dataNonCerta ? 'âš ï¸' : ''].filter(Boolean).join(' ');
+    const flags = [o.stef ? '🚛 STEF' : '', o.altroVettore ? '🚚 Altro vettore' : '', o.dataNonCerta ? '⚠️' : ''].filter(Boolean).join(' ');
     return `<div style="margin-bottom:10px;padding-bottom:6px;">
       <div style="font-weight:700;font-size:13px;text-decoration:underline;">${cl.nome}${flags ? ' <span style="font-weight:400;font-size:11px;">'+flags+'</span>' : ''}</div>
-      ${o.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">ðŸ“ ${o.note}</div>` : ''}
+      ${o.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">📝 ${o.note}</div>` : ''}
       ${linee || '<div style="font-size:11px;color:#aaa;">nessun prodotto</div>'}
     </div>`;
   }
 
-  // â”€â”€ REPORT FATTURAZIONE: nome prodotto + peso effettivo â”€â”€
+  // ── REPORT FATTURAZIONE: nome prodotto + peso effettivo ──
   function ordineHtmlFatt(o) {
     const cl = getCliente(o.clienteId);
     const linee = o.linee.map(l => {
@@ -4516,7 +4516,7 @@ function updatePDFPreview() {
       const nome = l.prodottoNomeLibero || p?.nome || 'Prodotto libero';
       const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
       const qty = l.qty || 1;
-      const peso = l.pesoEffettivo ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>` : `<span style="color:#bbb;">${qty} ${um} â€” peso da inserire</span>`;
+      const peso = l.pesoEffettivo ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>` : `<span style="color:#bbb;">${qty} ${um} — peso da inserire</span>`;
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
       return `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;border-bottom:1px dotted #eee;">
         <span>${nome}${nota}</span>
@@ -4525,7 +4525,7 @@ function updatePDFPreview() {
     }).join('');
     return `<div style="margin-bottom:10px;padding-bottom:6px;">
       <div style="font-weight:700;font-size:13px;text-decoration:underline;">${cl.nome}</div>
-      ${o.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">ðŸ“ ${o.note}</div>` : ''}
+      ${o.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">📝 ${o.note}</div>` : ''}
       ${linee || '<div style="font-size:11px;color:#aaa;">nessun prodotto</div>'}
     </div>`;
   }
@@ -4542,7 +4542,7 @@ function updatePDFPreview() {
     return `<div style="width:${colWidth};padding:0 6px;box-sizing:border-box;vertical-align:top;display:inline-block;">
       <div style="background:#f0f4f0;padding:6px 10px;margin-bottom:8px;border-radius:4px;border-left:3px solid #2e7d32;">
         <div style="font-weight:700;font-size:13px;text-transform:uppercase;">${g}</div>
-        ${aut ? `<div style="font-size:11px;color:#555;">ðŸ‘¤ ${aut}</div>` : ''}
+        ${aut ? `<div style="font-size:11px;color:#555;">👤 ${aut}</div>` : ''}
         <div style="font-size:11px;color:#777;">${ordiniGiro.length} ordine${ordiniGiro.length!==1?'i':''}</div>
       </div>
       ${ordiniGiro.map(ordineHtml).join('')}
@@ -4554,11 +4554,11 @@ function updatePDFPreview() {
 
   preview.innerHTML = `
     <div style="font-weight:700;font-size:15px;text-align:center;margin-bottom:12px;border-bottom:2px solid #333;padding-bottom:6px;">
-      NORBALAT â€” ${titoloTipo} ${formatDate(data)}${giriSel ? ' Â· ' + giriSel.map(g=>g.toUpperCase()).join(', ') : ''}
+      NORBALAT — ${titoloTipo} ${formatDate(data)}${giriSel ? ' · ' + giriSel.map(g=>g.toUpperCase()).join(', ') : ''}
     </div>
     <div style="font-size:0;">${columnsHtml}</div>
     <div style="text-align:right;font-size:11px;color:#666;margin-top:10px;padding-top:8px;border-top:1px solid #ddd;">
-      Ordini: <b>${totOrdini}</b> Â· Righe prodotto: <b>${totLinee}</b> Â· Stampato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}
+      Ordini: <b>${totOrdini}</b> · Righe prodotto: <b>${totLinee}</b> · Stampato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}
     </div>`;
 }
 
@@ -4569,7 +4569,7 @@ function stampaPDFGiornaliero() {
   const content = document.getElementById('pdf-preview').innerHTML;
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <title>Norbalat â€” ${tipo === 'fatturazione' ? 'Fatturazione' : 'Magazzino'} ${data}</title>
+    <title>Norbalat — ${tipo === 'fatturazione' ? 'Fatturazione' : 'Magazzino'} ${data}</title>
     <style>
       * { box-sizing: border-box; }
       body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1814; padding: 14px; margin: 0; }
@@ -4580,9 +4580,9 @@ function stampaPDFGiornaliero() {
   setTimeout(() => win.print(), 300);
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 // MODAL HELPERS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════
 
 async function importClientiExcel(input) {
   const file = input.files[0];
@@ -4618,13 +4618,13 @@ async function importClientiExcel(input) {
 
   let ok = 0, err = 0, skip = 0;
   const total = rows.slice(1).filter(r => r[0]).length;
-  showToast(`ðŸ“¥ Importazione ${total} clientiâ€¦`);
+  showToast(`📥 Importazione ${total} clienti…`);
 
   for (const row of rows.slice(1)) {
     const nome = (row[0]||'').toString().trim();
     if (!nome) continue;
 
-    // Partita IVA: numero â†’ stringa con zero iniziale se necessario
+    // Partita IVA: numero → stringa con zero iniziale se necessario
     let piva = '';
     if (row[1]) {
       piva = row[1].toString().trim();
@@ -4657,7 +4657,7 @@ async function importClientiExcel(input) {
     } catch(e) { err++; }
   }
 
-  showToast(`âœ… Import completato: ${ok} nuovi, ${skip} aggiornati${err ? ', '+err+' errori' : ''}`, 'success');
+  showToast(`✅ Import completato: ${ok} nuovi, ${skip} aggiornati${err ? ', '+err+' errori' : ''}`, 'success');
   renderClientiTable();
 }
 </script>
