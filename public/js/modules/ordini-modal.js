@@ -3,7 +3,7 @@ let selectedOrders = new Set();
 
 function openNewOrder() {
   state.editingId = null;
-  orderLines = [{ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: 0 }];
+  orderLines = [{ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: null }];
   document.getElementById('modal-ordine-title').textContent = 'Nuovo Ordine';
   document.getElementById('ord-data').value = today();
   document.getElementById('ord-stato').value = 'attesa';
@@ -375,16 +375,13 @@ function renderOrderLines() {
   let righeConPrezzo = 0;
   container.innerHTML = orderLines.map((l, i) => {
     const p = l.prodId ? getProdotto(l.prodId) : null;
-    if (l.prezzoUnitario === undefined || l.prezzoUnitario === null) {
-      l.prezzoUnitario = resolveDefaultLinePrice(l, clienteId, dataOrdine);
-    }
     const umOpts = ['Pezzi','Cartoni','Litri','Kg','Pedana'];
     const curUM = l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi');
     const isPedana = curUM === 'Pedana';
     const prezzoListino = p ? getListinoPrezzo(p.id, clienteId, dataOrdine) : null;
-    const prezzo = Number.isFinite(Number(l.prezzoUnitario)) ? Number(l.prezzoUnitario) : 0;
+    const prezzo = Number.isFinite(Number(l.prezzoUnitario)) ? Number(l.prezzoUnitario) : null;
     const qty = Number(l.qty || 0);
-    const subtot = Number.isFinite(qty) ? prezzo * qty : null;
+    const subtot = (prezzo !== null && Number.isFinite(qty)) ? prezzo * qty : null;
     if (subtot !== null) { totale += subtot; righeConPrezzo++; }
     return `
     <div class="order-line" id="ord-line-${i}">
@@ -411,15 +408,18 @@ function renderOrderLines() {
         </select>
         <button class="line-delete" onclick="removeOrderLine(${i})" style="flex-shrink:0;width:32px;height:32px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:16px;color:var(--text3);display:flex;align-items:center;justify-content:center;" title="Rimuovi">x</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 130px;gap:8px;margin-top:6px;">
+      <div style="display:grid;grid-template-columns:1fr 150px;gap:8px;margin-top:6px;">
         <input type="text" value="${l.prodottoNomeLibero||''}"
           placeholder="Prodotto libero (opzionale)"
           oninput="orderLines[${i}].prodottoNomeLibero=this.value"
           style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
-        <input type="number" step="0.01" min="0" value="${prezzo}"
-          placeholder="Prezzo unit."
-          oninput="orderLines[${i}].prezzoUnitario=Number(this.value||0);renderOrderLines()"
-          style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
+        <div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:2px;">Prezzo €</div>
+          <input type="number" step="0.01" min="0" value="${prezzo !== null ? prezzo.toFixed(2) : ''}"
+            placeholder="0,00"
+            oninput="const v=String(this.value||'').trim().replace(',','.');orderLines[${i}].prezzoUnitario=(v===''?null:Number(v));renderOrderLines()"
+            style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
+        </div>
       </div>
       ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">${p.packaging}${isPedana ? ' - PEDANA INTERA' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">PEDANA INTERA</div>` : '')}
       ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">${p.note}</div>` : ''}
@@ -460,7 +460,6 @@ function acProdFilter(i) {
   if (!inp || !dd) return;
   const q = inp.value.trim().toLowerCase();
   orderLines[i].prodId = null;
-  orderLines[i].prezzoUnitario = Number(orderLines[i].prezzoUnitario || 0);
   inp.classList.remove('has-value');
   acProdRender(i, q);
   dd.classList.add('open');
@@ -608,7 +607,7 @@ function acProdKey(e, i) {
 }
 
 function addOrderLine() {
-  orderLines.push({ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: 0 });
+  orderLines.push({ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: null });
   renderOrderLines();
   // Focus sul nuovo campo
   setTimeout(() => document.getElementById(`ac-prod-input-${orderLines.length-1}`)?.focus(), 50);
@@ -719,7 +718,7 @@ async function saveOrder() {
       prodotto_id: l.prodId || null,
       prodotto_nome_libero: String(l.prodottoNomeLibero || '').trim(),
       qty: l.qty,
-      prezzo_unitario: Number.isFinite(Number(l.prezzoUnitario)) ? Number(l.prezzoUnitario) : 0,
+      prezzo_unitario: Number.isFinite(Number(l.prezzoUnitario)) ? Number(l.prezzoUnitario) : null,
       is_pedana: !!l.isPedana,
       nota_riga: l.notaRiga||'',
       unita_misura: l.unitaMisura||'pezzi'

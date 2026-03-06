@@ -1681,7 +1681,18 @@ async function assertDocFolderVisible(req, res, folderId) {
   const row = await getDocFolderOrNull(folderId);
   if (!row) {
     res.status(404).json({ error: 'Cartella non trovata' });
-  return null;
+    return null;
+  }
+  let cursor = row;
+  while (cursor) {
+    if (!userCanViewDocFolder(req.user.ruolo, cursor.allowed_roles)) {
+      res.status(403).json({ error: 'Permesso negato su cartella' });
+      return null;
+    }
+    if (!cursor.parent_id) break;
+    cursor = await getDocFolderOrNull(cursor.parent_id);
+  }
+  return row;
 }
 
 async function resolveOrderLinePrice({ prodottoId, clienteId, data, manualPrice = null, client = null }) {
@@ -1704,17 +1715,6 @@ async function resolveOrderLinePrice({ prodottoId, clienteId, data, manualPrice 
   const last = await db.query(lastSql, [clienteId, prodottoId]);
   if (last.rows.length) return Number(last.rows[0].prezzo_unitario || 0);
   return 0;
-}
-  let cursor = row;
-  while (cursor) {
-    if (!userCanViewDocFolder(req.user.ruolo, cursor.allowed_roles)) {
-      res.status(403).json({ error: 'Permesso negato su cartella' });
-      return null;
-    }
-    if (!cursor.parent_id) break;
-    cursor = await getDocFolderOrNull(cursor.parent_id);
-  }
-  return row;
 }
 
 app.get('/api/documenti/folders', authMiddleware, requirePermission('documenti:view'), async (req, res) => {
