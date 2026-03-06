@@ -45,7 +45,7 @@ const app  = express();
 const pool = new Pool({ connectionString: DATABASE_URL });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Helper query
@@ -454,6 +454,27 @@ async function createSchema() {
       updated_at  TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS doc_folders (
+      id            SERIAL PRIMARY KEY,
+      name          TEXT NOT NULL,
+      parent_id     INTEGER REFERENCES doc_folders(id) ON DELETE CASCADE,
+      allowed_roles JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_by    INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      created_at    TIMESTAMPTZ DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS doc_files (
+      id          SERIAL PRIMARY KEY,
+      folder_id   INTEGER NOT NULL REFERENCES doc_folders(id) ON DELETE CASCADE,
+      file_name   TEXT NOT NULL,
+      mime_type   TEXT NOT NULL DEFAULT 'application/octet-stream',
+      size_bytes  INTEGER NOT NULL DEFAULT 0,
+      file_data   BYTEA NOT NULL,
+      created_by  INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_ordini_data    ON ordini(data);
     CREATE INDEX IF NOT EXISTS idx_ordini_stato   ON ordini(stato);
     CREATE INDEX IF NOT EXISTS idx_ordini_agente  ON ordini(agente_id);
@@ -463,6 +484,8 @@ async function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_listini_prod_cliente ON listini(prodotto_id,cliente_id);
     CREATE INDEX IF NOT EXISTS idx_listini_validita ON listini(valido_dal,valido_al);
     CREATE INDEX IF NOT EXISTS idx_crm_cliente_created ON clienti_crm_eventi(cliente_id,created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_doc_folders_parent ON doc_folders(parent_id);
+    CREATE INDEX IF NOT EXISTS idx_doc_files_folder ON doc_files(folder_id);
 
     -- Migrazioni safe per DB esistenti
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS classificazione TEXT DEFAULT '';
@@ -488,6 +511,10 @@ async function createSchema() {
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS discount_pct    NUMERIC DEFAULT 0;
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS final_price     NUMERIC;
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS excluded_client_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE doc_folders ADD COLUMN IF NOT EXISTS allowed_roles JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE doc_folders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE doc_files   ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT 'application/octet-stream';
+    ALTER TABLE doc_files   ADD COLUMN IF NOT EXISTS size_bytes INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS stato_cliente TEXT DEFAULT '';
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS followup_date DATE;
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS priorita TEXT DEFAULT 'media';
@@ -844,6 +871,8 @@ const PERMISSIONS = {
   'clienti:create': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'clienti:update': ['admin', 'amministrazione', 'direzione'],
   'clienti:delete': ['admin'],
+  'documenti:view': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
+  'documenti:manage': ['admin', 'amministrazione', 'direzione'],
   'listini:view': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'listini:manage': ['admin', 'direzione'],
   'onboarding:manage': ['admin', 'amministrazione'],
@@ -865,6 +894,33 @@ function requirePermission(permission) {
     }
     next();
   };
+}
+
+const APP_ROLES = ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'];
+const DOCS_FULL_ACCESS_ROLES = ['admin', 'amministrazione', 'direzione'];
+
+function hasFullDocumentAccess(role) {
+  return DOCS_FULL_ACCESS_ROLES.includes(String(role || ''));
+}
+
+function normalizeAllowedRoles(raw) {
+  const arr = Array.isArray(raw) ? raw : [];
+  return [...new Set(arr.map(r => String(r || '').trim()).filter(r => APP_ROLES.includes(r)))];
+}
+
+function userCanViewDocFolder(userRole, allowedRolesRaw) {
+  if (hasFullDocumentAccess(userRole)) return true;
+  const allowed = normalizeAllowedRoles(allowedRolesRaw);
+  if (!allowed.length) return true;
+  return allowed.includes(String(userRole || ''));
+}
+
+function decodeBase64Payload(raw) {
+  const str = String(raw || '').trim();
+  if (!str) return Buffer.alloc(0);
+  const match = str.match(/^data:[^;]+;base64,(.+)$/i);
+  const base = match ? match[1] : str;
+  return Buffer.from(base, 'base64');
 }
 
 async function logOnboardingChange({ clienteId, reqUser, oldStato, newStato, oldFido, newFido, note = '' }) {
@@ -1567,6 +1623,222 @@ app.delete('/api/listini/:id', authMiddleware, requirePermission('listini:manage
     await q('DELETE FROM listini WHERE id=$1', [id]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+function folderRowToPayload(row) {
+  return {
+    id: row.id,
+    name: row.name || '',
+    parent_id: row.parent_id || null,
+    allowed_roles: normalizeAllowedRoles(row.allowed_roles),
+    created_by: row.created_by || null,
+    created_at: row.created_at || null,
+    updated_at: row.updated_at || null,
+  };
+}
+
+function buildVisibleFolders(rows, role) {
+  const byId = new Map(rows.map(r => [r.id, r]));
+  const memo = new Map();
+  const visit = (id) => {
+    if (memo.has(id)) return memo.get(id);
+    const row = byId.get(id);
+    if (!row) return false;
+    const canSeeSelf = userCanViewDocFolder(role, row.allowed_roles);
+    if (!canSeeSelf) {
+      memo.set(id, false);
+      return false;
+    }
+    if (!row.parent_id) {
+      memo.set(id, true);
+      return true;
+    }
+    const parentOk = visit(row.parent_id);
+    memo.set(id, !!parentOk);
+    return !!parentOk;
+  };
+  return rows.filter(r => visit(r.id));
+}
+
+async function getDocFolderOrNull(id) {
+  const { rows } = await q('SELECT * FROM doc_folders WHERE id=$1 LIMIT 1', [id]);
+  return rows[0] || null;
+}
+
+async function assertDocFolderVisible(req, res, folderId) {
+  const row = await getDocFolderOrNull(folderId);
+  if (!row) {
+    res.status(404).json({ error: 'Cartella non trovata' });
+    return null;
+  }
+  let cursor = row;
+  while (cursor) {
+    if (!userCanViewDocFolder(req.user.ruolo, cursor.allowed_roles)) {
+      res.status(403).json({ error: 'Permesso negato su cartella' });
+      return null;
+    }
+    if (!cursor.parent_id) break;
+    cursor = await getDocFolderOrNull(cursor.parent_id);
+  }
+  return row;
+}
+
+app.get('/api/documenti/folders', authMiddleware, requirePermission('documenti:view'), async (req, res) => {
+  try {
+    const { rows } = await q(
+      `SELECT id,name,parent_id,allowed_roles,created_by,created_at,updated_at
+       FROM doc_folders
+       ORDER BY COALESCE(parent_id,0), name, id`
+    );
+    const visible = buildVisibleFolders(rows, req.user.ruolo).map(folderRowToPayload);
+    res.json({ folders: visible, can_manage: hasFullDocumentAccess(req.user.ruolo) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/documenti/folders', authMiddleware, requirePermission('documenti:manage'), async (req, res) => {
+  try {
+    const name = String(req.body?.name || '').trim();
+    const parentId = req.body?.parent_id ? parseInt(req.body.parent_id) : null;
+    const allowedRoles = normalizeAllowedRoles(req.body?.allowed_roles);
+    if (!name) return res.status(400).json({ error: 'Nome cartella obbligatorio' });
+    if (name.length > 120) return res.status(400).json({ error: 'Nome cartella troppo lungo' });
+    if (!allowedRoles.length) return res.status(400).json({ error: 'Seleziona almeno un ruolo visibile' });
+    if (parentId) {
+      const parent = await getDocFolderOrNull(parentId);
+      if (!parent) return res.status(404).json({ error: 'Cartella padre non trovata' });
+    }
+    const { rows } = await q(
+      `INSERT INTO doc_folders (name,parent_id,allowed_roles,created_by,updated_at)
+       VALUES ($1,$2,$3::jsonb,$4,NOW())
+       RETURNING *`,
+      [name, parentId, JSON.stringify(allowedRoles), req.user.id || null]
+    );
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim() || 'Sistema', 'Documenti', `Nuova cartella: ${name}`);
+    res.json(folderRowToPayload(rows[0]));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/documenti/folders/:id', authMiddleware, requirePermission('documenti:manage'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const old = await getDocFolderOrNull(id);
+    if (!old) return res.status(404).json({ error: 'Cartella non trovata' });
+    const nextName = req.body?.name !== undefined ? String(req.body.name || '').trim() : String(old.name || '');
+    const nextRoles = req.body?.allowed_roles !== undefined ? normalizeAllowedRoles(req.body.allowed_roles) : normalizeAllowedRoles(old.allowed_roles);
+    if (!nextName) return res.status(400).json({ error: 'Nome cartella obbligatorio' });
+    if (!nextRoles.length) return res.status(400).json({ error: 'Seleziona almeno un ruolo visibile' });
+    const { rows } = await q(
+      `UPDATE doc_folders
+       SET name=$1, allowed_roles=$2::jsonb, updated_at=NOW()
+       WHERE id=$3
+       RETURNING *`,
+      [nextName, JSON.stringify(nextRoles), id]
+    );
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim() || 'Sistema', 'Documenti', `Aggiorna cartella: ${nextName}`);
+    res.json(folderRowToPayload(rows[0]));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/documenti/folders/:id', authMiddleware, requirePermission('documenti:manage'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const folder = await getDocFolderOrNull(id);
+    if (!folder) return res.status(404).json({ error: 'Cartella non trovata' });
+    await q('DELETE FROM doc_folders WHERE id=$1', [id]);
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim() || 'Sistema', 'Documenti', `Elimina cartella: ${folder.name}`);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/documenti/files', authMiddleware, requirePermission('documenti:view'), async (req, res) => {
+  try {
+    const folderId = parseInt(req.query.folder_id);
+    if (!folderId) return res.status(400).json({ error: 'folder_id mancante' });
+    const folder = await assertDocFolderVisible(req, res, folderId);
+    if (!folder) return;
+    const { rows } = await q(
+      `SELECT id,folder_id,file_name,mime_type,size_bytes,created_by,created_at
+       FROM doc_files
+       WHERE folder_id=$1
+       ORDER BY created_at DESC, id DESC`,
+      [folderId]
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/documenti/files', authMiddleware, requirePermission('documenti:manage'), async (req, res) => {
+  try {
+    const folderId = parseInt(req.body?.folder_id);
+    const fileName = String(req.body?.file_name || '').trim();
+    const mimeType = String(req.body?.mime_type || 'application/octet-stream').trim() || 'application/octet-stream';
+    const contentBase64 = String(req.body?.content_base64 || '');
+    if (!folderId) return res.status(400).json({ error: 'folder_id mancante' });
+    if (!fileName) return res.status(400).json({ error: 'Nome file obbligatorio' });
+    if (!contentBase64) return res.status(400).json({ error: 'Contenuto file mancante' });
+    const folder = await getDocFolderOrNull(folderId);
+    if (!folder) return res.status(404).json({ error: 'Cartella non trovata' });
+    const fileData = decodeBase64Payload(contentBase64);
+    if (!fileData.length) return res.status(400).json({ error: 'File vuoto o non valido' });
+    if (fileData.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'File troppo grande (max 10MB)' });
+    const { rows } = await q(
+      `INSERT INTO doc_files (folder_id,file_name,mime_type,size_bytes,file_data,created_by)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING id,folder_id,file_name,mime_type,size_bytes,created_by,created_at`,
+      [folderId, fileName, mimeType, fileData.length, fileData, req.user.id || null]
+    );
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim() || 'Sistema', 'Documenti', `Upload file: ${fileName}`);
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/documenti/files/:id', authMiddleware, requirePermission('documenti:manage'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { rows } = await q('SELECT id,file_name FROM doc_files WHERE id=$1 LIMIT 1', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'File non trovato' });
+    await q('DELETE FROM doc_files WHERE id=$1', [id]);
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim() || 'Sistema', 'Documenti', `Elimina file: ${rows[0].file_name}`);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/documenti/files/:id/download', authMiddleware, requirePermission('documenti:view'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { rows } = await q(
+      `SELECT f.id,f.folder_id,f.file_name,f.mime_type,f.size_bytes,f.file_data
+       FROM doc_files f
+       WHERE f.id=$1
+       LIMIT 1`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'File non trovato' });
+    const file = rows[0];
+    const folder = await assertDocFolderVisible(req, res, file.folder_id);
+    if (!folder) return;
+    const safeName = String(file.file_name || 'documento').replace(/[^\w.\- ]+/g, '_');
+    res.setHeader('Content-Type', file.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Length', String(file.size_bytes || 0));
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`);
+    res.send(file.file_data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 async function getOrdineCompleto(id) {

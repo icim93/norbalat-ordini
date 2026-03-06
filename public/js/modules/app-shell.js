@@ -6,6 +6,7 @@
       { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
       { page: 'clienti', icon: '🏢', label: 'Clienti' },
+      { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
       { page: 'prodotti', icon: '🧀', label: 'Prodotti' },
       { page: 'utenti', icon: '👥', label: 'Utenti' },
@@ -17,6 +18,7 @@
     ],
     amministrazione: [
       { page: 'clienti', icon: '🏢', label: 'Clienti' },
+      { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
       { page: 'report', icon: '📊', label: 'Report' },
@@ -24,17 +26,20 @@
     ],
     autista: [
       { page: 'autista', icon: '🚚', label: 'Il mio giro' },
+      { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'piano', icon: '🚛', label: 'Piano Carico' },
       { page: 'ordini', icon: '📋', label: 'Tutti gli ordini' },
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
     magazzino: [
       { page: 'magazzino', icon: '📦', label: 'Da preparare' },
+      { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'piano', icon: '🚛', label: 'Piano Carico' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
     direzione: [
+      { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
       { page: 'report', icon: '📊', label: 'Report' },
       { page: 'sperimentale', icon: '🧪', label: 'Sperimentale' },
@@ -121,6 +126,10 @@
     window.state.emailNotifications = null;
     window.state.emailNotificationsLoaded = false;
     window.state.crmSummary = {};
+    window.state.docFolders = [];
+    window.state.docCurrentFolderId = null;
+    window.state.docCurrentFiles = [];
+    window.state.docCanManage = false;
     document.getElementById('screen-app').style.display = 'none';
     document.getElementById('screen-login').style.display = 'flex';
   }
@@ -193,6 +202,7 @@
     if (page === 'dashboard') window.renderDashboard();
     if (page === 'ordini') window.renderOrdiniTable();
     if (page === 'clienti') window.renderClientiTable();
+    if (page === 'documenti') window.renderDocumentiPage();
     if (page === 'listini') window.renderListiniPage();
     if (page === 'prodotti') window.renderProdottiTable();
     if (page === 'utenti') window.renderUtentiTable();

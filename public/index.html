@@ -962,6 +962,11 @@
     border-top: 1px solid var(--border);
     flex-shrink: 0;
   }
+  #page-documenti .doc-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 14px;
+  }
 
   @media (max-width: 768px) {
     .sidebar { display: none; }
@@ -970,6 +975,7 @@
     .topbar-brand { font-size: 15px; }
     .main { padding: 14px 12px; }
     .mobile-nav { display: none; }
+    #page-documenti .doc-layout { grid-template-columns: 1fr; }
   }
 
   /* ── EMPTY STATE ── */
@@ -1265,6 +1271,60 @@
       </div>
 
       <!-- ─── PAGE: Listini ─── -->
+      <div class="page" id="page-documenti">
+        <div class="page-header">
+          <div class="page-title">Documenti utili</div>
+          <div class="page-sub">Archivio documentale con visibilita per ruoli</div>
+        </div>
+        <div class="card" style="padding:14px;">
+          <div class="doc-layout">
+            <div style="border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface1);">
+              <div style="font-weight:700;margin-bottom:8px;">Cartelle</div>
+              <div id="doc-folder-tree"></div>
+            </div>
+            <div style="border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--surface1);">
+              <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+                <div>
+                  <div id="doc-current-folder-name" style="font-weight:700;">Nessuna cartella selezionata</div>
+                  <div id="doc-current-folder-roles" style="font-size:12px;color:var(--text2);margin-top:2px;"></div>
+                </div>
+              </div>
+              <div id="doc-manager-panel" style="display:none;margin-top:12px;padding:12px;border:1px dashed var(--border);border-radius:10px;">
+                <div style="font-weight:700;margin-bottom:8px;">Gestione cartelle e file</div>
+                <div style="display:grid;grid-template-columns:1fr 180px;gap:8px;align-items:center;">
+                  <input id="doc-folder-name" type="text" placeholder="Nome nuova cartella">
+                  <select id="doc-parent-folder"></select>
+                </div>
+                <div id="doc-role-checks" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                  <button class="btn btn-green btn-sm" onclick="createDocFolder()">Crea cartella</button>
+                  <button class="btn btn-outline btn-sm" onclick="updateDocFolderAcl()">Aggiorna visibilita cartella selezionata</button>
+                  <button class="btn btn-danger btn-sm" onclick="deleteDocFolder()">Elimina cartella selezionata</button>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;">
+                  <input id="doc-file-input" type="file">
+                  <button class="btn btn-outline btn-sm" onclick="uploadDocFile()">Carica file nella cartella selezionata</button>
+                </div>
+              </div>
+              <div style="margin-top:12px;">
+                <div style="font-weight:700;margin-bottom:8px;">File</div>
+                <div class="table-scroll-wrap"><table>
+                  <thead>
+                    <tr>
+                      <th>Nome file</th>
+                      <th>Dimensione</th>
+                      <th>Caricato il</th>
+                      <th>Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody id="doc-files-body"></tbody>
+                </table></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="page" id="page-listini">
         <div class="page-header">
           <div class="page-title">Listini</div>
@@ -2517,6 +2577,10 @@ let state = {
   crmClienteId: null,
   crmEventi: [],
   crmSummary: {},
+  docFolders: [],
+  docCurrentFolderId: null,
+  docCurrentFiles: [],
+  docCanManage: false,
 };
 window.state = state;
 
@@ -4215,6 +4279,7 @@ async function importClientiExcel(input) {
 <script src="/js/modules/listini.js"></script>
 <script src="/js/modules/listini-pdf.js"></script>
 <script src="/js/modules/crm.js"></script>
+<script src="/js/modules/documenti-ui.js"></script>
 
 
 <!-- Modal: Conferma generica -->
