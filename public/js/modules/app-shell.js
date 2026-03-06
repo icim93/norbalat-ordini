@@ -52,8 +52,6 @@
     selectedRole = role;
     document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
-    const hints = { admin: 'marco', amministrazione: 'marica', autista: 'francescoa', magazzino: 'gaston', direzione: 'francescoc' };
-    document.getElementById('login-user').value = hints[role] || 'admin';
   }
 
   async function doLogin() {
