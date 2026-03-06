@@ -137,6 +137,7 @@
     window.state.scorte = [];
     window.state.scorteAlertSignature = '';
     window.state.magazzinoHighlightOrderId = null;
+    window.state.magazzinoUndoStack = [];
     document.getElementById('screen-app').style.display = 'none';
     document.getElementById('screen-login').style.display = 'flex';
   }

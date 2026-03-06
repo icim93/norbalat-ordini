@@ -1182,7 +1182,7 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title">Ultimi Ordini</div>
-            <button class="btn btn-green" onclick="openNewOrder()">ï¼‹ Nuovo Ordine</button>
+            <button class="btn btn-green" onclick="openNewOrder()">+ Nuovo Ordine</button>
           </div>
           <div class="table-scroll-wrap"><table>
             <thead>
@@ -1223,7 +1223,7 @@
                 <option value="consegnato">Consegnato</option>
                 <option value="annullato">Annullato</option>
               </select>
-              <button class="btn btn-green" onclick="openNewOrder()">ï¼‹ Nuovo</button>
+              <button class="btn btn-green" onclick="openNewOrder()">+ Nuovo</button>
             </div>
           </div>
           <div id="bulk-toolbar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--accent-light);border:1.5px solid var(--accent);border-radius:8px;margin-bottom:10px;">
@@ -1271,7 +1271,7 @@
                 <option value="foggia">Foggia</option>
                 <option value="diretto">Diretto</option>
               </select>
-              <button class="btn btn-green" onclick="openNewCliente()">ï¼‹ Nuovo Cliente</button>
+              <button class="btn btn-green" onclick="openNewCliente()">+ Nuovo Cliente</button>
               <button class="btn btn-outline" onclick="document.getElementById('import-clienti-file').click()" title="Importa/aggiorna clienti da Excel">📥 Excel</button>
               <input type="file" id="import-clienti-file" accept=".xlsx,.xls" style="display:none" onchange="importClientiExcel(this)">
             </div>
@@ -1371,7 +1371,7 @@
                 <option value="scaduto">Scaduti</option>
               </select>
               <button class="btn btn-outline" onclick="exportListiniPdf()">📄 PDF</button>
-              <button class="btn btn-green" id="listini-new-btn" onclick="openNewListino()">ï¼‹ Nuovo Listino</button>
+              <button class="btn btn-green" id="listini-new-btn" onclick="openNewListino()">+ Nuovo Listino</button>
             </div>
           </div>
           <div class="table-scroll-wrap"><table>
@@ -1411,7 +1411,7 @@
                 <option value="PANNA UHT">Panna UHT</option>
                 <option value="ALTRO">Altro</option>
               </select>
-              <button class="btn btn-green" onclick="openNewProdotto()">ï¼‹ Nuovo Prodotto</button>
+              <button class="btn btn-green" onclick="openNewProdotto()">+ Nuovo Prodotto</button>
             </div>
           </div>
           <div class="table-scroll-wrap"><table>
@@ -1441,7 +1441,7 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title">Utenti del sistema</div>
-            <button class="btn btn-green" onclick="openNewUtente()">ï¼‹ Nuovo Utente</button>
+            <button class="btn btn-green" onclick="openNewUtente()">+ Nuovo Utente</button>
           </div>
           <div class="table-scroll-wrap"><table>
             <thead>
@@ -1483,7 +1483,7 @@
           <div style="font-weight:600;font-size:15px;">Giro consegne di oggi</div>
           <div style="display:flex;gap:8px;">
             <button class="btn" style="background:var(--accent2-light);color:var(--accent2);border:1px solid #f5d7a0;" onclick="openTentataVendita()">🚚 Tentata Vendita</button>
-            <button class="btn btn-green" onclick="openNewOrder()">ï¼‹ Nuovo ordine</button>
+            <button class="btn btn-green" onclick="openNewOrder()">+ Nuovo ordine</button>
           </div>
         </div>
 
@@ -1562,6 +1562,7 @@
                 <option value="id">Ordina: Numero ordine</option>
               </select>
               <button class="btn btn-outline btn-sm" onclick="openPDFGiornaliero()">PDF</button>
+              <button id="magazzino-undo-btn" class="btn btn-outline btn-sm" onclick="undoMagazzinoLastAction()" disabled style="opacity:0.5;">UNDO</button>
               <button class="btn btn-green btn-sm" onclick="chiudiGiornataMagazzino()">Conferma giornata</button>
             </div>
           </div>
@@ -1918,7 +1919,7 @@
       <div class="field">
         <label>Prodotti *</label>
         <div class="order-lines" id="ord-lines-container"></div>
-        <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addOrderLine()">ï¼‹ Aggiungi prodotto</button>
+        <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addOrderLine()">+ Aggiungi prodotto</button>
         <div id="ord-price-summary" style="margin-top:8px;font-size:12px;color:var(--text2);"></div>
       </div>
 
@@ -2493,7 +2494,7 @@
       <div class="field">
         <label>Prodotti nel carico</label>
         <div id="tentata-lines-container" class="order-lines"></div>
-        <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addTentataLine()">ï¼‹ Aggiungi prodotto</button>
+        <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addTentataLine()">+ Aggiungi prodotto</button>
       </div>
       <div class="field">
         <label>Note</label>
@@ -2689,6 +2690,7 @@ let state = {
   scorte: [],
   magazzinoHighlightOrderId: null,
   scorteAlertSignature: '',
+  magazzinoUndoStack: [],
 };
 window.state = state;
 
@@ -3450,6 +3452,7 @@ function renderMagazzino() {
   });
 
   const container = document.getElementById('magazzino-list');
+  updateMagazzinoUndoButton();
   if (!ordini.length) {
     const isOggi = filterData === today();
     let msg = isOggi ? 'Tutti gli ordini di oggi sono stati preparati!' : `Nessun ordine per il ${formatDate(filterData)}`;
@@ -3549,23 +3552,82 @@ function toggleLineaPreparata(ordineId, lineIdx, val) {
   if (!o) return;
   const line = o.linee[lineIdx];
   if (!line) return;
-  line.preparato = !!val;
-  saveLineaPreparazione(ordineId, lineIdx, { preparato: !!val });
+  const prev = !!line.preparato;
+  const next = !!val;
+  if (prev === next) return;
+  pushMagazzinoUndo({ ordineId, lineIdx, field: 'preparato', prev });
+  line.preparato = next;
+  saveLineaPreparazione(ordineId, lineIdx, { preparato: next });
 }
 
 function setLinePesoEffettivo(ordineId, lineIdx, val) {
   const o = state.ordini.find(x => x.id === ordineId);
   if (!o) return;
+  const prev = o.linee[lineIdx].pesoEffettivo ?? null;
   const n = parseFloat(String(val).replace(',', '.'));
-  o.linee[lineIdx].pesoEffettivo = Number.isFinite(n) ? n : null;
-  saveLineaPreparazione(ordineId, lineIdx, { peso_effettivo: Number.isFinite(n) ? n : null });
+  const next = Number.isFinite(n) ? n : null;
+  if (prev === next) return;
+  pushMagazzinoUndo({ ordineId, lineIdx, field: 'pesoEffettivo', prev });
+  o.linee[lineIdx].pesoEffettivo = next;
+  saveLineaPreparazione(ordineId, lineIdx, { peso_effettivo: next });
 }
 
 function setLineLotto(ordineId, lineIdx, val) {
   const o = state.ordini.find(x => x.id === ordineId);
   if (!o) return;
-  o.linee[lineIdx].lotto = String(val || '').trim();
-  saveLineaPreparazione(ordineId, lineIdx, { lotto: o.linee[lineIdx].lotto });
+  const prev = String(o.linee[lineIdx].lotto || '');
+  const next = String(val || '').trim();
+  if (prev === next) return;
+  pushMagazzinoUndo({ ordineId, lineIdx, field: 'lotto', prev });
+  o.linee[lineIdx].lotto = next;
+  saveLineaPreparazione(ordineId, lineIdx, { lotto: next });
+}
+
+function pushMagazzinoUndo(action) {
+  if (!action) return;
+  state.magazzinoUndoStack = Array.isArray(state.magazzinoUndoStack) ? state.magazzinoUndoStack : [];
+  state.magazzinoUndoStack.push(action);
+  if (state.magazzinoUndoStack.length > 50) state.magazzinoUndoStack.shift();
+  updateMagazzinoUndoButton();
+}
+
+function updateMagazzinoUndoButton() {
+  const btn = document.getElementById('magazzino-undo-btn');
+  if (!btn) return;
+  const hasUndo = Array.isArray(state.magazzinoUndoStack) && state.magazzinoUndoStack.length > 0;
+  btn.disabled = !hasUndo;
+  btn.style.opacity = hasUndo ? '1' : '0.5';
+}
+
+async function undoMagazzinoLastAction() {
+  if (!Array.isArray(state.magazzinoUndoStack) || !state.magazzinoUndoStack.length) return;
+  const action = state.magazzinoUndoStack.pop();
+  updateMagazzinoUndoButton();
+  const o = state.ordini.find(x => x.id === action?.ordineId);
+  const line = o?.linee?.[action?.lineIdx];
+  if (!o || !line) {
+    showToast('Undo non disponibile: riga non trovata', 'warning');
+    return;
+  }
+
+  const patch = {};
+  if (action.field === 'preparato') {
+    line.preparato = !!action.prev;
+    patch.preparato = !!action.prev;
+  } else if (action.field === 'pesoEffettivo') {
+    line.pesoEffettivo = action.prev ?? null;
+    patch.peso_effettivo = action.prev ?? null;
+  } else if (action.field === 'lotto') {
+    line.lotto = String(action.prev || '');
+    patch.lotto = line.lotto;
+  } else {
+    showToast('Undo non supportato per questa operazione', 'warning');
+    return;
+  }
+
+  await saveLineaPreparazione(action.ordineId, action.lineIdx, patch);
+  renderMagazzino();
+  showToast('Ultima modifica annullata', 'success');
 }
 
 function renderScortePanels() {
@@ -3852,7 +3914,7 @@ function renderImpostazioni() {
         <div style="font-weight:600;margin-bottom:8px;">🚚 ${(a.nome+' '+(a.cognome||'')).trim()}</div>
         ${lineeHtml || '<div style="font-size:13px;color:var(--text3);margin-bottom:8px;">Nessun prodotto nel carico predefinito</div>'}
         <select onchange="addCaricoTentataLine(${a.id},parseInt(this.value));this.value=''" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:5px;margin-top:4px;">
-          <option value="">ï¼‹ Aggiungi prodotto…</option>
+          <option value="">+ Aggiungi prodotto...</option>
           ${state.prodotti.map(p => `<option value="${p.id}">[${p.codice}] ${p.nome}</option>`).join('')}
         </select>
       </div>`;
@@ -4123,8 +4185,8 @@ function setModalitaOrdine(val) {
 // ═══════════════════════════════════════════════
 
 // Carrello: { prodId -> { qty, um } }
-let catalogoCart = {};
-let catCategoriaAttiva = null;
+var catalogoCart = {};
+var catCategoriaAttiva = null;
 
 const CAT_CONFIG = [
   { id: 'FORMAGGI',  icon: '🧀', label: 'Formaggi',  color: '#fff8e1', border: '#f9a825' },
