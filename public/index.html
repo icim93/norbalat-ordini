@@ -1471,10 +1471,15 @@
 
       <!-- ─── PAGE: Piano di Carico ─── -->
       <div class="page" id="page-piano">
-        <div class="page-header">
+        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
           <div>
-            <div class="page-title">🚚 Piano di Carico</div>
+            <div class="page-title">Piano di Carico</div>
             <div class="page-sub" id="piano-sub">Seleziona il mezzo e compila le pedane</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="date" id="piano-data" onchange="changePianoData(this.value)"
+              style="padding:8px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text1);font-family:inherit;cursor:pointer;">
+            <button class="btn btn-outline btn-sm" onclick="nuovoPianoGiorno()">Nuovo piano</button>
           </div>
         </div>
 
@@ -1834,6 +1839,11 @@
         <div class="field">
           <label>Data Consegna *</label>
           <input type="date" id="ord-data" onchange="renderOrderLines()">
+          <div style="margin-top:6px;">
+            <select id="ord-giro-override" onchange="updateConsegnatarioDisplay(parseInt(document.getElementById('ord-cliente').value)||null);renderOrderLines();" style="font-size:12px;padding:6px 8px;">
+              <option value="">Usa giro cliente</option>
+            </select>
+          </div>
           <div style="display:flex;gap:16px;margin-top:6px;">
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
               <input type="checkbox" id="ord-data-non-certa" style="width:15px;height:15px;">
@@ -1842,6 +1852,10 @@
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
               <input type="checkbox" id="ord-stef" style="width:15px;height:15px;">
               🚛 Spedizione STEF
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
+              <input type="checkbox" id="ord-altro-vettore" style="width:15px;height:15px;">
+              Altro vettore
             </label>
           </div>
         </div>
@@ -1914,10 +1928,18 @@
         <div class="field">
           <label>Data Consegna *</label>
           <input type="date" id="cat-data">
+          <div style="margin-top:6px;">
+            <select id="cat-giro-override" style="font-size:12px;padding:6px 8px;">
+              <option value="">Usa giro cliente</option>
+            </select>
+          </div>
         </div>
         <div class="field" style="display:flex;align-items:flex-end;gap:12px;padding-bottom:2px;">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
             <input type="checkbox" id="cat-stef" style="width:15px;height:15px;">🚛 STEF
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
+            <input type="checkbox" id="cat-altro-vettore" style="width:15px;height:15px;">Altro vettore
           </label>
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400;cursor:pointer;">
             <input type="checkbox" id="cat-data-non-certa" style="width:15px;height:15px;">⚠️ Data incerta
@@ -2563,6 +2585,7 @@ let state = {
   listini:   [],
   ordini:    [],
   camions:   [],
+  pianoData: '',
   giriCalendario: [],
   activityLog: [],
   carichiTentataVendita: [],
@@ -2599,6 +2622,11 @@ function clientiOrdinabili() {
   return state.clienti.filter(isClienteSbloccato);
 }
 
+function getOrdineGiroEffettivo(o) {
+  if (!o) return '';
+  return (o.giroOverride || getCliente(o.clienteId).giro || '').trim();
+}
+
 // ─── HTTP HELPER ──────────────────────────────────────────────────
 async function api(method, path, body = null) {
   const opts = {
@@ -2617,6 +2645,7 @@ async function api(method, path, body = null) {
 // ─── CARICAMENTO DATI INIZIALI ────────────────────────────────────
 async function loadAllData() {
   try {
+    if (!state.pianoData) state.pianoData = today();
     const canSeePiano = ['admin', 'autista', 'magazzino'].includes(state.currentUser?.ruolo);
     const [utenti, clienti, prodotti, listini, ordini, camions, giri] = await Promise.all([
       api('GET', '/api/utenti'),
@@ -2624,7 +2653,7 @@ async function loadAllData() {
       api('GET', '/api/prodotti'),
       api('GET', '/api/listini'),
       api('GET', '/api/ordini'),
-      canSeePiano ? api('GET', '/api/camions') : Promise.resolve([]),
+      canSeePiano ? api('GET', `/api/camions?data=${state.pianoData}`) : Promise.resolve([]),
       api('GET', '/api/giri'),
     ]);
     // Normalizza campi: il backend usa snake_case, il frontend usa camelCase
@@ -2950,8 +2979,10 @@ function renderAutistaView() {
       </div>
       <div class="mob-lines">
         ${o.linee.map(l => {
-          const p = getProdotto(l.prodId);
-          return `<div class="mob-line"><span>${p.nome}</span><span class="mob-line-qty">${l.qty} ${p.um}</span></div>`;
+          const p = l.prodId ? getProdotto(l.prodId) : null;
+          const nome = l.prodottoNomeLibero || p?.nome || 'Prodotto libero';
+          const um = l.unitaMisura || p?.um || 'pz';
+          return `<div class="mob-line"><span>${nome}</span><span class="mob-line-qty">${l.qty} ${um}</span></div>`;
         }).join('')}
       </div>
       ${o.note ? `<div style="font-size:12px;color:var(--text2);padding:6px 8px;background:var(--surface2);border-radius:6px;margin-bottom:8px;">📝 ${o.note}</div>` : ''}
@@ -2984,7 +3015,40 @@ async function confermaConsegnaRapida(id) {
 
 let pianoSelectedCamionId = null;
 
-function renderPianoPage() {
+async function loadCamionsForPianoData() {
+  state.pianoData = state.pianoData || today();
+  const rows = await api('GET', `/api/camions?data=${state.pianoData}`);
+  state.camions = (rows || []).map(normalizeCamion);
+}
+
+async function changePianoData(v) {
+  state.pianoData = v || today();
+  pianoSelectedCamionId = null;
+  await loadCamionsForPianoData();
+  renderPianoPage();
+}
+
+async function nuovoPianoGiorno() {
+  state.pianoData = document.getElementById('piano-data')?.value || state.pianoData || today();
+  if (!await customConfirm(`Svuotare tutte le pedane per il giorno ${state.pianoData}?`, 'Svuota', 'Nuovo piano giornaliero')) return;
+  await loadCamionsForPianoData();
+  for (const c of state.camions) {
+    c.pedane.forEach(p => p.nota = '');
+    await api('PATCH', `/api/camions/${c.id}/pedane`, {
+      data: state.pianoData,
+      pedane: c.pedane.map(p => ({ numero: p.n, nota: '' })),
+    });
+  }
+  await loadCamionsForPianoData();
+  renderPianoPage();
+  showToast(`Nuovo piano creato per ${state.pianoData}`, 'success');
+}
+
+async function renderPianoPage() {
+  state.pianoData = state.pianoData || today();
+  const dt = document.getElementById('piano-data');
+  if (dt) dt.value = state.pianoData;
+  await loadCamionsForPianoData();
   const role = state.currentUser.ruolo;
   const isEditor  = (role === 'autista' || role === 'admin');
   const isConferma = (role === 'magazzino' || role === 'admin');
@@ -3063,7 +3127,7 @@ function renderPianoBody(isEditor, isConferma) {
   const autistaInUso = camion.autistaInUso ? state.utenti.find(u => u.id === camion.autistaInUso) : null;
   const nomeAut = autistaInUso ? (autistaInUso.nome + ' ' + (autistaInUso.cognome||'')).trim() : null;
   const ordiniGiro = autistaInUso
-    ? state.ordini.filter(o => o.autistaDiGiro === autistaInUso.id && o.data === today() && o.stato !== 'annullato')
+    ? state.ordini.filter(o => o.autistaDiGiro === autistaInUso.id && o.data === state.pianoData && o.stato !== 'annullato')
     : [];
   const pieneCnt = camion.pedane.filter(p => p.nota && p.nota.trim()).length;
   const totCnt = camion.pedane.length;
@@ -3072,7 +3136,7 @@ function renderPianoBody(isEditor, isConferma) {
     <div style="background:linear-gradient(135deg,#0f2233,#1e3a52);border-radius:var(--radius);padding:20px 24px;margin-bottom:20px;color:#fff;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
       <div>
         <div style="font-size:24px;font-weight:800;letter-spacing:-0.5px;">🚛 ${camion.targa}</div>
-        <div style="font-size:13px;opacity:0.6;margin-top:2px;">${camion.nome} · ${totCnt} pedane totali</div>
+        <div style="font-size:13px;opacity:0.6;margin-top:2px;">${camion.nome} · ${totCnt} pedane totali · ${state.pianoData}</div>
       </div>
       <div style="display:flex;gap:20px;">
         <div style="text-align:center;"><div style="font-size:28px;font-weight:800;color:#60c8f0;">${pieneCnt}</div><div style="font-size:11px;opacity:0.5;text-transform:uppercase;letter-spacing:0.5px;">occupate</div></div>
@@ -3152,7 +3216,7 @@ function renderPianoBody(isEditor, isConferma) {
       } else {
         const daCons = ordiniGiro.filter(o=>o.stato!=='consegnato').length;
         confChecklist.innerHTML = `<div style="font-size:13px;color:var(--text2);margin-bottom:10px;"><b>${nomeAut}</b> — ${ordiniGiro.length} ordini · <span style="color:var(--accent);font-weight:600;">${daCons} da consegnare</span></div>
-          ${ordiniGiro.map(o=>{const cl=state.clienti.find(x=>x.id===o.clienteId);const icon=o.stato==='consegnato'?'✅':o.stato==='preparazione'?'🔵':'🟡';return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;"><span>${icon}</span><span><b>#${o.id}</b> ${cl?cl.nome:'?'}</span><span style="margin-left:auto;color:var(--text3);font-size:11px;">${cl?.giro||''}</span></div>`;}).join('')}`;
+          ${ordiniGiro.map(o=>{const cl=state.clienti.find(x=>x.id===o.clienteId);const icon=o.stato==='consegnato'?'✅':o.stato==='preparazione'?'🔵':'🟡';return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;"><span>${icon}</span><span><b>#${o.id}</b> ${cl?cl.nome:'?'}</span><span style="margin-left:auto;color:var(--text3);font-size:11px;">${getOrdineGiroEffettivo(o)}</span></div>`;}).join('')}`;
       }
     }
   }
@@ -3185,6 +3249,7 @@ async function salvaPianoCamion(camionId) {
   });
   try {
     await api('PATCH', `/api/camions/${camionId}/pedane`, {
+      data: state.pianoData,
       pedane: camion.pedane.map(p => ({ numero: p.n, nota: p.nota }))
     });
     camion.confermato = false; camion.confermatoDa = null; camion.confermatoAt = null;
@@ -3202,6 +3267,7 @@ async function resetPianoCamion(camionId) {
   camion.pedane.forEach(p => p.nota = '');
   try {
     await api('PATCH', `/api/camions/${camionId}/pedane`, {
+      data: state.pianoData,
       pedane: camion.pedane.map(p => ({ numero: p.n, nota: '' }))
     });
     camion.confermato = false; camion.confermatoDa = null; camion.confermatoAt = null;
@@ -3262,7 +3328,7 @@ function renderMagazzino() {
   }
 
   if (filterGiro) {
-    ordini = ordini.filter(o => getCliente(o.clienteId).giro === filterGiro);
+    ordini = ordini.filter(o => getOrdineGiroEffettivo(o) === filterGiro);
   }
 
   // Ordina: preparazione prima, poi attesa, poi consegnati
@@ -3285,11 +3351,12 @@ function renderMagazzino() {
     const inPrep = o.stato === 'preparazione';
     const isCons = o.stato === 'consegnato';
     const stef = o.stef ? `<span class="badge" style="background:var(--blue-light);color:var(--blue);font-size:10px;margin-left:4px;">🚛 STEF</span>` : '';
+    const altroVettore = o.altroVettore ? `<span class="badge" style="background:#fff1e0;color:#b86a00;font-size:10px;margin-left:4px;">🚚 Altro vettore</span>` : '';
     const dataNonCerta = o.dataNonCerta ? `<span class="badge" style="background:var(--accent2-light);color:var(--accent2);font-size:10px;margin-left:4px;">⚠️ Data non certa</span>` : '';
 
     // Checklist lines when in preparation
     const checkLines = inPrep ? o.linee.map((l, li) => {
-      const p = getProdotto(l.prodId);
+      const p = l.prodId ? getProdotto(l.prodId) : { codice: 'LIB', nome: l.prodottoNomeLibero || 'Prodotto libero', pesoFisso: true };
       const checked = l.preparato ? 'checked' : '';
       const pesoInput = !p.pesoFisso
         ? `<input type="number" step="0.1" min="0" placeholder="kg eff." value="${l.pesoEffettivo||''}"
@@ -3308,14 +3375,14 @@ function renderMagazzino() {
     <div class="warehouse-card" style="${isCons ? 'opacity:0.6;' : ''}">
       <div class="wh-num">${String(i+1).padStart(2,'0')}</div>
       <div class="wh-info" style="flex:1;">
-        <div class="wh-client">${c.nome} ${stef} ${dataNonCerta}</div>
+        <div class="wh-client">${c.nome} ${stef} ${altroVettore} ${dataNonCerta}</div>
         <div class="wh-detail">
           ${c.giro ? `<span class="badge badge-blue" style="font-size:10px;margin-right:6px;">${c.giro}</span>` : ''}
           Agente: ${a.nomeCompleto}${o.autistaDiGiro ? ` · 🚚 ${getAgente(o.autistaDiGiro).nomeCompleto}` : ''}
         </div>
         ${inPrep
           ? `<div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;">${checkLines}</div>`
-          : `<div class="wh-detail" style="margin-top:4px;">${o.linee.map(l => `${l.qty}× [${getProdotto(l.prodId).codice}] ${getProdotto(l.prodId).nome.split(' ').slice(0,2).join(' ')}`).join(', ')}</div>`
+          : `<div class="wh-detail" style="margin-top:4px;">${o.linee.map(l => { const p = l.prodId ? getProdotto(l.prodId) : { codice: 'LIB', nome: l.prodottoNomeLibero || 'Prodotto libero' }; return `${l.qty}× [${p.codice}] ${p.nome.split(' ').slice(0,2).join(' ')}`; }).join(', ')}</div>`
         }
         ${o.note ? `<div style="font-size:12px;color:var(--text2);margin-top:4px;">📝 ${o.note}</div>` : ''}
       </div>
@@ -3756,7 +3823,14 @@ function openNewOrderCatalogo() {
   document.getElementById('modal-catalogo-title').textContent = 'Nuovo Ordine';
   document.getElementById('cat-data').value = today();
   document.getElementById('cat-stef').checked = false;
+  document.getElementById('cat-altro-vettore').checked = false;
   document.getElementById('cat-data-non-certa').checked = false;
+  const selGiro = document.getElementById('cat-giro-override');
+  if (selGiro) {
+    const giri = [...new Set(state.giriCalendario.map(g => (g.giro || '').trim()).filter(Boolean))].sort();
+    selGiro.innerHTML = '<option value="">Usa giro cliente</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
+    selGiro.value = '';
+  }
   document.getElementById('cat-note').value = '';
   document.getElementById('cat-search').value = '';
   document.getElementById('cat-cliente-note-box').style.display = 'none';
@@ -4009,7 +4083,9 @@ async function saveCatalogoOrder() {
   const data      = document.getElementById('cat-data').value;
   const note      = document.getElementById('cat-note').value.trim();
   const stef      = document.getElementById('cat-stef').checked;
+  const altroVettore = document.getElementById('cat-altro-vettore').checked;
   const dataNonCerta = document.getElementById('cat-data-non-certa').checked;
+  const giroOverride = (document.getElementById('cat-giro-override')?.value || '').trim();
 
   if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
   const cliente = getCliente(clienteId);
@@ -4029,12 +4105,12 @@ async function saveCatalogoOrder() {
   if (!linee.length) { showToast('Aggiungi almeno un prodotto al carrello', 'warning'); return; }
 
   const cl = getCliente(clienteId);
-  const aut = cl ? getAutistaDiGiro(cl.giro) : null;
+  const aut = cl ? getAutistaDiGiro(giroOverride || cl.giro) : null;
 
   const body = {
     cliente_id: clienteId, agente_id: agenteId,
     autista_di_giro: aut ? aut.id : null,
-    data, stato: 'attesa', note, data_non_certa: dataNonCerta, stef, linee,
+    data, stato: 'attesa', note, data_non_certa: dataNonCerta, stef, altro_vettore: altroVettore, giro_override: giroOverride, linee,
   };
   try {
     const saved = await api('POST', '/api/ordini', body);
@@ -4067,7 +4143,7 @@ function updatePDFPreview() {
   const tipo = document.querySelector('input[name="pdf-tipo"]:checked')?.value || 'magazzino';
 
   let ordini = state.ordini.filter(o => o.data === data && o.stato !== 'annullato');
-  if (giriSel) ordini = ordini.filter(o => giriSel.includes(getCliente(o.clienteId).giro));
+  if (giriSel) ordini = ordini.filter(o => giriSel.includes(getOrdineGiroEffettivo(o)));
 
   const preview = document.getElementById('pdf-preview');
   if (!ordini.length) {
@@ -4078,7 +4154,7 @@ function updatePDFPreview() {
   // Raggruppa per giro
   const giriMap = {};
   ordini.forEach(o => {
-    const g = getCliente(o.clienteId).giro || 'Altro';
+    const g = getOrdineGiroEffettivo(o) || 'Altro';
     if (!giriMap[g]) giriMap[g] = [];
     giriMap[g].push(o);
   });
@@ -4095,16 +4171,17 @@ function updatePDFPreview() {
   function ordineHtmlMag(o) {
     const cl = getCliente(o.clienteId);
     const linee = o.linee.map(l => {
-      const p = getProdotto(l.prodId);
+      const p = l.prodId ? getProdotto(l.prodId) : null;
+      const nome = l.prodottoNomeLibero || p?.nome || 'Prodotto libero';
       const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
       const qty = l.qty || 1;
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
       return `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;border-bottom:1px dotted #eee;">
-        <span>${p.nome}${nota}</span>
+        <span>${nome}${nota}</span>
         <span style="white-space:nowrap;margin-left:8px;font-weight:700;">${qty} ${um}</span>
       </div>`;
     }).join('');
-    const flags = [o.stef ? '🚛 STEF' : '', o.dataNonCerta ? '⚠️' : ''].filter(Boolean).join(' ');
+    const flags = [o.stef ? '🚛 STEF' : '', o.altroVettore ? '🚚 Altro vettore' : '', o.dataNonCerta ? '⚠️' : ''].filter(Boolean).join(' ');
     return `<div style="margin-bottom:10px;padding-bottom:6px;">
       <div style="font-weight:700;font-size:13px;text-decoration:underline;">${cl.nome}${flags ? ' <span style="font-weight:400;font-size:11px;">'+flags+'</span>' : ''}</div>
       ${o.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">📝 ${o.note}</div>` : ''}
@@ -4116,13 +4193,14 @@ function updatePDFPreview() {
   function ordineHtmlFatt(o) {
     const cl = getCliente(o.clienteId);
     const linee = o.linee.map(l => {
-      const p = getProdotto(l.prodId);
+      const p = l.prodId ? getProdotto(l.prodId) : null;
+      const nome = l.prodottoNomeLibero || p?.nome || 'Prodotto libero';
       const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
       const qty = l.qty || 1;
       const peso = l.pesoEffettivo ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>` : `<span style="color:#bbb;">${qty} ${um} — peso da inserire</span>`;
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
       return `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;border-bottom:1px dotted #eee;">
-        <span>${p.nome}${nota}</span>
+        <span>${nome}${nota}</span>
         <span style="white-space:nowrap;margin-left:8px;">${peso}</span>
       </div>`;
     }).join('');
@@ -4300,6 +4378,11 @@ async function importClientiExcel(input) {
 
 </body>
 </html>
+
+
+
+
+
 
 
 

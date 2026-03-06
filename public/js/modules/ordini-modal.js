@@ -3,13 +3,17 @@ let selectedOrders = new Set();
 
 function openNewOrder() {
   state.editingId = null;
-  orderLines = [{ prodId: null, qty: 1 }];
+  orderLines = [{ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: 0 }];
   document.getElementById('modal-ordine-title').textContent = 'Nuovo Ordine';
   document.getElementById('ord-data').value = today();
   document.getElementById('ord-stato').value = 'attesa';
   document.getElementById('ord-note').value = '';
   document.getElementById('ord-data-non-certa').checked = false;
   document.getElementById('ord-stef').checked = false;
+  const altroVettoreEl = document.getElementById('ord-altro-vettore');
+  if (altroVettoreEl) altroVettoreEl.checked = false;
+  const giroOverrideEl = document.getElementById('ord-giro-override');
+  if (giroOverrideEl) giroOverrideEl.value = '';
   acState.cliente = { value: null, query: '', focusIdx: -1 };
   const defaultAgente = state.currentUser.isAgente ? state.currentUser.id : null;
   populateOrderSelects(null, defaultAgente);
@@ -23,7 +27,9 @@ function openEditOrder(id) {
   state.editingId = id;
   orderLines = o.linee.map(l => ({
     prodId: l.prodId,
+    prodottoNomeLibero: l.prodottoNomeLibero || '',
     qty: l.qty,
+    prezzoUnitario: (l.prezzoUnitario !== undefined && l.prezzoUnitario !== null) ? Number(l.prezzoUnitario) : null,
     isPedana: !!l.isPedana,
     notaRiga: l.notaRiga||'',
     unitaMisura: l.unitaMisura||'pezzi',
@@ -35,8 +41,12 @@ function openEditOrder(id) {
   document.getElementById('ord-note').value = o.note;
   document.getElementById('ord-data-non-certa').checked = o.dataNonCerta || false;
   document.getElementById('ord-stef').checked = o.stef || false;
+  const altroVettoreEl = document.getElementById('ord-altro-vettore');
+  if (altroVettoreEl) altroVettoreEl.checked = o.altroVettore || false;
+  const giroOverrideEl = document.getElementById('ord-giro-override');
   acState.cliente = { value: o.clienteId, query: '', focusIdx: -1 };
   populateOrderSelects(o.clienteId, o.agenteId);
+  if (giroOverrideEl) giroOverrideEl.value = o.giroOverride || '';
   if (o.autistaDiGiro) document.getElementById('ord-autista-di-giro').value = o.autistaDiGiro;
   updateConsegnatarioDisplay(o.clienteId);
   renderOrderLines();
@@ -216,6 +226,8 @@ function acSelect(type, id) {
       const selAg = document.getElementById('ord-agente');
       if (selAg) selAg.value = c.agenteId;
     }
+    const giroOverrideEl = document.getElementById('ord-giro-override');
+    if (giroOverrideEl && !state.editingId) giroOverrideEl.value = '';
     updateConsegnatarioDisplay(id);
 
     // Pre-imposta data dalla prossima data utile del giro del cliente
@@ -265,6 +277,8 @@ function acSelect(type, id) {
       const sel = document.getElementById('cat-agente');
       if (sel) sel.value = cl.agenteId;
     }
+    const giroSel = document.getElementById('cat-giro-override');
+    if (giroSel && !state.editingId) giroSel.value = '';
     // Data dal giro
     if (cl.giro && !state.editingId) {
       const nd = getNextGiroDate(cl.giro);
@@ -332,6 +346,27 @@ function umPlurale(um, qty) {
   return map[um] || um;
 }
 
+function getLastPriceForClienteProd(clienteId, prodId) {
+  if (!clienteId || !prodId) return null;
+  const orders = [...state.ordini]
+    .filter(o => o.clienteId === clienteId)
+    .sort((a, b) => String(b.data).localeCompare(String(a.data)) || (b.id - a.id));
+  for (const o of orders) {
+    const r = (o.linee || []).find(x => x.prodId === prodId && x.prezzoUnitario !== null && x.prezzoUnitario !== undefined);
+    if (r) return Number(r.prezzoUnitario);
+  }
+  return null;
+}
+
+function resolveDefaultLinePrice(line, clienteId, dataOrdine) {
+  if (!line?.prodId) return 0;
+  const fromListino = getListinoPrezzo(line.prodId, clienteId, dataOrdine);
+  if (fromListino !== null && fromListino !== undefined) return Number(fromListino);
+  const last = getLastPriceForClienteProd(clienteId, line.prodId);
+  if (last !== null && last !== undefined) return Number(last);
+  return 0;
+}
+
 function renderOrderLines() {
   const container = document.getElementById('ord-lines-container');
   const clienteId = parseInt(document.getElementById('ord-cliente')?.value || acState.cliente?.value || 0) || null;
@@ -340,12 +375,16 @@ function renderOrderLines() {
   let righeConPrezzo = 0;
   container.innerHTML = orderLines.map((l, i) => {
     const p = l.prodId ? getProdotto(l.prodId) : null;
+    if (l.prezzoUnitario === undefined || l.prezzoUnitario === null) {
+      l.prezzoUnitario = resolveDefaultLinePrice(l, clienteId, dataOrdine);
+    }
     const umOpts = ['Pezzi','Cartoni','Litri','Kg','Pedana'];
     const curUM = l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi');
     const isPedana = curUM === 'Pedana';
-    const prezzo = p ? getListinoPrezzo(p.id, clienteId, dataOrdine) : null;
+    const prezzoListino = p ? getListinoPrezzo(p.id, clienteId, dataOrdine) : null;
+    const prezzo = Number.isFinite(Number(l.prezzoUnitario)) ? Number(l.prezzoUnitario) : 0;
     const qty = Number(l.qty || 0);
-    const subtot = (prezzo !== null && Number.isFinite(qty)) ? prezzo * qty : null;
+    const subtot = Number.isFinite(qty) ? prezzo * qty : null;
     if (subtot !== null) { totale += subtot; righeConPrezzo++; }
     return `
     <div class="order-line" id="ord-line-${i}">
@@ -354,7 +393,7 @@ function renderOrderLines() {
           <input type="text" class="ac-input${p ? ' has-value' : ''}"
             id="ac-prod-input-${i}"
             value="${p ? '['+p.codice+'] '+p.nome : ''}"
-            placeholder="Cerca codice o nome prodotto…"
+            placeholder="Cerca codice o nome prodotto..."
             autocomplete="off"
             oninput="acProdFilter(${i})"
             onfocus="acProdOpen(${i})"
@@ -364,19 +403,29 @@ function renderOrderLines() {
         </div>
         <input type="number" class="qty-input" value="${l.qty||1}" min="1"
           onchange="orderLines[${i}].qty=parseInt(this.value)||1;renderOrderLines()"
-          placeholder="Qtà" style="width:56px;flex-shrink:0;">
+          placeholder="Qta" style="width:56px;flex-shrink:0;">
         <select
           onchange="orderLines[${i}].unitaMisura=this.value;orderLines[${i}].isPedana=(this.value==='Pedana');orderLines[${i}]._umPersonalizzata=true;renderOrderLines()"
           style="flex-shrink:0;font-size:12px;padding:5px 6px;border:1.5px solid ${isPedana ? 'var(--accent)' : 'var(--border)'};border-radius:6px;background:${isPedana ? 'var(--accent-light)' : 'var(--surface2)'};color:var(--text1);cursor:pointer;max-width:92px;">
           ${umOpts.map(u => `<option value="${u}" ${u===curUM?'selected':''}>${umPlurale(u, l.qty||1)}</option>`).join('')}
         </select>
-        <button class="line-delete" onclick="removeOrderLine(${i})" style="flex-shrink:0;width:32px;height:32px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:16px;color:var(--text3);display:flex;align-items:center;justify-content:center;" title="Rimuovi">✕</button>
+        <button class="line-delete" onclick="removeOrderLine(${i})" style="flex-shrink:0;width:32px;height:32px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:16px;color:var(--text3);display:flex;align-items:center;justify-content:center;" title="Rimuovi">x</button>
       </div>
-      ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">📦 ${p.packaging}${isPedana ? ' · <b style=color:var(--accent)>PEDANA INTERA</b>' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">🪵 PEDANA INTERA</div>` : '')}
-      ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">📌 ${p.note}</div>` : ''}
-      ${p ? `<div style="font-size:11px;color:var(--text2);padding-left:2px;">Prezzo: ${prezzo !== null ? eur(prezzo) : 'non configurato'}${subtot !== null ? ` · Subtotale: <b>${eur(subtot)}</b>` : ''}</div>` : ''}
+      <div style="display:grid;grid-template-columns:1fr 130px;gap:8px;margin-top:6px;">
+        <input type="text" value="${l.prodottoNomeLibero||''}"
+          placeholder="Prodotto libero (opzionale)"
+          oninput="orderLines[${i}].prodottoNomeLibero=this.value"
+          style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
+        <input type="number" step="0.01" min="0" value="${prezzo}"
+          placeholder="Prezzo unit."
+          oninput="orderLines[${i}].prezzoUnitario=Number(this.value||0);renderOrderLines()"
+          style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
+      </div>
+      ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">${p.packaging}${isPedana ? ' - PEDANA INTERA' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">PEDANA INTERA</div>` : '')}
+      ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">${p.note}</div>` : ''}
+      ${p ? `<div style="font-size:11px;color:var(--text2);padding-left:2px;">Listino: ${prezzoListino !== null ? eur(prezzoListino) : 'n.d.'}${subtot !== null ? ` - Subtotale: <b>${eur(subtot)}</b>` : ''}</div>` : ''}
       <input type="text" value="${l.notaRiga||''}"
-        placeholder="📝 Nota riga (es. nuovo lotto, data scadenza…)"
+        placeholder="Nota riga"
         oninput="orderLines[${i}].notaRiga=this.value"
         style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
     </div>`;
@@ -386,12 +435,10 @@ function renderOrderLines() {
     if (!orderLines.length) {
       summary.textContent = '';
     } else {
-      const missing = orderLines.length - righeConPrezzo;
-      summary.innerHTML = `Totale stimato ordine: <b>${eur(totale)}</b>${missing ? ` · ${missing} riga/e senza prezzo` : ''}`;
+      summary.innerHTML = `Totale stimato ordine: <b>${eur(totale)}</b>${(orderLines.length-righeConPrezzo)>0 ? ` - ${(orderLines.length-righeConPrezzo)} riga/e senza prezzo` : ''}`;
     }
   }
 }
-
 
 // Single delegated listener for closing prod dropdowns on outside click (set once)
 if (!window._prodDdListenerSet) {
@@ -413,6 +460,7 @@ function acProdFilter(i) {
   if (!inp || !dd) return;
   const q = inp.value.trim().toLowerCase();
   orderLines[i].prodId = null;
+  orderLines[i].prezzoUnitario = Number(orderLines[i].prezzoUnitario || 0);
   inp.classList.remove('has-value');
   acProdRender(i, q);
   dd.classList.add('open');
@@ -515,12 +563,16 @@ function acProdRender(i, q) {
 
 function acProdSelect(i, prodId) {
   orderLines[i].prodId = prodId;
+  orderLines[i].prodottoNomeLibero = '';
   const p = getProdotto(prodId);
   // Imposta UM di default in base alla categoria, solo se non già personalizzata dall'utente
   if (!orderLines[i]._umPersonalizzata) {
     orderLines[i].unitaMisura = getDefaultUM(p);
     orderLines[i].isPedana = false;
   }
+  const clienteId = parseInt(document.getElementById('ord-cliente')?.value || acState.cliente?.value || 0) || null;
+  const dataOrdine = document.getElementById('ord-data')?.value || today();
+  orderLines[i].prezzoUnitario = resolveDefaultLinePrice(orderLines[i], clienteId, dataOrdine);
   const inp = document.getElementById(`ac-prod-input-${i}`);
   if (inp) { inp.value = `[${p.codice}] ${p.nome}`; inp.classList.add('has-value'); }
   document.getElementById(`ac-prod-dd-${i}`)?.classList.remove('open');
@@ -556,7 +608,7 @@ function acProdKey(e, i) {
 }
 
 function addOrderLine() {
-  orderLines.push({ prodId: null, qty: 1 });
+  orderLines.push({ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: 0 });
   renderOrderLines();
   // Focus sul nuovo campo
   setTimeout(() => document.getElementById(`ac-prod-input-${orderLines.length-1}`)?.focus(), 50);
@@ -573,7 +625,9 @@ function getAutistaDiGiro(giro) {
 
 function updateConsegnatarioDisplay(clienteId) {
   const c = clienteId ? getCliente(clienteId) : null;
-  const aut = c ? getAutistaDiGiro(c.giro) : null;
+  const giroOverride = (document.getElementById('ord-giro-override')?.value || '').trim();
+  const giroRef = giroOverride || c?.giro || '';
+  const aut = giroRef ? getAutistaDiGiro(giroRef) : null;
   const box = document.getElementById('ord-consegnatario-nome');
   const hidden = document.getElementById('ord-autista-di-giro');
   if (!box) return;
@@ -598,6 +652,11 @@ function populateOrderSelects(clienteId, agenteId) {
 
   // Consegnatario auto dal giro del cliente
   updateConsegnatarioDisplay(clienteId);
+  const giroSel = document.getElementById('ord-giro-override');
+  if (giroSel) {
+    const giri = [...new Set(state.giriCalendario.map(g => (g.giro || '').trim()).filter(Boolean))].sort();
+    giroSel.innerHTML = '<option value="">Usa giro cliente</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
+  }
 
   // Autocomplete cliente
   const inp = document.getElementById('ac-cliente-input');
@@ -646,6 +705,8 @@ async function saveOrder() {
   const note        = document.getElementById('ord-note').value.trim();
   const dataNonCerta= document.getElementById('ord-data-non-certa').checked;
   const stef        = document.getElementById('ord-stef')?.checked || false;
+  const altroVettore = document.getElementById('ord-altro-vettore')?.checked || false;
+  const giroOverride = (document.getElementById('ord-giro-override')?.value || '').trim();
 
   if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
   const cliente = getCliente(clienteId);
@@ -653,10 +714,12 @@ async function saveOrder() {
   if (!data)      { showToast('Inserisci la data', 'warning'); return; }
 
   const linee = orderLines
-    .filter(l => l.prodId && Number(l.qty) > 0)
+    .filter(l => (l.prodId || String(l.prodottoNomeLibero || '').trim()) && Number(l.qty) > 0)
     .map(l => ({
-      prodotto_id: l.prodId,
+      prodotto_id: l.prodId || null,
+      prodotto_nome_libero: String(l.prodottoNomeLibero || '').trim(),
       qty: l.qty,
+      prezzo_unitario: Number.isFinite(Number(l.prezzoUnitario)) ? Number(l.prezzoUnitario) : 0,
       is_pedana: !!l.isPedana,
       nota_riga: l.notaRiga||'',
       unita_misura: l.unitaMisura||'pezzi'
@@ -668,7 +731,7 @@ async function saveOrder() {
   }
 
   const body = { cliente_id: clienteId, agente_id: agenteId, autista_di_giro: autistaDiGiro,
-                 data, stato, note, data_non_certa: dataNonCerta, stef, linee };
+                 data, stato, note, data_non_certa: dataNonCerta, stef, altro_vettore: altroVettore, giro_override: giroOverride, linee };
   try {
     let saved;
     if (state.editingId) {
@@ -736,14 +799,17 @@ function openDettaglio(id) {
     <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px;">Prodotti ordinati</div>
     <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">
       ${o.linee.map(l => {
-        const p = getProdotto(l.prodId);
+        const p = l.prodId ? getProdotto(l.prodId) : null;
+        const nome = l.prodottoNomeLibero || p?.nome || 'Prodotto libero';
+        const codice = p?.codice || 'LIB';
+        const um = l.unitaMisura || p?.um || 'pz';
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);font-size:14px;">
           <div>
-            <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-right:8px;">[${p.codice}]</span>
-            <span>${p.nome}</span>
-            ${p.packaging ? `<div style="font-size:11px;color:var(--text3);">📦 ${p.packaging}</div>` : ''}
+            <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-right:8px;">[${codice}]</span>
+            <span>${nome}</span>
+            ${p?.packaging ? `<div style="font-size:11px;color:var(--text3);">📦 ${p.packaging}</div>` : ''}
           </div>
-          <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--accent);">${l.qty} ${p.um}</span>
+          <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--accent);">${l.qty} ${um}</span>
         </div>`;
       }).join('')}
     </div>
@@ -779,12 +845,12 @@ async function consegnaParziale(id) {
   if (!o) return;
   const delivered = {};
   for (const l of o.linee) {
-    const p = getProdotto(l.prodId);
-    const v = prompt(`Quantità consegnata per ${p.nome} (ordinata: ${l.qty})`, String(l.qty));
+    const nome = l.prodottoNomeLibero || getProdotto(l.prodId).nome;
+    const v = prompt(`Quantità consegnata per ${nome} (ordinata: ${l.qty})`, String(l.qty));
     if (v === null) return;
     const n = Number(String(v).replace(',', '.'));
     if (!Number.isFinite(n) || n < 0 || n > Number(l.qty)) {
-      showToast(`Quantità non valida per ${p.nome}`, 'warning');
+      showToast(`Quantità non valida per ${nome}`, 'warning');
       return;
     }
     delivered[l.id] = n;
@@ -807,4 +873,5 @@ async function consegnaParziale(id) {
 // ═══════════════════════════════════════════════
 // AUTISTA VIEW
 // ═══════════════════════════════════════════════
+
 

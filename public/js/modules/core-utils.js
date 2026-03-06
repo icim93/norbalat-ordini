@@ -37,8 +37,10 @@
 
   function lineeResume(linee) {
     return linee.map(l => {
-      const p = getProdotto(l.prodId);
-      return `${l.qty} ${p.um} ${p.nome.split(' ').slice(0, 3).join(' ')}`;
+      const p = l.prodId ? getProdotto(l.prodId) : null;
+      const um = l.unitaMisura || p?.um || 'pz';
+      const nome = (l.prodottoNomeLibero || p?.nome || 'Prodotto libero').split(' ').slice(0, 3).join(' ');
+      return `${l.qty} ${um} ${nome}`;
     }).join(', ');
   }
 

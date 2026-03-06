@@ -118,6 +118,7 @@
     window.state.listinoProdottoId = null;
     window.state.ordini = [];
     window.state.camions = [];
+    window.state.pianoData = '';
     window.state.giriCalendario = [];
     window.state.devMetrics = null;
     window.state.devSmoke = null;

@@ -348,6 +348,8 @@ async function createSchema() {
       note             TEXT DEFAULT '',
       data_non_certa   BOOLEAN DEFAULT FALSE,
       stef             BOOLEAN DEFAULT FALSE,
+      altro_vettore    BOOLEAN DEFAULT FALSE,
+      giro_override    TEXT DEFAULT '',
       inserted_at      TIMESTAMPTZ DEFAULT NOW(),
       updated_at       TIMESTAMPTZ DEFAULT NOW()
     );
@@ -355,7 +357,8 @@ async function createSchema() {
     CREATE TABLE IF NOT EXISTS ordine_linee (
       id              SERIAL PRIMARY KEY,
       ordine_id       INTEGER NOT NULL REFERENCES ordini(id) ON DELETE CASCADE,
-      prodotto_id     INTEGER NOT NULL REFERENCES prodotti(id),
+      prodotto_id     INTEGER REFERENCES prodotti(id),
+      prodotto_nome_libero TEXT DEFAULT '',
       qty             NUMERIC NOT NULL DEFAULT 1,
       prezzo_unitario NUMERIC,
       peso_effettivo  NUMERIC,
@@ -379,6 +382,7 @@ async function createSchema() {
     CREATE TABLE IF NOT EXISTS pedane (
       id         SERIAL PRIMARY KEY,
       camion_id  INTEGER NOT NULL REFERENCES camions(id) ON DELETE CASCADE,
+      piano_data DATE NOT NULL DEFAULT CURRENT_DATE,
       numero     INTEGER NOT NULL,
       nota       TEXT DEFAULT ''
     );
@@ -503,6 +507,14 @@ async function createSchema() {
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS nota_riga      TEXT DEFAULT '';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS unita_misura   TEXT DEFAULT 'pezzi';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS prezzo_unitario NUMERIC;
+    ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS prodotto_nome_libero TEXT DEFAULT '';
+    ALTER TABLE ordine_linee ALTER COLUMN prodotto_id DROP NOT NULL;
+    ALTER TABLE ordini ADD COLUMN IF NOT EXISTS altro_vettore BOOLEAN DEFAULT FALSE;
+    ALTER TABLE ordini ADD COLUMN IF NOT EXISTS giro_override TEXT DEFAULT '';
+    ALTER TABLE pedane ADD COLUMN IF NOT EXISTS piano_data DATE DEFAULT CURRENT_DATE;
+    UPDATE pedane SET piano_data = CURRENT_DATE WHERE piano_data IS NULL;
+    ALTER TABLE pedane ALTER COLUMN piano_data SET NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_pedane_camion_data_numero ON pedane(camion_id,piano_data,numero);
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS giro            TEXT DEFAULT '';
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS scope           TEXT NOT NULL DEFAULT 'all';
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS mode            TEXT NOT NULL DEFAULT 'final_price';
@@ -1669,8 +1681,30 @@ async function assertDocFolderVisible(req, res, folderId) {
   const row = await getDocFolderOrNull(folderId);
   if (!row) {
     res.status(404).json({ error: 'Cartella non trovata' });
-    return null;
-  }
+  return null;
+}
+
+async function resolveOrderLinePrice({ prodottoId, clienteId, data, manualPrice = null, client = null }) {
+  const explicit = asNum(manualPrice);
+  if (explicit !== null) return explicit;
+  if (!prodottoId || !clienteId) return 0;
+  const db = client ? { query: (sql, params) => client.query(sql, params) } : pool;
+  const fromListino = await resolvePrezzoUnitario({ prodottoId, clienteId, data, client });
+  if (fromListino !== null) return Number(fromListino);
+  const lastSql = `
+    SELECT ol.prezzo_unitario
+    FROM ordine_linee ol
+    JOIN ordini o ON o.id = ol.ordine_id
+    WHERE o.cliente_id = $1
+      AND ol.prodotto_id = $2
+      AND ol.prezzo_unitario IS NOT NULL
+    ORDER BY o.data DESC, ol.id DESC
+    LIMIT 1
+  `;
+  const last = await db.query(lastSql, [clienteId, prodottoId]);
+  if (last.rows.length) return Number(last.rows[0].prezzo_unitario || 0);
+  return 0;
+}
   let cursor = row;
   while (cursor) {
     if (!userCanViewDocFolder(req.user.ruolo, cursor.allowed_roles)) {
@@ -1858,7 +1892,7 @@ async function getOrdineCompleto(id) {
   const ordine = rows[0];
   const linee = await q(`
     SELECT ol.*, p.codice, p.nome as prodotto_nome, p.um, p.packaging
-    FROM ordine_linee ol JOIN prodotti p ON ol.prodotto_id = p.id
+    FROM ordine_linee ol LEFT JOIN prodotti p ON ol.prodotto_id = p.id
     WHERE ol.ordine_id = $1 ORDER BY ol.id`, [id]);
   ordine.linee = linee.rows;
   return ordine;
@@ -1873,14 +1907,14 @@ app.get('/api/ordini', authMiddleware, async (req, res) => {
     if (stato)      { where.push(`o.stato=$${pi++}`);            params.push(stato); }
     if (agente_id)  { where.push(`o.agente_id=$${pi++}`);        params.push(parseInt(agente_id)); }
     if (autista_id) { where.push(`o.autista_di_giro=$${pi++}`);  params.push(parseInt(autista_id)); }
-    if (giro)       { where.push(`c.giro=$${pi++}`);             params.push(giro); }
+    if (giro)       { where.push(`COALESCE(NULLIF(o.giro_override,''), c.giro)=$${pi++}`); params.push(giro); }
     if (search)     {
       where.push(`(c.nome ILIKE $${pi} OR u.nome ILIKE $${pi+1})`);
       params.push(`%${search}%`, `%${search}%`); pi += 2;
     }
 
     const { rows } = await q(`
-      SELECT o.id, o.data, o.stato, o.note, o.data_non_certa, o.stef,
+      SELECT o.id, o.data, o.stato, o.note, o.data_non_certa, o.stef, o.altro_vettore, o.giro_override,
              o.inserted_at, o.updated_at,
              o.cliente_id, c.nome as cliente_nome, c.giro as cliente_giro,
              o.agente_id, u.nome as agente_nome,
@@ -1901,10 +1935,10 @@ app.get('/api/ordini', authMiddleware, async (req, res) => {
     if (rows.length) {
       const ids = rows.map(r => r.id);
       const { rows: linee } = await q(
-        `SELECT ol.ordine_id, ol.prodotto_id, ol.qty, ol.peso_effettivo,
+        `SELECT ol.ordine_id, ol.prodotto_id, ol.prodotto_nome_libero, ol.qty, ol.peso_effettivo,
                 ol.prezzo_unitario, ol.is_pedana, ol.nota_riga, ol.unita_misura,
                 p.codice, p.nome as prodotto_nome, p.um, p.packaging
-         FROM ordine_linee ol JOIN prodotti p ON ol.prodotto_id = p.id
+         FROM ordine_linee ol LEFT JOIN prodotti p ON ol.prodotto_id = p.id
          WHERE ol.ordine_id = ANY($1) ORDER BY ol.ordine_id, ol.id`, [ids]);
       const lineeMap = {};
       linee.forEach(l => {
@@ -1930,7 +1964,7 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
   const client = await pool.connect();
   try {
     const { cliente_id, agente_id=null, autista_di_giro=null,
-            data, stato='attesa', note='', data_non_certa=false, stef=false, linee=[] } = req.body;
+            data, stato='attesa', note='', data_non_certa=false, stef=false, altro_vettore=false, giro_override='', linee=[] } = req.body;
     if (!cliente_id||!data) return res.status(400).json({ error: 'Campi obbligatori mancanti' });
     if (!linee.length) return res.status(400).json({ error: 'Almeno un prodotto richiesto' });
     const c = await q('SELECT id, sbloccato, onboarding_stato FROM clienti WHERE id=$1', [cliente_id]);
@@ -1939,21 +1973,27 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
 
     await client.query('BEGIN');
     const r = await client.query(
-      `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-      [cliente_id, agente_id||null, autista_di_giro||null, req.user.id, data, stato, note, data_non_certa, stef]
+      `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef,altro_vettore,giro_override)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+      [cliente_id, agente_id||null, autista_di_giro||null, req.user.id, data, stato, note, data_non_certa, stef, !!altro_vettore, String(giro_override || '')]
     );
     const oid = r.rows[0].id;
     for (const l of linee) {
-      const prezzoUnitario = await resolvePrezzoUnitario({
-        prodottoId: l.prodotto_id,
+      const prodottoId = l.prodotto_id ? parseInt(l.prodotto_id, 10) : null;
+      const prodottoNomeLibero = String(l.prodotto_nome_libero || '').trim();
+      if (!prodottoId && !prodottoNomeLibero) {
+        throw new Error('Ogni riga ordine deve avere un prodotto o un nome libero');
+      }
+      const prezzoUnitario = await resolveOrderLinePrice({
+        prodottoId,
         clienteId: cliente_id,
         data,
+        manualPrice: l.prezzo_unitario,
         client,
       });
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [oid, l.prodotto_id, l.qty, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi']
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [oid, prodottoId, prodottoNomeLibero, l.qty, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi']
       );
     }
     await client.query('COMMIT');
@@ -1971,7 +2011,7 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
   try {
     const id = parseInt(req.params.id);
     const { cliente_id, agente_id=null, autista_di_giro=null,
-            data, stato, note='', data_non_certa=false, stef=false, linee=[] } = req.body;
+            data, stato, note='', data_non_certa=false, stef=false, altro_vettore=false, giro_override='', linee=[] } = req.body;
     if (!cliente_id||!data||!stato) return res.status(400).json({ error: 'Campi mancanti' });
     const c = await q('SELECT id, sbloccato, onboarding_stato FROM clienti WHERE id=$1', [cliente_id]);
     if (!c.rows.length) return res.status(400).json({ error: 'Cliente non trovato' });
@@ -1980,21 +2020,27 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
     await client.query('BEGIN');
     await client.query(
       `UPDATE ordini SET cliente_id=$1,agente_id=$2,autista_di_giro=$3,data=$4,stato=$5,
-       note=$6,data_non_certa=$7,stef=$8,updated_at=NOW() WHERE id=$9`,
-      [cliente_id, agente_id||null, autista_di_giro||null, data, stato, note, data_non_certa, stef, id]
+       note=$6,data_non_certa=$7,stef=$8,altro_vettore=$9,giro_override=$10,updated_at=NOW() WHERE id=$11`,
+      [cliente_id, agente_id||null, autista_di_giro||null, data, stato, note, data_non_certa, stef, !!altro_vettore, String(giro_override || ''), id]
     );
     await client.query('DELETE FROM ordine_linee WHERE ordine_id=$1', [id]);
     for (const l of linee) {
-      const prezzoUnitario = await resolvePrezzoUnitario({
-        prodottoId: l.prodotto_id,
+      const prodottoId = l.prodotto_id ? parseInt(l.prodotto_id, 10) : null;
+      const prodottoNomeLibero = String(l.prodotto_nome_libero || '').trim();
+      if (!prodottoId && !prodottoNomeLibero) {
+        throw new Error('Ogni riga ordine deve avere un prodotto o un nome libero');
+      }
+      const prezzoUnitario = await resolveOrderLinePrice({
+        prodottoId,
         clienteId: cliente_id,
         data,
+        manualPrice: l.prezzo_unitario,
         client,
       });
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [id, l.prodotto_id, l.qty, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi']
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [id, prodottoId, prodottoNomeLibero, l.qty, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi']
       );
     }
     await client.query('COMMIT');
@@ -2048,6 +2094,7 @@ app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission(
       if (residuo > 0) {
         residuali.push({
           prodotto_id: l.prodotto_id,
+          prodotto_nome_libero: l.prodotto_nome_libero || '',
           qty: residuo,
           is_pedana: !!l.is_pedana,
           nota_riga: l.nota_riga || '',
@@ -2067,8 +2114,8 @@ app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission(
     const nextData = preferredDate && preferredDate >= autoNextData ? preferredDate : autoNextData;
 
     const ins = await client.query(
-      `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef,inserted_at,updated_at)
-       VALUES ($1,$2,$3,$4,$5,'attesa',$6,$7,$8,NOW(),NOW()) RETURNING id`,
+      `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef,altro_vettore,giro_override,inserted_at,updated_at)
+       VALUES ($1,$2,$3,$4,$5,'attesa',$6,$7,$8,$9,$10,NOW(),NOW()) RETURNING id`,
       [
         ordine.cliente_id,
         ordine.agente_id || null,
@@ -2078,14 +2125,16 @@ app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission(
         `[RIPORTO PARZIALE da #${ordineId}] ${note}`.trim(),
         !!ordine.data_non_certa,
         !!ordine.stef,
+        !!ordine.altro_vettore,
+        String(ordine.giro_override || ''),
       ]
     );
     const newOrdineId = ins.rows[0].id;
     for (const r of residuali) {
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [newOrdineId, r.prodotto_id, r.qty, r.prezzo_unitario, r.is_pedana, r.nota_riga, r.unita_misura]
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [newOrdineId, r.prodotto_id, r.prodotto_nome_libero || '', r.qty, r.prezzo_unitario, r.is_pedana, r.nota_riga, r.unita_misura]
       );
     }
 
@@ -2117,10 +2166,31 @@ app.delete('/api/ordini/:id', authMiddleware, requirePermission('ordini:delete')
 // ─── CAMIONS / PIANO DI CARICO ────────────────────────────────────
 app.get('/api/camions', authMiddleware, requireRole('admin','autista','magazzino'), async (req, res) => {
   try {
+    const pianoData = String(req.query.data || '').match(/^\d{4}-\d{2}-\d{2}$/) ? String(req.query.data) : new Date().toISOString().slice(0, 10);
     const { rows: camions } = await q('SELECT * FROM camions ORDER BY id');
     for (const c of camions) {
-      const { rows: pedane } = await q('SELECT numero, nota FROM pedane WHERE camion_id=$1 ORDER BY numero', [c.id]);
-      c.pedane = pedane;
+      const { rows: pedane } = await q('SELECT numero, nota FROM pedane WHERE camion_id=$1 AND piano_data=$2 ORDER BY numero', [c.id, pianoData]);
+      if (!pedane.length) {
+        const templateRows = await q('SELECT num_pedane FROM camions WHERE id=$1', [c.id]);
+        const n = Number(templateRows.rows[0]?.num_pedane || 0);
+        if (n > 0) {
+          for (let i = 1; i <= n; i++) {
+            await q(
+              `INSERT INTO pedane (camion_id,piano_data,numero,nota)
+               VALUES ($1,$2,$3,'')
+               ON CONFLICT (camion_id,piano_data,numero) DO NOTHING`,
+              [c.id, pianoData, i]
+            );
+          }
+          const seeded = await q('SELECT numero, nota FROM pedane WHERE camion_id=$1 AND piano_data=$2 ORDER BY numero', [c.id, pianoData]);
+          c.pedane = seeded.rows;
+        } else {
+          c.pedane = [];
+        }
+      } else {
+        c.pedane = pedane;
+      }
+      c.piano_data = pianoData;
     }
     res.json(camions);
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -2131,9 +2201,16 @@ app.patch('/api/camions/:id/pedane', authMiddleware, requireRole('admin','autist
   try {
     const id = parseInt(req.params.id);
     const { pedane } = req.body;
+    const pianoData = String(req.body?.data || '').match(/^\d{4}-\d{2}-\d{2}$/) ? String(req.body.data) : new Date().toISOString().slice(0, 10);
     await client.query('BEGIN');
     for (const p of pedane) {
-      await client.query('UPDATE pedane SET nota=$1 WHERE camion_id=$2 AND numero=$3', [p.nota||'', id, p.numero]);
+      await client.query(
+        `INSERT INTO pedane (camion_id,piano_data,numero,nota)
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT (camion_id,piano_data,numero)
+         DO UPDATE SET nota=EXCLUDED.nota`,
+        [id, pianoData, p.numero, p.nota || '']
+      );
     }
     await client.query('UPDATE camions SET last_update=NOW(), confermato=FALSE, confermato_da=NULL, confermato_at=NULL WHERE id=$1', [id]);
     await client.query('COMMIT');

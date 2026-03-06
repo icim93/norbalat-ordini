@@ -86,9 +86,12 @@
       note: o.note || '',
       dataNonCerta: !!o.data_non_certa,
       stef: !!o.stef,
+      altroVettore: !!o.altro_vettore,
+      giroOverride: o.giro_override || '',
       linee: (o.linee || []).map(l => ({
         id: l.id,
-        prodId: l.prodotto_id,
+        prodId: l.prodotto_id || null,
+        prodottoNomeLibero: l.prodotto_nome_libero || '',
         qty: l.qty,
         prezzoUnitario: (l.prezzo_unitario !== undefined && l.prezzo_unitario !== null) ? Number(l.prezzo_unitario) : null,
         pesoEffettivo: l.peso_effettivo || null,
@@ -110,6 +113,7 @@
       confermatoDa: c.confermato_da || null,
       confermatoAt: c.confermato_at || null,
       lastUpdate: c.last_update || null,
+      pianoData: (c.piano_data || '').substring(0, 10),
       pedane: (c.pedane || []).map(p => ({ n: p.numero, nota: p.nota || '' })),
     };
   }
