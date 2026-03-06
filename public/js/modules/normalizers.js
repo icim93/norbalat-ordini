@@ -98,6 +98,8 @@
         isPedana: !!l.is_pedana,
         notaRiga: l.nota_riga || '',
         unitaMisura: l.unita_misura || 'pezzi',
+        preparato: !!l.preparato,
+        lotto: l.lotto || '',
       })),
     };
   }

@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   let selectedRole = 'admin';
 
   const navConfigs = {
@@ -36,6 +36,7 @@
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'piano', icon: '🚛', label: 'Piano Carico' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
+      { page: 'report', icon: '📄', label: 'PDF Ordini' },
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
     direzione: [
@@ -96,7 +97,9 @@
       goTo(defaultPages[window.state.currentUser.ruolo] || 'dashboard');
       window.startDevMonitor();
     } catch (e) {
-      window.showToast(e.message || 'Errore di connessione', 'warning');
+      const raw = String(e?.message || '');
+      const credErr = raw.toLowerCase().includes('username o password') || raw.toLowerCase().includes('credenziali');
+      window.showToast(credErr ? 'Username o password errati' : (raw || 'Errore di connessione'), 'warning');
     } finally {
       if (btn) {
         btn.textContent = 'Accedi ->';
@@ -129,6 +132,9 @@
     window.state.docCurrentFolderId = null;
     window.state.docCurrentFiles = [];
     window.state.docCanManage = false;
+    window.state.scorte = [];
+    window.state.scorteAlertSignature = '';
+    window.state.magazzinoHighlightOrderId = null;
     document.getElementById('screen-app').style.display = 'none';
     document.getElementById('screen-login').style.display = 'flex';
   }
@@ -227,3 +233,6 @@
   window.goTo = goTo;
   window.renderPage = renderPage;
 })();
+
+
+

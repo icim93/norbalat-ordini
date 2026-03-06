@@ -2,6 +2,12 @@ let orderLines = [];
 let selectedOrders = new Set();
 
 function openNewOrder() {
+  if (typeof getModalitaOrdine === 'function'
+    && getModalitaOrdine() === 'catalogo'
+    && typeof openNewOrderCatalogo === 'function') {
+    openNewOrderCatalogo();
+    return;
+  }
   state.editingId = null;
   orderLines = [{ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: null }];
   document.getElementById('modal-ordine-title').textContent = 'Nuovo Ordine';
@@ -34,6 +40,8 @@ function openEditOrder(id) {
     notaRiga: l.notaRiga||'',
     unitaMisura: l.unitaMisura||'pezzi',
     pesoEffettivo: l.pesoEffettivo||null,
+    preparato: !!l.preparato,
+    lotto: l.lotto || '',
   }));
   document.getElementById('modal-ordine-title').textContent = `Modifica Ordine #${id}`;
   document.getElementById('ord-data').value = o.data;
@@ -721,7 +729,9 @@ async function saveOrder() {
       prezzo_unitario: Number.isFinite(Number(l.prezzoUnitario)) ? Number(l.prezzoUnitario) : null,
       is_pedana: !!l.isPedana,
       nota_riga: l.notaRiga||'',
-      unita_misura: l.unitaMisura||'pezzi'
+      unita_misura: l.unitaMisura||'pezzi',
+      preparato: !!l.preparato,
+      lotto: l.lotto || '',
     }));
   
   if (!linee.length) {

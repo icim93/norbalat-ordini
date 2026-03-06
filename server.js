@@ -363,7 +363,9 @@ async function createSchema() {
       prezzo_unitario NUMERIC,
       peso_effettivo  NUMERIC,
       is_pedana       BOOLEAN DEFAULT FALSE,
-      nota_riga       TEXT DEFAULT ''
+      nota_riga       TEXT DEFAULT '',
+      preparato       BOOLEAN DEFAULT FALSE,
+      lotto           TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS camions (
@@ -479,6 +481,33 @@ async function createSchema() {
       created_at  TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS scorte_magazzino (
+      id                  SERIAL PRIMARY KEY,
+      prodotto_id         INTEGER REFERENCES prodotti(id) ON DELETE SET NULL,
+      prodotto_nome       TEXT NOT NULL,
+      quantita_rimanente  NUMERIC NOT NULL DEFAULT 0,
+      unita_misura        TEXT DEFAULT '',
+      kg_stimati          NUMERIC,
+      note                TEXT DEFAULT '',
+      stato               TEXT NOT NULL DEFAULT 'attiva' CHECK (stato IN ('attiva','ripristinata')),
+      created_by          INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      updated_by          INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      created_at          TIMESTAMPTZ DEFAULT NOW(),
+      updated_at          TIMESTAMPTZ DEFAULT NOW(),
+      ripristinata_at     TIMESTAMPTZ
+    );
+
+    CREATE TABLE IF NOT EXISTS magazzino_chiusure_giornata (
+      id                SERIAL PRIMARY KEY,
+      data              DATE NOT NULL,
+      giro              TEXT DEFAULT '',
+      confermata_da     INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      confermata_nome   TEXT DEFAULT '',
+      confermata_at     TIMESTAMPTZ DEFAULT NOW(),
+      esito             TEXT DEFAULT '',
+      dettagli          JSONB DEFAULT '{}'::jsonb
+    );
+
     CREATE INDEX IF NOT EXISTS idx_ordini_data    ON ordini(data);
     CREATE INDEX IF NOT EXISTS idx_ordini_stato   ON ordini(stato);
     CREATE INDEX IF NOT EXISTS idx_ordini_agente  ON ordini(agente_id);
@@ -490,6 +519,9 @@ async function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_crm_cliente_created ON clienti_crm_eventi(cliente_id,created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_doc_folders_parent ON doc_folders(parent_id);
     CREATE INDEX IF NOT EXISTS idx_doc_files_folder ON doc_files(folder_id);
+    CREATE INDEX IF NOT EXISTS idx_scorte_stato ON scorte_magazzino(stato, prodotto_id);
+    CREATE INDEX IF NOT EXISTS idx_magazzino_chiusure_data_giro ON magazzino_chiusure_giornata(data, giro);
+    CREATE INDEX IF NOT EXISTS idx_utenti_username_lower ON utenti (LOWER(username));
 
     -- Migrazioni safe per DB esistenti
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS classificazione TEXT DEFAULT '';
@@ -508,6 +540,8 @@ async function createSchema() {
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS unita_misura   TEXT DEFAULT 'pezzi';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS prezzo_unitario NUMERIC;
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS prodotto_nome_libero TEXT DEFAULT '';
+    ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS preparato      BOOLEAN DEFAULT FALSE;
+    ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS lotto          TEXT DEFAULT '';
     ALTER TABLE ordine_linee ALTER COLUMN prodotto_id DROP NOT NULL;
     ALTER TABLE ordini ADD COLUMN IF NOT EXISTS altro_vettore BOOLEAN DEFAULT FALSE;
     ALTER TABLE ordini ADD COLUMN IF NOT EXISTS giro_override TEXT DEFAULT '';
@@ -892,6 +926,8 @@ const PERMISSIONS = {
   'ordini:update': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'ordini:delete': ['admin', 'amministrazione'],
   'ordini:stato': ['admin', 'autista', 'magazzino', 'amministrazione', 'direzione'],
+  'scorte:view': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
+  'scorte:manage': ['admin', 'magazzino'],
 };
 
 function hasPermission(role, permission) {
@@ -1000,6 +1036,28 @@ const zConsegnaParzialePayload = z.object({
   preferred_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
 });
 
+const zPreparazioneLineaPayload = z.object({
+  preparato: z.boolean().optional(),
+  peso_effettivo: z.coerce.number().nullable().optional(),
+  lotto: z.string().max(120).optional(),
+});
+
+const zChiudiGiornataPayload = z.object({
+  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  giro: z.string().max(120).optional().default(''),
+  action_if_incomplete: z.enum(['continue', 'back']).optional(),
+  action_if_residual: z.enum(['reload', 'delete']).optional(),
+});
+
+const zScortaPayload = z.object({
+  prodotto_id: z.coerce.number().int().positive().nullable().optional().default(null),
+  prodotto_nome: z.string().min(2).max(160),
+  quantita_rimanente: z.coerce.number().nonnegative(),
+  unita_misura: z.string().max(40).optional().default(''),
+  kg_stimati: z.coerce.number().nonnegative().nullable().optional().default(null),
+  note: z.string().max(1000).optional().default(''),
+});
+
 async function getNextDeliveryDate(giro, fromDateStr = null) {
   const start = fromDateStr ? new Date(fromDateStr) : new Date();
   const { rows } = await q('SELECT giorni FROM giri_calendario WHERE giro=$1 LIMIT 1', [String(giro || '').trim()]);
@@ -1017,6 +1075,91 @@ async function getNextDeliveryDate(giro, fromDateStr = null) {
   const fb = new Date(start);
   fb.setDate(fb.getDate() + 1);
   return fb.toISOString().slice(0, 10);
+}
+
+async function getOrdineGiroEffettivoRow(ordineId, client = null) {
+  const db = client || pool;
+  const { rows } = await db.query(
+    `SELECT COALESCE(NULLIF(o.giro_override,''), c.giro, '') AS giro_effettivo
+     FROM ordini o
+     JOIN clienti c ON c.id = o.cliente_id
+     WHERE o.id = $1
+     LIMIT 1`,
+    [ordineId]
+  );
+  return String(rows[0]?.giro_effettivo || '').trim();
+}
+
+async function listOrdiniApertiByDateGiro({ data, giro = '', client = null }) {
+  const db = client || pool;
+  const params = [data];
+  let giroWhere = '';
+  if (String(giro || '').trim()) {
+    params.push(String(giro || '').trim());
+    giroWhere = `AND COALESCE(NULLIF(o.giro_override,''), c.giro, '') = $2`;
+  }
+  const { rows } = await db.query(
+    `SELECT o.id, o.cliente_id, o.agente_id, o.autista_di_giro, o.inserted_by, o.data, o.stato, o.note,
+            o.data_non_certa, o.stef, o.altro_vettore, o.giro_override,
+            c.giro AS cliente_giro,
+            COALESCE(NULLIF(o.giro_override,''), c.giro, '') AS giro_effettivo
+     FROM ordini o
+     JOIN clienti c ON c.id = o.cliente_id
+     WHERE o.data = $1
+       AND o.stato <> 'annullato'
+       ${giroWhere}
+     ORDER BY o.id`,
+    params
+  );
+  return rows;
+}
+
+async function getScorteAttiveMap(client = null) {
+  const db = client || pool;
+  const { rows } = await db.query(
+    `SELECT id, prodotto_id, prodotto_nome, quantita_rimanente, unita_misura
+     FROM scorte_magazzino
+     WHERE stato='attiva'`
+  );
+  const map = new Map();
+  rows.forEach(r => {
+    if (!r.prodotto_id) return;
+    map.set(Number(r.prodotto_id), r);
+  });
+  return map;
+}
+
+function summarizeOrderQtyByProd(lines = []) {
+  const qtyMap = new Map();
+  for (const l of lines) {
+    const pid = l?.prodotto_id ? Number(l.prodotto_id) : null;
+    if (!pid) continue;
+    const q = Number(l?.qty || 0);
+    if (!Number.isFinite(q) || q <= 0) continue;
+    qtyMap.set(pid, (qtyMap.get(pid) || 0) + q);
+  }
+  return qtyMap;
+}
+
+async function detectScorteSuperateForOrder(lines = [], client = null) {
+  const scorteMap = await getScorteAttiveMap(client);
+  const qtyMap = summarizeOrderQtyByProd(lines);
+  const alerts = [];
+  for (const [pid, orderedQty] of qtyMap.entries()) {
+    const scorta = scorteMap.get(pid);
+    if (!scorta) continue;
+    const disponibile = Number(scorta.quantita_rimanente || 0);
+    if (orderedQty > disponibile) {
+      alerts.push({
+        prodotto_id: pid,
+        prodotto_nome: scorta.prodotto_nome,
+        ordinato: orderedQty,
+        disponibile,
+        unita_misura: scorta.unita_misura || '',
+      });
+    }
+  }
+  return alerts;
 }
 
 function applyListinoRule(currentPrice, rule) {
@@ -1085,10 +1228,11 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Dati mancanti' });
-    const { rows } = await q('SELECT * FROM utenti WHERE username=$1', [username]);
+    const uname = String(username || '').trim();
+    const { rows } = await q('SELECT * FROM utenti WHERE LOWER(username)=LOWER($1) LIMIT 1', [uname]);
     const u = rows[0];
     if (!u || !(await bcrypt.compare(password, u.password)))
-      return res.status(401).json({ error: 'Credenziali errate' });
+      return res.status(401).json({ error: 'Username o password errati' });
     const payload = {
       id: u.id, username: u.username, nome: u.nome, cognome: u.cognome || '',
       ruolo: u.ruolo, tipo_utente: u.tipo_utente || '',
@@ -1114,13 +1258,14 @@ app.post('/api/utenti', authMiddleware, requireRole('admin'), async (req, res) =
             tipo_utente='', giri_consegna=[], is_agente=false } = req.body;
     if (!nome||!username||!password||!ruolo)
       return res.status(400).json({ error: 'Campi mancanti' });
-    const dup = await q('SELECT id FROM utenti WHERE username=$1', [username]);
+    const uname = String(username || '').trim();
+    const dup = await q('SELECT id FROM utenti WHERE LOWER(username)=LOWER($1)', [uname]);
     if (dup.rows.length) return res.status(409).json({ error: 'Username già esistente' });
     const hash = await bcrypt.hash(password, SALT_ROUNDS);
     const r = await q(
       `INSERT INTO utenti (nome,cognome,username,password,ruolo,tipo_utente,giri_consegna,is_agente)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [nome, cognome, username, hash, ruolo, tipo_utente, JSON.stringify(giri_consegna), is_agente]
+      [nome, cognome, uname, hash, ruolo, tipo_utente, JSON.stringify(giri_consegna), is_agente]
     );
     res.json(parseUtente(r.rows[0]));
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -1132,20 +1277,21 @@ app.put('/api/utenti/:id', authMiddleware, requireRole('admin'), async (req, res
     const { nome, cognome='', username, password, ruolo,
             tipo_utente='', giri_consegna=[], is_agente=false } = req.body;
     if (!nome||!username) return res.status(400).json({ error: 'Campi mancanti' });
-    const dup = await q('SELECT id FROM utenti WHERE username=$1 AND id!=$2', [username, id]);
+    const uname = String(username || '').trim();
+    const dup = await q('SELECT id FROM utenti WHERE LOWER(username)=LOWER($1) AND id!=$2', [uname, id]);
     if (dup.rows.length) return res.status(409).json({ error: 'Username già in uso' });
     if (password) {
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
       await q(
         `UPDATE utenti SET nome=$1,cognome=$2,username=$3,password=$4,ruolo=$5,
          tipo_utente=$6,giri_consegna=$7,is_agente=$8 WHERE id=$9`,
-        [nome, cognome, username, hash, ruolo, tipo_utente, JSON.stringify(giri_consegna), is_agente, id]
+        [nome, cognome, uname, hash, ruolo, tipo_utente, JSON.stringify(giri_consegna), is_agente, id]
       );
     } else {
       await q(
         `UPDATE utenti SET nome=$1,cognome=$2,username=$3,ruolo=$4,
          tipo_utente=$5,giri_consegna=$6,is_agente=$7 WHERE id=$8`,
-        [nome, cognome, username, ruolo, tipo_utente, JSON.stringify(giri_consegna), is_agente, id]
+        [nome, cognome, uname, ruolo, tipo_utente, JSON.stringify(giri_consegna), is_agente, id]
       );
     }
     res.json({ ok: true });
@@ -1174,19 +1320,20 @@ app.patch('/api/utenti/:id/profilo', authMiddleware, async (req, res) => {
     }
 
     // Check username univoco
-    const { rows: dup } = await q('SELECT id FROM utenti WHERE username=$1 AND id!=$2', [username, id]);
+    const uname = String(username || '').trim();
+    const { rows: dup } = await q('SELECT id FROM utenti WHERE LOWER(username)=LOWER($1) AND id!=$2', [uname, id]);
     if (dup.length) return res.status(400).json({ error: 'Username già in uso' });
 
     if (password) {
       const bcrypt = require('bcrypt');
       const hash = await bcrypt.hash(password, 10);
       await q('UPDATE utenti SET nome=$1,cognome=$2,username=$3,password=$4 WHERE id=$5',
-        [nome, cognome, username, hash, id]);
+        [nome, cognome, uname, hash, id]);
     } else {
       await q('UPDATE utenti SET nome=$1,cognome=$2,username=$3 WHERE id=$4',
-        [nome, cognome, username, id]);
+        [nome, cognome, uname, id]);
     }
-    res.json({ ok: true, nome, cognome, username });
+    res.json({ ok: true, nome, cognome, username: uname });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1936,7 +2083,7 @@ app.get('/api/ordini', authMiddleware, async (req, res) => {
       const ids = rows.map(r => r.id);
       const { rows: linee } = await q(
         `SELECT ol.ordine_id, ol.prodotto_id, ol.prodotto_nome_libero, ol.qty, ol.peso_effettivo,
-                ol.prezzo_unitario, ol.is_pedana, ol.nota_riga, ol.unita_misura,
+                ol.prezzo_unitario, ol.is_pedana, ol.nota_riga, ol.unita_misura, ol.preparato, ol.lotto,
                 p.codice, p.nome as prodotto_nome, p.um, p.packaging
          FROM ordine_linee ol LEFT JOIN prodotti p ON ol.prodotto_id = p.id
          WHERE ol.ordine_id = ANY($1) ORDER BY ol.ordine_id, ol.id`, [ids]);
@@ -1970,6 +2117,14 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
     const c = await q('SELECT id, sbloccato, onboarding_stato FROM clienti WHERE id=$1', [cliente_id]);
     if (!c.rows.length) return res.status(400).json({ error: 'Cliente non trovato' });
     if (!c.rows[0].sbloccato || c.rows[0].onboarding_stato !== 'approvato') return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
+    const scorteAlerts = await detectScorteSuperateForOrder(linee, client);
+    if (scorteAlerts.length) {
+      return res.status(409).json({
+        error: `Scorte insufficienti: ${scorteAlerts.map(a => `${a.prodotto_nome} (${a.ordinato} > ${a.disponibile})`).join(', ')}`,
+        code: 'SCORTE_INSUFFICIENTI',
+        alerts: scorteAlerts,
+      });
+    }
 
     await client.query('BEGIN');
     const r = await client.query(
@@ -1992,8 +2147,9 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
         client,
       });
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [oid, prodottoId, prodottoNomeLibero, l.qty, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi']
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [oid, prodottoId, prodottoNomeLibero, l.qty, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi', !!l.preparato, String(l.lotto || '').trim()]
       );
     }
     await client.query('COMMIT');
@@ -2016,6 +2172,14 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
     const c = await q('SELECT id, sbloccato, onboarding_stato FROM clienti WHERE id=$1', [cliente_id]);
     if (!c.rows.length) return res.status(400).json({ error: 'Cliente non trovato' });
     if (!c.rows[0].sbloccato || c.rows[0].onboarding_stato !== 'approvato') return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
+    const scorteAlerts = await detectScorteSuperateForOrder(linee, client);
+    if (scorteAlerts.length) {
+      return res.status(409).json({
+        error: `Scorte insufficienti: ${scorteAlerts.map(a => `${a.prodotto_nome} (${a.ordinato} > ${a.disponibile})`).join(', ')}`,
+        code: 'SCORTE_INSUFFICIENTI',
+        alerts: scorteAlerts,
+      });
+    }
 
     await client.query('BEGIN');
     await client.query(
@@ -2038,9 +2202,9 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
         client,
       });
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [id, prodottoId, prodottoNomeLibero, l.qty, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi']
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [id, prodottoId, prodottoNomeLibero, l.qty, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi', !!l.preparato, String(l.lotto || '').trim()]
       );
     }
     await client.query('COMMIT');
@@ -2061,6 +2225,203 @@ app.patch('/api/ordini/:id/stato', authMiddleware, requirePermission('ordini:sta
     await q('UPDATE ordini SET stato=$1,updated_at=NOW() WHERE id=$2', [stato, id]);
     res.json({ ok: true, stato });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  try {
+    const ordineId = parseInt(req.params.ordineId, 10);
+    const lineaId = parseInt(req.params.lineaId, 10);
+    const parsed = zPreparazioneLineaPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const payload = parsed.data;
+    const { rows: lineRows } = await q('SELECT id, ordine_id FROM ordine_linee WHERE id=$1 AND ordine_id=$2 LIMIT 1', [lineaId, ordineId]);
+    if (!lineRows.length) return res.status(404).json({ error: 'Riga ordine non trovata' });
+
+    const sets = ['id=id'];
+    const params = [];
+    let p = 1;
+    if (payload.preparato !== undefined) {
+      sets.push(`preparato=$${p++}`);
+      params.push(!!payload.preparato);
+    }
+    if (payload.peso_effettivo !== undefined) {
+      sets.push(`peso_effettivo=$${p++}`);
+      params.push(payload.peso_effettivo === null ? null : Number(payload.peso_effettivo));
+    }
+    if (payload.lotto !== undefined) {
+      sets.push(`lotto=$${p++}`);
+      params.push(String(payload.lotto || '').trim());
+    }
+    params.push(lineaId);
+    await q(`UPDATE ordine_linee SET ${sets.join(', ')} WHERE id=$${p}`, params);
+
+    const { rows: prepRows } = await q(
+      `SELECT COUNT(*)::int AS n_tot, SUM(CASE WHEN preparato THEN 1 ELSE 0 END)::int AS n_prep
+       FROM ordine_linee WHERE ordine_id=$1`,
+      [ordineId]
+    );
+    const nTot = Number(prepRows[0]?.n_tot || 0);
+    const nPrep = Number(prepRows[0]?.n_prep || 0);
+    if (nTot > 0 && nPrep === nTot) {
+      await q(`UPDATE ordini SET stato='preparazione', updated_at=NOW() WHERE id=$1 AND stato='attesa'`, [ordineId]);
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+async function createResidualOrderFromMissingLines({ ordine, missingLinee, reqUser, noteSuffix = '', client }) {
+  const effectiveGiro = String(ordine.giro_effettivo || ordine.giro_override || ordine.cliente_giro || '').trim();
+  const nextDate = await getNextDeliveryDate(effectiveGiro, ordine.data);
+  const ins = await client.query(
+    `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef,altro_vettore,giro_override,inserted_at,updated_at)
+     VALUES ($1,$2,$3,$4,$5,'attesa',$6,$7,$8,$9,$10,NOW(),NOW()) RETURNING id`,
+    [
+      ordine.cliente_id,
+      ordine.agente_id || null,
+      ordine.autista_di_giro || null,
+      reqUser.id || null,
+      nextDate,
+      `[RIPORTO MAGAZZINO da #${ordine.id}] ${noteSuffix}`.trim(),
+      !!ordine.data_non_certa,
+      !!ordine.stef,
+      !!ordine.altro_vettore,
+      String(ordine.giro_override || ''),
+    ]
+  );
+  const newOrdineId = ins.rows[0].id;
+  for (const l of missingLinee) {
+    await client.query(
+      `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,peso_effettivo,is_pedana,nota_riga,unita_misura,preparato,lotto)
+       VALUES ($1,$2,$3,$4,$5,NULL,$6,$7,$8,FALSE,$9)`,
+      [
+        newOrdineId,
+        l.prodotto_id || null,
+        l.prodotto_nome_libero || '',
+        l.qty,
+        l.prezzo_unitario,
+        !!l.is_pedana,
+        l.nota_riga || '',
+        l.unita_misura || 'pezzi',
+        l.lotto || '',
+      ]
+    );
+  }
+  return { newOrdineId, nextDate };
+}
+
+app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const parsed = zChiudiGiornataPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const { data, giro, action_if_incomplete, action_if_residual } = parsed.data;
+    const ordini = await listOrdiniApertiByDateGiro({ data, giro, client });
+    if (!ordini.length) {
+      return res.status(400).json({ error: 'Nessun ordine trovato per la selezione' });
+    }
+    const ids = ordini.map(o => o.id);
+    const { rows: linee } = await client.query(
+      `SELECT id, ordine_id, prodotto_id, prodotto_nome_libero, qty, prezzo_unitario, is_pedana, nota_riga, unita_misura, preparato, lotto
+       FROM ordine_linee
+       WHERE ordine_id = ANY($1)
+       ORDER BY ordine_id, id`,
+      [ids]
+    );
+    const lineeByOrder = {};
+    linee.forEach(l => {
+      if (!lineeByOrder[l.ordine_id]) lineeByOrder[l.ordine_id] = [];
+      lineeByOrder[l.ordine_id].push(l);
+    });
+
+    const missing = [];
+    ordini.forEach(o => {
+      const nonPrep = (lineeByOrder[o.id] || []).filter(l => !l.preparato);
+      if (nonPrep.length) {
+        missing.push({
+          ordine_id: o.id,
+          mancanti: nonPrep.map(l => ({
+            linea_id: l.id,
+            prodotto_id: l.prodotto_id || null,
+            prodotto_nome_libero: l.prodotto_nome_libero || '',
+            qty: Number(l.qty || 0),
+          })),
+        });
+      }
+    });
+
+    if (missing.length && action_if_incomplete !== 'continue') {
+      return res.status(409).json({
+        code: 'GIORNATA_INCOMPLETA',
+        message: 'Attenzione: alcuni ordini/prodotti non risultano preparati',
+        missing,
+      });
+    }
+
+    if (missing.length && !action_if_residual) {
+      return res.status(409).json({
+        code: 'RESIDUAL_ACTION_REQUIRED',
+        message: 'Seleziona come gestire i prodotti non preparati: ricarica o cancella.',
+        missing,
+      });
+    }
+
+    await client.query('BEGIN');
+    const reloaded = [];
+    const deleted = [];
+    for (const o of ordini) {
+      const righe = lineeByOrder[o.id] || [];
+      const mancanti = righe.filter(l => !l.preparato);
+      if (!mancanti.length) {
+        await client.query(`UPDATE ordini SET stato='consegnato', updated_at=NOW() WHERE id=$1`, [o.id]);
+        continue;
+      }
+      if (action_if_residual === 'reload') {
+        const created = await createResidualOrderFromMissingLines({
+          ordine: o,
+          missingLinee: mancanti,
+          reqUser: req.user,
+          noteSuffix: 'riporto da chiusura giornata',
+          client,
+        });
+        reloaded.push({ ordine_id: o.id, new_order_id: created.newOrdineId, next_date: created.nextDate });
+        await client.query(
+          `UPDATE ordini
+           SET stato='consegnato',
+               note=TRIM(BOTH ' ' FROM COALESCE(note,'') || ' [CHIUSURA GIORNATA: residuo su #' || $1 || ']'),
+               updated_at=NOW()
+           WHERE id=$2`,
+          [created.newOrdineId, o.id]
+        );
+      } else {
+        await client.query(`UPDATE ordini SET stato='annullato', updated_at=NOW() WHERE id=$1`, [o.id]);
+        deleted.push(o.id);
+      }
+    }
+
+    const giroVal = String(giro || '').trim();
+    await client.query(
+      `INSERT INTO magazzino_chiusure_giornata (data,giro,confermata_da,confermata_nome,esito,dettagli)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+      [
+        data,
+        giroVal,
+        req.user.id || null,
+        `${req.user.nome} ${req.user.cognome || ''}`.trim(),
+        missing.length ? 'con_residui' : 'ok',
+        JSON.stringify({ missing_count: missing.length, action_if_residual: action_if_residual || null, reloaded, deleted }),
+      ]
+    );
+    await client.query('COMMIT');
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Chiusura giornata magazzino', `${data}${giroVal ? ` (${giroVal})` : ''}`);
+    res.json({ ok: true, missing_count: missing.length, reloaded, deleted });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch {}
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
 });
 
 app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission('ordini:stato'), async (req, res) => {
@@ -2100,6 +2461,7 @@ app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission(
           nota_riga: l.nota_riga || '',
           unita_misura: l.unita_misura || 'pezzi',
           prezzo_unitario: l.prezzo_unitario,
+          lotto: l.lotto || '',
         });
       }
     }
@@ -2132,9 +2494,9 @@ app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission(
     const newOrdineId = ins.rows[0].id;
     for (const r of residuali) {
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [newOrdineId, r.prodotto_id, r.prodotto_nome_libero || '', r.qty, r.prezzo_unitario, r.is_pedana, r.nota_riga, r.unita_misura]
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE,$9)`,
+        [newOrdineId, r.prodotto_id, r.prodotto_nome_libero || '', r.qty, r.prezzo_unitario, r.is_pedana, r.nota_riga, r.unita_misura, r.lotto || '']
       );
     }
 
@@ -2194,6 +2556,108 @@ app.get('/api/camions', authMiddleware, requireRole('admin','autista','magazzino
     }
     res.json(camions);
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/scorte', authMiddleware, requirePermission('scorte:view'), async (req, res) => {
+  try {
+    const includeRipristinate = String(req.query.include_ripristinate || '') === '1';
+    const where = includeRipristinate ? '' : `WHERE s.stato='attiva'`;
+    const { rows } = await q(
+      `SELECT s.*,
+              p.codice AS prodotto_codice,
+              p.nome   AS prodotto_nome_ref
+       FROM scorte_magazzino s
+       LEFT JOIN prodotti p ON p.id = s.prodotto_id
+       ${where}
+       ORDER BY
+         CASE WHEN s.stato='attiva' THEN 0 ELSE 1 END,
+         s.updated_at DESC,
+         s.id DESC`
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/scorte', authMiddleware, requirePermission('scorte:manage'), async (req, res) => {
+  try {
+    const parsed = zScortaPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const b = parsed.data;
+    const prodottoId = b.prodotto_id ? Number(b.prodotto_id) : null;
+    const prodottoNome = String(b.prodotto_nome || '').trim();
+    const unita = String(b.unita_misura || '').trim();
+    const note = String(b.note || '').trim();
+    const { rows } = await q(
+      `INSERT INTO scorte_magazzino
+       (prodotto_id,prodotto_nome,quantita_rimanente,unita_misura,kg_stimati,note,stato,created_by,updated_by,created_at,updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'attiva',$7,$8,NOW(),NOW())
+       RETURNING *`,
+      [prodottoId, prodottoNome, Number(b.quantita_rimanente || 0), unita, b.kg_stimati ?? null, note, req.user.id || null, req.user.id || null]
+    );
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Scorte magazzino', `Nuova soglia: ${prodottoNome}`);
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/scorte/:id', authMiddleware, requirePermission('scorte:manage'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const parsed = zScortaPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const b = parsed.data;
+    const { rows } = await q(
+      `UPDATE scorte_magazzino
+       SET prodotto_id=$1,
+           prodotto_nome=$2,
+           quantita_rimanente=$3,
+           unita_misura=$4,
+           kg_stimati=$5,
+           note=$6,
+           stato='attiva',
+           ripristinata_at=NULL,
+           updated_by=$7,
+           updated_at=NOW()
+       WHERE id=$8
+       RETURNING *`,
+      [
+        b.prodotto_id ? Number(b.prodotto_id) : null,
+        String(b.prodotto_nome || '').trim(),
+        Number(b.quantita_rimanente || 0),
+        String(b.unita_misura || '').trim(),
+        b.kg_stimati ?? null,
+        String(b.note || '').trim(),
+        req.user.id || null,
+        id,
+      ]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Scorta non trovata' });
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Scorte magazzino', `Aggiorna soglia: ${rows[0].prodotto_nome}`);
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.patch('/api/scorte/:id/ripristina', authMiddleware, requirePermission('scorte:manage'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { rows } = await q(
+      `UPDATE scorte_magazzino
+       SET stato='ripristinata', updated_by=$1, updated_at=NOW(), ripristinata_at=NOW()
+       WHERE id=$2
+       RETURNING *`,
+      [req.user.id || null, id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Scorta non trovata' });
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Scorte magazzino', `Scorta ripristinata: ${rows[0].prodotto_nome}`);
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.patch('/api/camions/:id/pedane', authMiddleware, requireRole('admin','autista'), async (req, res) => {

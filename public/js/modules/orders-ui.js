@@ -1,4 +1,4 @@
-function renderDashboard() {
+﻿function renderDashboard() {
   const t = today();
   const ordiniOggi = state.ordini.filter(o => o.data === t);
   const attesa = state.ordini.filter(o => o.stato === 'attesa').length;
@@ -21,21 +21,23 @@ function renderDashboard() {
       <td><b>${getCliente(o.clienteId).nome}</b></td>
       <td style="color:var(--text2);">${formatDate(o.data)}</td>
       <td>
-        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : '—'; })()}</div>
-        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">👤 ${getAgente(o.agenteId).nome}</div>` : ''}
+        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : 'â€”'; })()}</div>
+        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">ðŸ‘¤ ${getAgente(o.agenteId).nome}</div>` : ''}
       </td>
       <td>${statoBadge(o.stato)}</td>
       <td>
-        <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">✏️</button>
-        <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">👁️</button>
+        <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">âœï¸</button>
+        <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">ðŸ‘ï¸</button>
+<button class="btn btn-outline btn-sm" title="Vai alla preparazione" aria-label="Vai alla preparazione" onclick="openPreparazioneOrdine(${o.id})">📦</button>
       </td>
     </tr>
   `).join('');
+  if (typeof renderScortePanels === 'function') renderScortePanels();
 }
 
-// ═══════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ORDINI TABLE
-// ═══════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 function renderOrdiniTable() {
   const q = (document.getElementById('search-ordini')?.value || '').toLowerCase();
@@ -58,7 +60,7 @@ function renderOrdiniTable() {
 
   const tbody = document.getElementById('ordini-table');
   if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📋</div><p>Nessun ordine trovato</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">ðŸ“‹</div><p>Nessun ordine trovato</p></div></td></tr>`;
     return;
   }
   const allIds = list.map(o => o.id);
@@ -78,16 +80,17 @@ function renderOrdiniTable() {
       <td><b>${getCliente(o.clienteId).nome}</b></td>
       <td>${formatDate(o.data)}</td>
       <td>
-        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : '—'; })()}</div>
-        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">👤 ${getAgente(o.agenteId).nome}</div>` : ''}
+        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : 'â€”'; })()}</div>
+        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">ðŸ‘¤ ${getAgente(o.agenteId).nome}</div>` : ''}
       </td>
       <td class="col-lines" style="font-size:12px;color:var(--text2);max-width:200px;">${lineeResume(o.linee)}</td>
       <td>${statoBadge(o.stato)}</td>
-      <td class="col-note" style="font-size:13px;color:var(--text2);">${o.note || '—'}</td>
+      <td class="col-note" style="font-size:13px;color:var(--text2);">${o.note || 'â€”'}</td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">✏️</button>
-        <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">👁️</button>
-        <button class="btn btn-danger btn-sm" title="Elimina ordine" aria-label="Elimina ordine" onclick="deleteOrder(${o.id})">🗑️</button>
+        <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">âœï¸</button>
+        <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">ðŸ‘ï¸</button>
+<button class="btn btn-outline btn-sm" title="Vai alla preparazione" aria-label="Vai alla preparazione" onclick="openPreparazioneOrdine(${o.id})">📦</button>
+        <button class="btn btn-danger btn-sm" title="Elimina ordine" aria-label="Elimina ordine" onclick="deleteOrder(${o.id})">ðŸ—‘ï¸</button>
       </td>
     </tr>`;
   }).join('');
@@ -124,11 +127,27 @@ async function deleteSelectedOrders() {
       ok++;
     } catch(e) { /* ignora singolo errore */ }
   }
-  showToast(`${ok} ordine${ok>1?'i':''} eliminat${ok>1?'i':'o'} ✅`, 'success');
+  showToast(`${ok} ordine${ok>1?'i':''} eliminat${ok>1?'i':'o'} âœ…`, 'success');
   renderOrdiniTable();
 }
 
-// ═══════════════════════════════════════════════
+function openPreparazioneOrdine(orderId) {
+  const o = state.ordini.find(x => x.id === Number(orderId));
+  if (!o) return;
+  const dt = document.getElementById('filter-magazzino-data');
+  const giro = document.getElementById('filter-magazzino-giro');
+  const stato = document.getElementById('filter-magazzino-stato');
+  if (dt) dt.value = o.data;
+  if (giro && typeof getOrdineGiroEffettivo === 'function') giro.value = getOrdineGiroEffettivo(o) || '';
+  if (stato) stato.value = '';
+  if (typeof goTo === 'function') goTo('magazzino');
+  if (typeof highlightMagazzinoOrder === 'function') {
+    setTimeout(() => highlightMagazzinoOrder(o.id), 150);
+  }
+}
+
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CLIENTI
-// ═══════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
 
