@@ -1235,13 +1235,13 @@
             <thead>
               <tr>
                 <th style="width:36px;padding:8px 6px;"><input type="checkbox" id="th-select-all" onchange="selectAllOrders(this.checked)" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;" title="Seleziona tutti"></th>
-                <th>N°</th>
-                <th>Cliente</th>
-                <th>Data</th>
-                <th>Inserito da</th>
+                <th id="ord-sort-id" data-label="N°" style="cursor:pointer;" onclick="setOrdiniSort('id')">N°</th>
+                <th id="ord-sort-cliente" data-label="Cliente" style="cursor:pointer;" onclick="setOrdiniSort('cliente')">Cliente</th>
+                <th id="ord-sort-data" data-label="Data" style="cursor:pointer;" onclick="setOrdiniSort('data')">Data</th>
+                <th id="ord-sort-inserito" data-label="Inserito da" style="cursor:pointer;" onclick="setOrdiniSort('inserito')">Inserito da</th>
                 <th class="col-lines">Prodotti</th>
-                <th>Stato</th>
-                <th class="col-note">Note</th>
+                <th id="ord-sort-stato" data-label="Stato" style="cursor:pointer;" onclick="setOrdiniSort('stato')">Stato</th>
+                <th id="ord-sort-note" data-label="Note" class="col-note" style="cursor:pointer;" onclick="setOrdiniSort('note')">Note</th>
                 <th>Azioni</th>
               </tr>
             </thead>
@@ -1480,7 +1480,11 @@
         </div>
 
         <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-          <div style="font-weight:600;font-size:15px;">Giro consegne di oggi</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div style="font-weight:600;font-size:15px;">Giro consegne</div>
+            <input type="date" id="autista-data" onchange="renderAutistaView()"
+              style="padding:7px 10px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text1);font-family:inherit;cursor:pointer;">
+          </div>
           <div style="display:flex;gap:8px;">
             <button class="btn" style="background:var(--accent2-light);color:var(--accent2);border:1px solid #f5d7a0;" onclick="openTentataVendita()">🚚 Tentata Vendita</button>
             <button class="btn btn-green" onclick="openNewOrder()">+ Nuovo ordine</button>
@@ -1729,6 +1733,7 @@
             <div style="display:flex;gap:8px;">
               <button class="btn btn-outline" onclick="saveExperimentalConfig()">Salva config</button>
               <button class="btn btn-outline" onclick="loadExperimentalSource()">Aggiorna</button>
+              <button class="btn btn-outline" onclick="copyExperimentalPreview()">Copia anteprima</button>
             </div>
           </div>
           <div style="padding:16px 20px;">
@@ -1880,6 +1885,7 @@
         <div class="field">
           <label>Data Consegna *</label>
           <input type="date" id="ord-data" onchange="renderOrderLines()">
+          <div id="ord-delivery-days-hint" style="margin-top:6px;font-size:12px;color:var(--text2);"></div>
           <div style="margin-top:6px;">
             <select id="ord-giro-override" onchange="updateConsegnatarioDisplay(parseInt(document.getElementById('ord-cliente').value)||null);renderOrderLines();" style="font-size:12px;padding:6px 8px;">
               <option value="">Usa giro cliente</option>
@@ -3037,13 +3043,16 @@ async function clearActivityLog() {
 
 
 function renderAutistaView() {
-  const t = today();
+  const dateInput = document.getElementById('autista-data');
+  if (dateInput && !dateInput.value) dateInput.value = today();
+  const t = dateInput?.value || today();
   const uid = state.currentUser.id;
   const ordini = state.ordini.filter(o => o.autistaDiGiro === uid && o.data === t);
 
   const nome = state.currentUser.nome;
   document.getElementById('autista-title').textContent = `Ciao, ${nome}! 👋`;
-  document.getElementById('autista-sub').textContent = `Giro di oggi — ${new Date().toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long'})}`;
+  const isToday = t === today();
+  document.getElementById('autista-sub').textContent = `${isToday ? 'Giro di oggi' : 'Giro selezionato'} — ${formatDate(t)}`;
 
   const daCons = ordini.filter(o => o.stato !== 'consegnato' && o.stato !== 'annullato').length;
   const cons = ordini.filter(o => o.stato === 'consegnato').length;
@@ -3053,7 +3062,7 @@ function renderAutistaView() {
 
   const container = document.getElementById('autista-orders');
   if (!ordini.length) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🎉</div><p>Nessun ordine assegnato oggi!</p></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🎉</div><p>Nessun ordine assegnato per ${formatDate(t)}.</p></div>`;
     return;
   }
 
@@ -3834,8 +3843,11 @@ function renderEmailNotificationSettings() {
   setChk('email-notify-daily', cfg.daily_summary);
   setVal('email-notify-hour', cfg.daily_summary_hour ?? 18);
   setVal('email-notify-recipients', (cfg.recipients || []).join(', '));
+  const missing = Array.isArray(cfg.smtp_missing) ? cfg.smtp_missing : [];
   const st = document.getElementById('email-notify-status');
-  if (st) st.textContent = cfg.smtp_configured ? `SMTP OK · timezone ${cfg.timezone}` : 'SMTP non configurato sul server';
+  if (st) st.textContent = cfg.smtp_configured
+    ? `SMTP OK · timezone ${cfg.timezone}`
+    : `SMTP non configurato${missing.length ? ` (manca: ${missing.join(', ')})` : ''}`;
   const meta = document.getElementById('email-notify-meta');
   if (meta) meta.textContent = cfg.smtp_from ? `Mittente: ${cfg.smtp_from}` : '';
 }
@@ -3869,6 +3881,11 @@ async function sendEmailNotificationTest() {
     await api('POST', '/api/impostazioni/notifiche-email/test', {});
     showToast('Email di test inviata', 'success');
   } catch (e) {
+    const missing = Array.isArray(e?.payload?.smtp_missing) ? e.payload.smtp_missing : [];
+    if (missing.length) {
+      showToast(`${e.message} — manca: ${missing.join(', ')}`, 'warning');
+      return;
+    }
     showToast(e.message, 'warning');
   }
 }

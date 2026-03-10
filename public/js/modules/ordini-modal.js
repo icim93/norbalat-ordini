@@ -9,7 +9,7 @@ function openNewOrder() {
     return;
   }
   state.editingId = null;
-  orderLines = [{ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: null }];
+  orderLines = [{ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: null, showPesoApprox: false }];
   document.getElementById('modal-ordine-title').textContent = 'Nuovo Ordine';
   document.getElementById('ord-data').value = today();
   document.getElementById('ord-stato').value = 'attesa';
@@ -42,6 +42,7 @@ function openEditOrder(id) {
     pesoEffettivo: l.pesoEffettivo||null,
     preparato: !!l.preparato,
     lotto: l.lotto || '',
+    showPesoApprox: false,
   }));
   document.getElementById('modal-ordine-title').textContent = `Modifica Ordine #${id}`;
   document.getElementById('ord-data').value = o.data;
@@ -375,8 +376,82 @@ function resolveDefaultLinePrice(line, clienteId, dataOrdine) {
   return 0;
 }
 
+function getGiroConsegnaDays(giroName) {
+  const giro = String(giroName || '').trim();
+  if (!giro) return [];
+  const conf = (state.giriCalendario || []).find(g => String(g.giro || '').trim().toLowerCase() === giro.toLowerCase());
+  if (!conf || !Array.isArray(conf.giorni)) return [];
+  return conf.giorni.filter(n => Number.isInteger(n) && n >= 0 && n <= 6);
+}
+
+function renderOrdineDeliveryDaysHint() {
+  const box = document.getElementById('ord-delivery-days-hint');
+  if (!box) return;
+  const clienteId = parseInt(document.getElementById('ord-cliente')?.value || acState.cliente?.value || 0, 10) || null;
+  const cliente = clienteId ? getCliente(clienteId) : null;
+  const giroOverride = (document.getElementById('ord-giro-override')?.value || '').trim();
+  const giro = giroOverride || cliente?.giro || '';
+  const days = getGiroConsegnaDays(giro);
+  const labels = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
+  const selectedDate = document.getElementById('ord-data')?.value || '';
+  const selectedDay = selectedDate ? new Date(selectedDate + 'T00:00:00').getDay() : null;
+
+  if (!giro) {
+    box.innerHTML = '<span style="color:var(--text3);">Seleziona cliente o giro per vedere i giorni di consegna.</span>';
+    return;
+  }
+  if (!days.length) {
+    box.innerHTML = `<span style="color:var(--text3);">Nessun giorno configurato per il giro <b>${giro}</b>.</span>`;
+    return;
+  }
+  const chips = labels.map((lbl, idx) => {
+    const isDelivery = days.includes(idx);
+    const isSelected = selectedDay === idx;
+    const bg = isDelivery ? (isSelected ? 'var(--accent)' : 'var(--accent-light)') : 'var(--surface2)';
+    const color = isDelivery ? (isSelected ? '#fff' : 'var(--accent)') : 'var(--text3)';
+    const border = isSelected ? '2px solid var(--accent)' : `1px solid ${isDelivery ? 'var(--accent)' : 'var(--border)'}`;
+    return `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:34px;padding:3px 6px;border-radius:999px;background:${bg};color:${color};border:${border};font-weight:${isDelivery ? 600 : 500};">${lbl}</span>`;
+  }).join(' ');
+  box.innerHTML = `Consegna giro <b>${giro}</b>: ${chips}`;
+}
+
+function parseKgPerUnitaFromPackaging(packagingRaw) {
+  const src = String(packagingRaw || '').toLowerCase().replace(',', '.').replace(/\s+/g, ' ');
+  if (!src) return null;
+  const m1 = src.match(/(\d+(?:\.\d+)?)\s*(?:pz|pezzo|pezzi|forma|forme|rete|ct|cartone|cartoni)\s*=\s*(\d+(?:\.\d+)?)\s*kg/);
+  if (m1) {
+    const units = Number(m1[1]);
+    const kg = Number(m1[2]);
+    if (Number.isFinite(units) && units > 0 && Number.isFinite(kg) && kg > 0) return kg / units;
+  }
+  const m2 = src.match(/(?:1\s*)?(?:pz|pezzo|forma|pezzi|forme|rete|ct|cartone|cartoni)?\s*=?\s*(\d+(?:\.\d+)?)\s*kg/);
+  if (m2) {
+    const kg = Number(m2[1]);
+    if (Number.isFinite(kg) && kg > 0) return kg;
+  }
+  return null;
+}
+
+function estimateLineKg(line) {
+  if (!line?.prodId) return null;
+  const p = getProdotto(line.prodId);
+  if (!p?.id) return null;
+  const kgPer = parseKgPerUnitaFromPackaging(p.packaging || '');
+  const qty = Number(line.qty || 0);
+  if (!Number.isFinite(kgPer) || !Number.isFinite(qty) || qty <= 0) return null;
+  return Math.round(kgPer * qty * 100) / 100;
+}
+
+function toggleOrderLinePesoApprox(i) {
+  const line = orderLines[i];
+  if (!line) return;
+  line.showPesoApprox = !line.showPesoApprox;
+  renderOrderLines();
+}
+
 function renderOrderLines() {
   const container = document.getElementById('ord-lines-container');
+  renderOrdineDeliveryDaysHint();
   const clienteId = parseInt(document.getElementById('ord-cliente')?.value || acState.cliente?.value || 0) || null;
   const dataOrdine = document.getElementById('ord-data')?.value || today();
   let totale = 0;
@@ -386,6 +461,8 @@ function renderOrderLines() {
     const umOpts = ['Pezzi','Cartoni','Litri','Kg','Pedana'];
     const curUM = l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi');
     const isPedana = curUM === 'Pedana';
+    const showPesoApprox = !!l.showPesoApprox;
+    const approxKg = estimateLineKg(l);
     const prezzoListino = p ? getListinoPrezzo(p.id, clienteId, dataOrdine) : null;
     const prezzo = Number.isFinite(Number(l.prezzoUnitario)) ? Number(l.prezzoUnitario) : null;
     const qty = Number(l.qty || 0);
@@ -406,9 +483,20 @@ function renderOrderLines() {
             style="width:100%;">
           <div class="ac-dropdown" id="ac-prod-dd-${i}"></div>
         </div>
-        <input type="number" class="qty-input" value="${l.qty||1}" min="1"
-          onchange="orderLines[${i}].qty=parseInt(this.value)||1;renderOrderLines()"
-          placeholder="Qta" style="width:56px;flex-shrink:0;">
+        ${showPesoApprox
+          ? `<input type="text" value="${approxKg !== null ? `${approxKg.toFixed(2)} kg ca.` : 'n.d.'}" readonly
+              title="${approxKg !== null ? `Stima da packaging: ${p?.packaging || 'n.d.'}` : 'Packaging non leggibile per stima kg'}"
+              style="width:96px;flex-shrink:0;font-size:12px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);">`
+          : `<input type="number" class="qty-input" value="${l.qty||1}" min="1"
+              onchange="orderLines[${i}].qty=parseInt(this.value)||1;renderOrderLines()"
+              placeholder="Qta" style="width:56px;flex-shrink:0;">`
+        }
+        <button class="btn btn-outline btn-sm" type="button"
+          onclick="toggleOrderLinePesoApprox(${i})"
+          title="${showPesoApprox ? 'Mostra quantità' : 'Mostra peso stimato'}"
+          style="padding:5px 8px;line-height:1;flex-shrink:0;${showPesoApprox ? 'border-color:var(--accent);color:var(--accent);' : ''}">
+          ${showPesoApprox ? 'Qta' : 'Kg≈'}
+        </button>
         <select
           onchange="orderLines[${i}].unitaMisura=this.value;orderLines[${i}].isPedana=(this.value==='Pedana');orderLines[${i}]._umPersonalizzata=true;renderOrderLines()"
           style="flex-shrink:0;font-size:12px;padding:5px 6px;border:1.5px solid ${isPedana ? 'var(--accent)' : 'var(--border)'};border-radius:6px;background:${isPedana ? 'var(--accent-light)' : 'var(--surface2)'};color:var(--text1);cursor:pointer;max-width:92px;">
@@ -430,6 +518,7 @@ function renderOrderLines() {
         </div>
       </div>
       ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">${p.packaging}${isPedana ? ' - PEDANA INTERA' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">PEDANA INTERA</div>` : '')}
+      ${approxKg !== null ? `<div style="font-size:11px;color:var(--accent);padding-left:2px;">Stima peso: <b>${approxKg.toFixed(2)} kg</b></div>` : ''}
       ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">${p.note}</div>` : ''}
       ${p ? `<div style="font-size:11px;color:var(--text2);padding-left:2px;">Listino: ${prezzoListino !== null ? eur(prezzoListino) : 'n.d.'}${subtot !== null ? ` - Subtotale: <b>${eur(subtot)}</b>` : ''}</div>` : ''}
       <input type="text" value="${l.notaRiga||''}"
@@ -615,7 +704,7 @@ function acProdKey(e, i) {
 }
 
 function addOrderLine() {
-  orderLines.push({ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: null });
+  orderLines.push({ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: null, showPesoApprox: false });
   renderOrderLines();
   // Focus sul nuovo campo
   setTimeout(() => document.getElementById(`ac-prod-input-${orderLines.length-1}`)?.focus(), 50);
@@ -647,6 +736,7 @@ function updateConsegnatarioDisplay(clienteId) {
     box.style.color = 'var(--text3)';
     if (hidden) hidden.value = '';
   }
+  renderOrdineDeliveryDaysHint();
 }
 
 function populateOrderSelects(clienteId, agenteId) {

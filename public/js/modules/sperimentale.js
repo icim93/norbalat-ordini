@@ -12,7 +12,7 @@
   async function renderSperimentale() {
     const pre = document.getElementById('experimental-preview');
     if (pre && !pre.textContent.trim()) {
-      pre.textContent = 'Premi "Aggiorna" per acquisire i dati.';
+      pre.textContent = 'Premi "Aggiorna" per acquisire i dati dalla sorgente configurata.';
     }
     await loadExperimentalConfig();
   }
@@ -43,8 +43,18 @@
       if (mode) qp.push(`mode=${encodeURIComponent(mode)}`);
       const q = qp.length ? `?${qp.join('&')}` : '';
       const r = await window.api('GET', `/api/experimental/source${q}`);
-      if (meta) meta.textContent = `${r.source || ''} · ${r.content_type || ''} · mode ${r.mode || 'auto'}`;
-      if (pre) pre.textContent = typeof r.preview === 'string' ? r.preview : JSON.stringify(r.preview, null, 2);
+      const previewRaw = typeof r.preview === 'string' ? r.preview : JSON.stringify(r.preview, null, 2);
+      let previewOut = previewRaw;
+      if ((r.mode === 'json' || r.content_type?.includes('json') || mode === 'json') && typeof previewRaw === 'string') {
+        try {
+          previewOut = JSON.stringify(JSON.parse(previewRaw), null, 2);
+        } catch (_) {}
+      }
+      const now = new Date();
+      const size = String(previewOut || '').length;
+      if (meta) meta.textContent = `${r.source || ''} · ${r.content_type || ''} · mode ${r.mode || 'auto'} · ${size} caratteri · ${now.toLocaleString('it-IT')}`;
+      if (pre) pre.textContent = previewOut;
+      window.state.experimentalLastPreview = previewOut;
     } catch (e) {
       if (meta) meta.textContent = `Errore: ${e.message}`;
       if (pre) pre.textContent = '';
@@ -52,7 +62,22 @@
     }
   }
 
+  async function copyExperimentalPreview() {
+    const txt = document.getElementById('experimental-preview')?.textContent || '';
+    if (!txt.trim()) {
+      if (typeof window.showToast === 'function') window.showToast('Nessuna anteprima da copiare', 'warning');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(txt);
+      if (typeof window.showToast === 'function') window.showToast('Anteprima copiata negli appunti', 'success');
+    } catch (_) {
+      if (typeof window.showToast === 'function') window.showToast('Copia non riuscita', 'warning');
+    }
+  }
+
   window.renderSperimentale = renderSperimentale;
   window.saveExperimentalConfig = saveExperimentalConfig;
   window.loadExperimentalSource = loadExperimentalSource;
+  window.copyExperimentalPreview = copyExperimentalPreview;
 })();

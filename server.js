@@ -20,6 +20,35 @@ const cors     = require('cors');
 const nodemailer = require('nodemailer');
 const { z } = require('zod');
 const path     = require('path');
+const fs = require('fs');
+
+function stripEnvQuotes(v = '') {
+  const s = String(v).trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
+function loadLocalEnvFiles() {
+  const files = [path.join(__dirname, '.env'), path.join(__dirname, '.env.local')];
+  for (const file of files) {
+    if (!fs.existsSync(file)) continue;
+    const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+    for (const raw of lines) {
+      const line = String(raw || '').trim();
+      if (!line || line.startsWith('#')) continue;
+      const eq = line.indexOf('=');
+      if (eq <= 0) continue;
+      const key = line.slice(0, eq).trim();
+      const value = stripEnvQuotes(line.slice(eq + 1));
+      if (!key) continue;
+      if (process.env[key] === undefined) process.env[key] = value;
+    }
+  }
+}
+
+loadLocalEnvFiles();
 
 const PORT        = process.env.PORT       || 3000;
 const JWT_SECRET  = process.env.JWT_SECRET || 'norbalat-secret-change-in-production-2026';
@@ -111,6 +140,14 @@ function parseEmailList(raw) {
     .filter(Boolean);
 }
 
+function getSmtpMissingFields() {
+  const missing = [];
+  if (!SMTP_HOST) missing.push('SMTP_HOST');
+  if (!SMTP_PORT) missing.push('SMTP_PORT');
+  if (!SMTP_FROM) missing.push('SMTP_FROM');
+  return missing;
+}
+
 function getDefaultEmailNotificationSettings() {
   return {
     enabled: !!(SMTP_HOST && SMTP_FROM && parseEmailList(NOTIFY_EMAIL_TO).length),
@@ -161,7 +198,7 @@ async function saveEmailNotificationSettings(next) {
 }
 
 function isSmtpConfigured() {
-  return !!(SMTP_HOST && SMTP_PORT && SMTP_FROM);
+  return getSmtpMissingFields().length === 0;
 }
 
 function getSmtpTransporter() {
@@ -2733,9 +2770,11 @@ app.put('/api/giri/:id', authMiddleware, requireRole('admin'), async (req, res) 
 app.get('/api/impostazioni/notifiche-email', authMiddleware, requireRole('admin'), async (req, res) => {
   try {
     const cfg = await getEmailNotificationSettings();
+    const smtpMissing = getSmtpMissingFields();
     res.json({
       ...cfg,
-      smtp_configured: isSmtpConfigured(),
+      smtp_configured: smtpMissing.length === 0,
+      smtp_missing: smtpMissing,
       smtp_from: SMTP_FROM || '',
       timezone: NOTIFY_TIMEZONE,
     });
@@ -2767,7 +2806,8 @@ app.put('/api/impostazioni/notifiche-email', authMiddleware, requireRole('admin'
     );
     res.json({
       ...saved,
-      smtp_configured: isSmtpConfigured(),
+      smtp_configured: getSmtpMissingFields().length === 0,
+      smtp_missing: getSmtpMissingFields(),
       smtp_from: SMTP_FROM || '',
       timezone: NOTIFY_TIMEZONE,
     });
@@ -2788,7 +2828,10 @@ app.post('/api/impostazioni/notifiche-email/test', authMiddleware, requireRole('
       html: `<div style="font-family:Arial,sans-serif;"><h3>Test notifiche</h3><p>Invio riuscito alle <b>${now}</b></p></div>`,
     });
     if (sent.skipped && sent.reason === 'smtp_not_configured') {
-      return res.status(400).json({ error: 'SMTP non configurato sul server (.env)' });
+      return res.status(400).json({
+        error: 'SMTP non configurato sul server (.env)',
+        smtp_missing: getSmtpMissingFields(),
+      });
     }
     res.json({ ok: true });
   } catch (e) {

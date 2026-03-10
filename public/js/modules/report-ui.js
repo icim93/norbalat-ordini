@@ -1,4 +1,5 @@
 function initReportDropdowns() {
+  const defaultOpen = new Set(['chart-week', 'chart-agenti']);
   const defs = [
     { contentId: 'chart-week', toggleEl: () => document.querySelector('#chart-week')?.previousElementSibling },
     { contentId: 'chart-agenti', toggleEl: () => document.querySelector('#chart-agenti')?.previousElementSibling },
@@ -13,7 +14,7 @@ function initReportDropdowns() {
     const content = document.getElementById(def.contentId);
     const toggle = def.toggleEl();
     if (!content || !toggle) return;
-    if (!content.dataset.reportOpen) content.dataset.reportOpen = '1';
+    if (!content.dataset.reportOpen) content.dataset.reportOpen = defaultOpen.has(def.contentId) ? '1' : '0';
     if (!toggle.dataset.reportReady) {
       toggle.dataset.reportReady = '1';
       toggle.style.cursor = 'pointer';
@@ -23,11 +24,11 @@ function initReportDropdowns() {
         content.dataset.reportOpen = willOpen ? '1' : '0';
         content.style.display = willOpen ? '' : 'none';
         const ind = toggle.querySelector('.report-toggle-ind');
-        if (ind) ind.textContent = willOpen ? '?' : '?';
+        if (ind) ind.textContent = willOpen ? '▾' : '▸';
       };
       const ind = document.createElement('span');
       ind.className = 'report-toggle-ind';
-      ind.textContent = '?';
+      ind.textContent = content.dataset.reportOpen === '1' ? '▾' : '▸';
       ind.style.marginLeft = '8px';
       ind.style.fontSize = '12px';
       ind.style.color = 'var(--text3)';
@@ -39,11 +40,115 @@ function initReportDropdowns() {
 
 const reportDataCache = {};
 
+function isMagazzinoReportOnly() {
+  return state.currentUser?.ruolo === 'magazzino';
+}
+
+function setAllReportSections(open) {
+  const ids = ['chart-week', 'chart-agenti', 'report-top-prodotti', 'report-giri', 'report-clienti-inattivi', 'report-agenti-clienti', 'report-clienti-table', 'activity-log-list'];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.dataset.reportOpen = open ? '1' : '0';
+    el.style.display = open ? '' : 'none';
+    const toggle = el.previousElementSibling || el.closest('.card')?.querySelector('.card-header');
+    const ind = toggle?.querySelector('.report-toggle-ind');
+    if (ind) ind.textContent = open ? '▾' : '▸';
+  });
+}
+
+function toggleReportStatsVisibility(showStats) {
+  const page = document.getElementById('page-report');
+  if (!page) return;
+  page.querySelectorAll('.report-grid').forEach((grid) => {
+    grid.style.display = showStats ? '' : 'none';
+  });
+  const filters = document.getElementById('report-filters-card');
+  if (filters) filters.style.display = showStats ? '' : 'none';
+}
+
+function ensureMagazzinoPdfCard() {
+  const page = document.getElementById('page-report');
+  if (!page) return null;
+  let card = document.getElementById('report-magazzino-pdf-card');
+  if (!card) {
+    card = document.createElement('div');
+    card.id = 'report-magazzino-pdf-card';
+    card.className = 'card';
+    card.style.maxWidth = '980px';
+    card.style.marginTop = '12px';
+    card.innerHTML = `
+      <div class="card-header">
+        <div class="card-title">PDF Ordini Magazzino</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="renderMagazzinoPdfPreviewInline()">Aggiorna anteprima</button>
+          <button class="btn btn-green btn-sm" onclick="openPDFGiornaliero()">Apri pannello PDF</button>
+        </div>
+      </div>
+      <div id="report-magazzino-pdf-preview" style="padding:12px 16px;color:var(--text2);font-size:13px;">Anteprima non caricata.</div>
+    `;
+    page.appendChild(card);
+  }
+  card.style.display = '';
+  return card;
+}
+
+function hideMagazzinoPdfCard() {
+  const card = document.getElementById('report-magazzino-pdf-card');
+  if (card) card.style.display = 'none';
+}
+
+function renderMagazzinoPdfPreviewInline() {
+  const previewBox = document.getElementById('report-magazzino-pdf-preview');
+  if (!previewBox) return;
+  const dataEl = document.getElementById('pdf-data');
+  if (dataEl) dataEl.value = today();
+  const mag = document.querySelector('input[name="pdf-tipo"][value="magazzino"]');
+  if (mag) mag.checked = true;
+  if (typeof updatePDFPreview === 'function') updatePDFPreview();
+  const src = document.getElementById('pdf-preview');
+  previewBox.innerHTML = src?.innerHTML || '<span style="color:var(--text3);">Nessuna anteprima disponibile.</span>';
+}
+
+function ensureReportScorteCard() {
+  const page = document.getElementById('page-report');
+  if (!page) return;
+  let card = document.getElementById('report-scorte-card');
+  if (!card) {
+    card = document.createElement('div');
+    card.id = 'report-scorte-card';
+    card.className = 'card';
+    card.style.marginBottom = '16px';
+    card.innerHTML = `
+      <div class="card-header">
+        <div class="card-title">Scorte magazzino in esaurimento</div>
+      </div>
+      <div id="report-scorte-list" style="padding:10px 16px;color:var(--text2);font-size:13px;"></div>
+    `;
+    const firstGrid = page.querySelector('.report-grid');
+    if (firstGrid) page.insertBefore(card, firstGrid);
+    else page.appendChild(card);
+  }
+  card.style.display = '';
+  const list = document.getElementById('report-scorte-list');
+  if (!list) return;
+  const active = (state.scorte || []).filter(s => s.stato === 'attiva');
+  if (!active.length) {
+    list.innerHTML = '<span style="color:var(--text3);">Nessuna scorta in esaurimento.</span>';
+    return;
+  }
+  list.innerHTML = active.map((s) => {
+    const qty = Number(s.quantita_rimanente || 0);
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border);"><b>${s.prodotto_nome}</b> - ${qty} ${s.unita_misura || ''}</div>`;
+  }).join('');
+}
+
 function reportFilterStorageKey() {
   return 'report_filters_' + (state.currentUser?.id || 'default');
 }
 
 function ensureReportToolbar() {
+  if (isMagazzinoReportOnly()) return;
   const page = document.getElementById('page-report');
   if (!page) return;
   const existing = document.getElementById('report-filters-card');
@@ -86,6 +191,8 @@ function ensureReportToolbar() {
         <select id="report-filter-agente" onchange="renderReport()"><option value="">Tutti</option></select>
       </div>
       <button class="btn btn-outline btn-sm" onclick="resetReportFilters()">Reset</button>
+      <button class="btn btn-outline btn-sm" onclick="setAllReportSections(false)">Chiudi tutte</button>
+      <button class="btn btn-outline btn-sm" onclick="setAllReportSections(true)">Apri tutte</button>
     </div>`;
   page.insertBefore(card, firstGrid);
   populateReportAgentFilter();
@@ -205,10 +312,25 @@ function exportReportCsv(section) {
 }
 
 async function renderReport() {
+  if (isMagazzinoReportOnly()) {
+    toggleReportStatsVisibility(false);
+    ensureMagazzinoPdfCard();
+    renderMagazzinoPdfPreviewInline();
+    return;
+  }
+
+  toggleReportStatsVisibility(true);
+  hideMagazzinoPdfCard();
   ensureReportToolbar();
   ensureReportExportButtons();
   populateReportAgentFilter();
   initReportDropdowns();
+  if (state.currentUser?.ruolo === 'direzione' || state.currentUser?.ruolo === 'admin') {
+    ensureReportScorteCard();
+  } else {
+    const scCard = document.getElementById('report-scorte-card');
+    if (scCard) scCard.style.display = 'none';
+  }
 
   if (state.currentUser?.ruolo === 'admin' || state.currentUser?.ruolo === 'direzione' || state.currentUser?.ruolo === 'amministrazione') {
     try {

@@ -39,12 +39,67 @@
 // ORDINI TABLE
 // ================================================
 
+let ordiniSort = { key: 'id', dir: 'desc' };
+
+function setOrdiniSort(key) {
+  if (!key) return;
+  if (ordiniSort.key === key) ordiniSort.dir = ordiniSort.dir === 'asc' ? 'desc' : 'asc';
+  else ordiniSort = { key, dir: key === 'id' ? 'desc' : 'asc' };
+  renderOrdiniTable();
+}
+
+function getOrdineSortValue(o, key) {
+  if (key === 'id') return Number(o.id || 0);
+  if (key === 'cliente') return (getCliente(o.clienteId)?.nome || '').toLowerCase();
+  if (key === 'data') return String(o.data || '');
+  if (key === 'inserito') {
+    const u = state.utenti.find(x => x.id === o.insertedBy);
+    return ((u?.nome || '') + ' ' + (u?.cognome || '')).trim().toLowerCase();
+  }
+  if (key === 'stato') return String(o.stato || '').toLowerCase();
+  if (key === 'note') return String(o.note || '').toLowerCase();
+  return Number(o.id || 0);
+}
+
+function applyOrdiniSort(list) {
+  const dir = ordiniSort.dir === 'asc' ? 1 : -1;
+  return [...list].sort((a, b) => {
+    const av = getOrdineSortValue(a, ordiniSort.key);
+    const bv = getOrdineSortValue(b, ordiniSort.key);
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+    return String(av).localeCompare(String(bv), 'it', { sensitivity: 'base' }) * dir;
+  });
+}
+
+function ordiniSortIcon(key) {
+  if (ordiniSort.key !== key) return '↕';
+  return ordiniSort.dir === 'asc' ? '↑' : '↓';
+}
+
+function renderOrdiniSortHeaders() {
+  const map = {
+    id: document.getElementById('ord-sort-id'),
+    cliente: document.getElementById('ord-sort-cliente'),
+    data: document.getElementById('ord-sort-data'),
+    inserito: document.getElementById('ord-sort-inserito'),
+    stato: document.getElementById('ord-sort-stato'),
+    note: document.getElementById('ord-sort-note'),
+  };
+  Object.entries(map).forEach(([key, el]) => {
+    if (!el) return;
+    const label = el.dataset.label || el.textContent || '';
+    el.innerHTML = `${label} <span style="font-size:11px;color:var(--text3);">${ordiniSortIcon(key)}</span>`;
+  });
+}
+
 function renderOrdiniTable() {
   const q = (document.getElementById('search-ordini')?.value || '').toLowerCase();
   const filterStato = document.getElementById('filter-stato')?.value || '';
-  let list = [...state.ordini].sort((a,b) => b.id-a.id);
+  let list = [...state.ordini];
   if (q) list = list.filter(o => getCliente(o.clienteId).nome.toLowerCase().includes(q) || getAgente(o.agenteId).nomeCompleto.toLowerCase().includes(q));
   if (filterStato) list = list.filter(o => o.stato === filterStato);
+  list = applyOrdiniSort(list);
+  renderOrdiniSortHeaders();
 
   // Toolbar bulk
   const toolbar = document.getElementById('bulk-toolbar');
