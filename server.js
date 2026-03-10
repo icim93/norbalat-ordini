@@ -72,6 +72,9 @@ const NOTIFY_EMAIL_TO = process.env.NOTIFY_EMAIL_TO || '';
 const NOTIFY_TIMEZONE = process.env.NOTIFY_TIMEZONE || 'Europe/Rome';
 const EXPERIMENTAL_SOURCE_URL = process.env.EXPERIMENTAL_SOURCE_URL || '';
 const CLAL_BURRO_ZANGOLATO_URL = 'https://www.clal.it/index.php?section=burro_milano#zangolato';
+const EXPERIMENTAL_CLAL_SOURCE_KEY = 'burro_milano_zangolato';
+const EXPERIMENTAL_TIMEZONE = process.env.EXPERIMENTAL_TIMEZONE || 'Europe/Rome';
+const EXPERIMENTAL_AUTO_IMPORT_CHECK_MS = Math.max(5 * 60 * 1000, Number(process.env.EXPERIMENTAL_AUTO_IMPORT_CHECK_MS || 15 * 60 * 1000));
 
 const app  = express();
 const pool = new Pool({ connectionString: DATABASE_URL });
@@ -198,6 +201,39 @@ async function saveEmailNotificationSettings(next) {
     ['email_notifications', JSON.stringify(payload)]
   );
   return payload;
+}
+
+function getExperimentalAutomationDefaults() {
+  return {
+    source_url: CLAL_BURRO_ZANGOLATO_URL,
+    bulletin_week_key: '',
+    last_attempt_at: '',
+    last_success_at: '',
+  };
+}
+
+async function getExperimentalAutomationSettings() {
+  const defaults = getExperimentalAutomationDefaults();
+  try {
+    const { rows } = await q('SELECT value FROM app_settings WHERE key=$1', ['experimental_automation']);
+    if (!rows.length) return defaults;
+    const saved = rows[0].value && typeof rows[0].value === 'object' ? rows[0].value : {};
+    return { ...defaults, ...saved };
+  } catch (_) {
+    return defaults;
+  }
+}
+
+async function saveExperimentalAutomationSettings(next) {
+  const merged = { ...(await getExperimentalAutomationSettings()), ...next };
+  await q(
+    `INSERT INTO app_settings (key,value,updated_at)
+     VALUES ($1,$2::jsonb,NOW())
+     ON CONFLICT (key)
+     DO UPDATE SET value=$2::jsonb, updated_at=NOW()`,
+    ['experimental_automation', JSON.stringify(merged)]
+  );
+  return merged;
 }
 
 function isSmtpConfigured() {
@@ -331,6 +367,116 @@ function startEmailNotificationsScheduler() {
   setInterval(() => {
     maybeSendDailyPendingSummary().catch(() => {});
   }, 60 * 1000);
+}
+
+function getRomeWeekWindowInfo(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: EXPERIMENTAL_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.filter(p => p.type !== 'literal').map(p => [p.type, p.value]));
+  const year = Number(map.year);
+  const month = Number(map.month);
+  const day = Number(map.day);
+  const hour = Number(map.hour);
+  const minute = Number(map.minute);
+  const weekday = String(map.weekday || '').toLowerCase();
+  const mondayWindow = weekday.startsWith('mon') && hour >= 15 && hour < 17;
+  const mondayDate = `${map.year}-${map.month}-${map.day}`;
+  const weekKey = `${mondayDate}`;
+  return { year, month, day, hour, minute, weekday, mondayWindow, mondayDate, weekKey };
+}
+
+function getNextClalBulletinWindow(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: EXPERIMENTAL_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.filter(p => p.type !== 'literal').map(p => [p.type, p.value]));
+  const weekdayMap = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+  const currentDow = weekdayMap[String(map.weekday || '').toLowerCase().slice(0, 3)] ?? 0;
+  const currentMinutes = (Number(map.hour) * 60) + Number(map.minute);
+  let addDays = (1 - currentDow + 7) % 7;
+  if (addDays === 0 && currentMinutes >= (17 * 60)) addDays = 7;
+  const base = new Date(Date.UTC(Number(map.year), Number(map.month) - 1, Number(map.day), 12, 0, 0));
+  base.setUTCDate(base.getUTCDate() + addDays);
+  const y = base.getUTCFullYear();
+  const m = String(base.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(base.getUTCDate()).padStart(2, '0');
+  return {
+    date_iso: `${y}-${m}-${d}`,
+    label: `lunedi ${d}/${m}/${y} 15:00-16:59`,
+    timezone: EXPERIMENTAL_TIMEZONE,
+  };
+}
+
+async function autoImportClalZangolato() {
+  try {
+    const result = await fetchClalZangolatoSnapshot({
+      sourceUrl: CLAL_BURRO_ZANGOLATO_URL,
+      persist: true,
+      userId: null,
+    });
+    console.log(`[experimental] CLAL zangolato aggiornato: ${result.rows_count} righe, nuovi snapshot ${result.inserted_count}`);
+  } catch (e) {
+    console.warn(`[experimental] auto import CLAL fallito: ${e.message}`);
+  }
+}
+
+async function maybeAutoImportClalZangolato() {
+  const now = new Date();
+  const info = getRomeWeekWindowInfo(now);
+  if (!info.mondayWindow) return;
+  const state = await getExperimentalAutomationSettings();
+  if (String(state.bulletin_week_key || '') === info.weekKey) return;
+
+  await saveExperimentalAutomationSettings({
+    source_url: CLAL_BURRO_ZANGOLATO_URL,
+    bulletin_week_key: info.weekKey,
+    last_attempt_at: now.toISOString(),
+  });
+
+  try {
+    const result = await fetchClalZangolatoSnapshot({
+      sourceUrl: CLAL_BURRO_ZANGOLATO_URL,
+      persist: true,
+      userId: null,
+    });
+    await saveExperimentalAutomationSettings({
+      source_url: CLAL_BURRO_ZANGOLATO_URL,
+      bulletin_week_key: info.weekKey,
+      last_attempt_at: now.toISOString(),
+      last_success_at: new Date().toISOString(),
+    });
+    console.log(`[experimental] bollettino CLAL importato (${info.weekKey}): ${result.rows_count} righe, nuovi snapshot ${result.inserted_count}`);
+  } catch (e) {
+    await saveExperimentalAutomationSettings({
+      source_url: CLAL_BURRO_ZANGOLATO_URL,
+      bulletin_week_key: '',
+      last_attempt_at: now.toISOString(),
+    });
+    console.warn(`[experimental] import bollettino CLAL fallito (${info.weekKey}): ${e.message}`);
+  }
+}
+
+function startExperimentalScheduler() {
+  maybeAutoImportClalZangolato().catch(() => {});
+  setInterval(() => {
+    maybeAutoImportClalZangolato().catch(() => {});
+  }, EXPERIMENTAL_AUTO_IMPORT_CHECK_MS);
 }
 
 // ─── SCHEMA ──────────────────────────────────────────────────────
@@ -3066,6 +3212,23 @@ async function fetchExternalText(url) {
 async function saveClalZangolatoSnapshot({ sourceUrl, parsed, userId }) {
   const inserted = [];
   for (const row of (parsed.rows || [])) {
+    const existing = await q(
+      `SELECT id
+       FROM experimental_clal_quotes
+       WHERE source_key=$1
+         AND ref_date IS NOT DISTINCT FROM $2
+         AND min_price IS NOT DISTINCT FROM $3
+         AND max_price IS NOT DISTINCT FROM $4
+       LIMIT 1`,
+      [
+        EXPERIMENTAL_CLAL_SOURCE_KEY,
+        row.date_iso || null,
+        row.min_price ?? null,
+        row.max_price ?? null,
+      ]
+    );
+    if (existing.rows.length) continue;
+
     const payload = {
       row_index: row.row_index,
       prices: row.prices || [],
@@ -3078,7 +3241,7 @@ async function saveClalZangolatoSnapshot({ sourceUrl, parsed, userId }) {
        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)
        RETURNING id,fetched_at`,
       [
-        'burro_milano_zangolato',
+        EXPERIMENTAL_CLAL_SOURCE_KEY,
         sourceUrl,
         row.date_iso || null,
         String(row.date_raw || ''),
@@ -3091,6 +3254,43 @@ async function saveClalZangolatoSnapshot({ sourceUrl, parsed, userId }) {
     inserted.push(rows[0]);
   }
   return inserted;
+}
+
+async function fetchClalZangolatoSnapshot({ sourceUrl = CLAL_BURRO_ZANGOLATO_URL, persist = false, userId = null } = {}) {
+  const html = await fetchExternalText(String(sourceUrl || CLAL_BURRO_ZANGOLATO_URL).trim());
+  const parsed = parseClalBurroZangolatoFromHtml(html);
+  if (!parsed.rows.length) {
+    const err = new Error('Nessuna riga BURRO ZANGOLATO trovata nella sorgente');
+    err.statusCode = 422;
+    err.payload = {
+      source: sourceUrl,
+      scanned_rows: parsed.total_rows_scanned,
+    };
+    throw err;
+  }
+
+  let inserted = [];
+  if (persist) {
+    inserted = await saveClalZangolatoSnapshot({ sourceUrl, parsed, userId });
+  }
+
+  const latest = parsed.rows[0] || null;
+  return {
+    ok: true,
+    source: sourceUrl,
+    fetched_at: parsed.scraped_at,
+    total_rows_scanned: parsed.total_rows_scanned,
+    rows_count: parsed.rows.length,
+    latest: latest ? {
+      date_raw: latest.date_raw,
+      date_iso: latest.date_iso,
+      min_price: latest.min_price,
+      max_price: latest.max_price,
+    } : null,
+    rows: parsed.rows,
+    persisted: persist,
+    inserted_count: inserted.length,
+  };
 }
 
 async function getExperimentalSourceConfig() {
@@ -3211,47 +3411,26 @@ app.get('/api/experimental/clal/zangolato', authMiddleware, requireRole('admin',
     const sourceUrl = String(parsedQ.data.url || CLAL_BURRO_ZANGOLATO_URL).trim();
     const persistRaw = parsedQ.data.persist;
     const persist = persistRaw === true || String(persistRaw || '').toLowerCase() === 'true' || String(persistRaw || '') === '1';
-
-    const html = await fetchExternalText(sourceUrl);
-    const parsed = parseClalBurroZangolatoFromHtml(html);
-    if (!parsed.rows.length) {
-      return res.status(422).json({
-        error: 'Nessuna riga BURRO ZANGOLATO trovata nella sorgente',
-        source: sourceUrl,
-        scanned_rows: parsed.total_rows_scanned,
-      });
-    }
-
-    let inserted = [];
+    const result = await fetchClalZangolatoSnapshot({
+      sourceUrl,
+      persist,
+      userId: req.user?.id || null,
+    });
     if (persist) {
-      inserted = await saveClalZangolatoSnapshot({ sourceUrl, parsed, userId: req.user?.id || null });
       await logDB(
         req.user.id,
         `${req.user.nome} ${req.user.cognome || ''}`.trim(),
         'Sperimentale CLAL',
-        `Snapshot zangolato: ${parsed.rows.length} righe`
+        `Snapshot zangolato: ${result.rows_count} righe, nuovi record ${result.inserted_count}`
       );
     }
-
-    const latest = parsed.rows[0];
-    res.json({
-      ok: true,
-      source: sourceUrl,
-      fetched_at: parsed.scraped_at,
-      total_rows_scanned: parsed.total_rows_scanned,
-      rows_count: parsed.rows.length,
-      latest: latest ? {
-        date_raw: latest.date_raw,
-        date_iso: latest.date_iso,
-        min_price: latest.min_price,
-        max_price: latest.max_price,
-      } : null,
-      rows: parsed.rows,
-      persisted: persist,
-      inserted_count: inserted.length,
-    });
+    res.json(result);
   } catch (e) {
-    res.status(500).json({ error: e.name === 'AbortError' ? 'Timeout sorgente CLAL' : e.message });
+    const status = e.statusCode || 500;
+    res.status(status).json({
+      error: e.name === 'AbortError' ? 'Timeout sorgente CLAL' : e.message,
+      ...(e.payload || {}),
+    });
   }
 });
 
@@ -3264,12 +3443,43 @@ app.get('/api/experimental/clal/zangolato/history', authMiddleware, requireRole(
     const { rows } = await q(
       `SELECT id, source_url, fetched_at, ref_date, date_raw, min_price, max_price, payload
        FROM experimental_clal_quotes
-       WHERE source_key='burro_milano_zangolato'
+       WHERE source_key=$2
        ORDER BY fetched_at DESC, id DESC
        LIMIT $1`,
-      [limit]
+      [limit, EXPERIMENTAL_CLAL_SOURCE_KEY]
     );
     res.json({ ok: true, count: rows.length, rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/experimental/clal/status', authMiddleware, requireRole('admin','direzione'), async (req, res) => {
+  try {
+    const automation = await getExperimentalAutomationSettings();
+    const lastImport = await q(
+      `SELECT fetched_at, ref_date, date_raw, min_price, max_price
+       FROM experimental_clal_quotes
+       WHERE source_key=$1
+       ORDER BY fetched_at DESC, id DESC
+       LIMIT 1`,
+      [EXPERIMENTAL_CLAL_SOURCE_KEY]
+    );
+    const latest = lastImport.rows[0] || null;
+    res.json({
+      ok: true,
+      source_url: CLAL_BURRO_ZANGOLATO_URL,
+      timezone: EXPERIMENTAL_TIMEZONE,
+      next_window: getNextClalBulletinWindow(),
+      automation,
+      last_import: latest ? {
+        fetched_at: latest.fetched_at,
+        ref_date: latest.ref_date,
+        date_raw: latest.date_raw,
+        min_price: latest.min_price,
+        max_price: latest.max_price,
+      } : null,
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -3388,6 +3598,7 @@ async function start() {
     await createSchema();
     await seed();
     startEmailNotificationsScheduler();
+    startExperimentalScheduler();
     app.listen(PORT, () => {
       console.log(`\n🧀 Norbalat Ordini v2 — http://localhost:${PORT}`);
       console.log(`   DB: ${DATABASE_URL.replace(/:([^:@]+)@/, ':****@')}\n`);

@@ -1,5 +1,9 @@
 (function () {
   const CLAL_DEFAULT_URL = 'https://www.clal.it/index.php?section=burro_milano#zangolato';
+  const DEFAULT_SPREAD = 0.5;
+  const DEFAULT_COEFFICIENT = 82;
+  const DEFAULT_FAT_FROM = 30;
+  const DEFAULT_FAT_TO = 40;
 
   function fmtNum(v) {
     const n = Number(v);
@@ -7,12 +11,108 @@
     return n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  function fmtMoney(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '-';
+    return `${fmtNum(n)} EUR`;
+  }
+
+  function fmtDateTime(v) {
+    if (!v) return '-';
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return String(v);
+    return d.toLocaleString('it-IT');
+  }
+
+  function parseInputNumber(id, fallback) {
+    const raw = document.getElementById(id)?.value;
+    const n = Number(String(raw || '').replace(',', '.'));
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function getLatestClalRow(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    return list[0] || null;
+  }
+
+  function updateClalHighlights(row) {
+    const latestMin = document.getElementById('experimental-clal-latest-min');
+    const latestMax = document.getElementById('experimental-clal-latest-max');
+    const latestDate = document.getElementById('experimental-clal-latest-date');
+    const refDate = row?.date_iso || row?.ref_date || row?.date_raw || '';
+    if (latestMin) latestMin.textContent = row ? fmtMoney(row.min_price ?? row.minPrice) : '-';
+    if (latestMax) latestMax.textContent = row ? fmtMoney(row.max_price ?? row.maxPrice) : '-';
+    if (latestDate) latestDate.textContent = refDate ? (String(refDate).includes('-') ? window.formatDate?.(refDate) || refDate : refDate) : '-';
+  }
+
+  function computeCreamPrice(clalPrice, spread, coefficient, fatPct) {
+    const price = Number(clalPrice);
+    const fat = Number(fatPct);
+    const coeff = Number(coefficient);
+    const spreadNum = Number(spread);
+    if (!Number.isFinite(price) || !Number.isFinite(fat) || !Number.isFinite(coeff) || coeff <= 0) return null;
+    return ((price + spreadNum) / coeff) * fat;
+  }
+
+  function renderExperimentalCreamPanel() {
+    const tbody = document.getElementById('experimental-cream-rows');
+    const summary = document.getElementById('experimental-cream-summary');
+    if (!tbody || !summary) return;
+
+    const latest = getLatestClalRow(window.state.experimentalClalRows);
+    updateClalHighlights(latest);
+    if (!latest) {
+      tbody.innerHTML = '<tr><td colspan="3" style="padding:10px;color:var(--text3);">Importa prima il dato CLAL per calcolare la panna.</td></tr>';
+      summary.textContent = 'Nessun dato CLAL disponibile.';
+      return;
+    }
+
+    const spread = parseInputNumber('experimental-cream-spread', DEFAULT_SPREAD);
+    const coefficient = parseInputNumber('experimental-cream-coefficient', DEFAULT_COEFFICIENT);
+    let fatFrom = Math.round(parseInputNumber('experimental-cream-fat-from', DEFAULT_FAT_FROM));
+    let fatTo = Math.round(parseInputNumber('experimental-cream-fat-to', DEFAULT_FAT_TO));
+    if (fatFrom > fatTo) [fatFrom, fatTo] = [fatTo, fatFrom];
+    fatFrom = Math.max(1, fatFrom);
+    fatTo = Math.min(100, fatTo);
+
+    const minClal = Number(latest.min_price ?? latest.minPrice);
+    const maxClal = Number(latest.max_price ?? latest.maxPrice ?? minClal);
+    if (!Number.isFinite(minClal) || !Number.isFinite(maxClal) || !Number.isFinite(coefficient) || coefficient <= 0) {
+      tbody.innerHTML = '<tr><td colspan="3" style="padding:10px;color:var(--text3);">Dati non validi per il calcolo.</td></tr>';
+      summary.textContent = 'Verifica CLAL, spread e coefficiente.';
+      return;
+    }
+
+    const rows = [];
+    for (let fat = fatFrom; fat <= fatTo; fat += 1) {
+      rows.push({
+        fat,
+        min: computeCreamPrice(minClal, spread, coefficient, fat),
+        max: computeCreamPrice(maxClal, spread, coefficient, fat),
+      });
+    }
+    tbody.innerHTML = rows.map((row) => `
+      <tr>
+        <td style="padding:8px 10px;border-top:1px solid var(--border);">${row.fat}%</td>
+        <td style="padding:8px 10px;border-top:1px solid var(--border);text-align:right;font-family:'DM Mono',monospace;">${fmtMoney(row.min)}</td>
+        <td style="padding:8px 10px;border-top:1px solid var(--border);text-align:right;font-family:'DM Mono',monospace;">${fmtMoney(row.max)}</td>
+      </tr>
+    `).join('');
+
+    const rangeMin = rows[0]?.min;
+    const rangeMax = rows[rows.length - 1]?.max;
+    summary.textContent = `Dal ${fatFrom}% al ${fatTo}%: da ${fmtMoney(rangeMin)} a ${fmtMoney(rangeMax)}. Ultimo CLAL ${fmtMoney(minClal)} - ${fmtMoney(maxClal)}, spread ${fmtMoney(spread)}, coefficiente ${fmtNum(coefficient)}.`;
+  }
+
   function renderClalRows(rows, originLabel = '') {
     const tbody = document.getElementById('experimental-clal-rows');
     if (!tbody) return;
     const list = Array.isArray(rows) ? rows : [];
+    window.state.experimentalClalRows = list;
+    updateClalHighlights(getLatestClalRow(list));
     if (!list.length) {
       tbody.innerHTML = '<tr><td colspan="4" style="padding:10px;color:var(--text3);">Nessun dato disponibile</td></tr>';
+      renderExperimentalCreamPanel();
       return;
     }
     tbody.innerHTML = list.map((r) => {
@@ -28,11 +128,40 @@
         <td style="padding:8px 10px;border-top:1px solid var(--border);color:var(--text2);">${src}</td>
       </tr>`;
     }).join('');
+    renderExperimentalCreamPanel();
   }
 
   function setClalMeta(text) {
     const meta = document.getElementById('experimental-clal-meta');
     if (meta) meta.textContent = text || '';
+  }
+
+  function renderClalScheduleStatus(status) {
+    const lastImportEl = document.getElementById('experimental-clal-last-import');
+    const nextWindowEl = document.getElementById('experimental-clal-next-window');
+    if (lastImportEl) {
+      const last = status?.last_import;
+      if (!last) {
+        lastImportEl.textContent = 'Nessun bollettino salvato';
+      } else {
+        const refDate = last.ref_date || last.date_raw || '-';
+        lastImportEl.textContent = `${refDate} - importato il ${fmtDateTime(last.fetched_at)}`;
+      }
+    }
+    if (nextWindowEl) {
+      const next = status?.next_window;
+      nextWindowEl.textContent = next?.label || '-';
+    }
+  }
+
+  async function loadClalStatus() {
+    try {
+      const r = await window.api('GET', '/api/experimental/clal/status');
+      window.state.experimentalClalStatus = r;
+      renderClalScheduleStatus(r);
+    } catch (_) {
+      renderClalScheduleStatus(null);
+    }
   }
 
   async function loadExperimentalConfig() {
@@ -50,10 +179,11 @@
     if (pre && !pre.textContent.trim()) {
       pre.textContent = 'Premi "Aggiorna" per acquisire i dati dalla sorgente configurata.';
     }
+    window.state.experimentalClalRows = window.state.experimentalClalRows || [];
     await loadExperimentalConfig();
-    if (!document.getElementById('experimental-clal-rows')?.children.length) {
-      loadClalZangolatoHistory().catch(() => {});
-    }
+    await loadClalStatus();
+    renderExperimentalCreamPanel();
+    await loadClalZangolato(true, { silent: true, auto: true, fallbackToHistory: true });
   }
 
   async function saveExperimentalConfig() {
@@ -91,7 +221,7 @@
       }
       const now = new Date();
       const size = String(previewOut || '').length;
-      if (meta) meta.textContent = `${r.source || ''} · ${r.content_type || ''} · mode ${r.mode || 'auto'} · ${size} caratteri · ${now.toLocaleString('it-IT')}`;
+      if (meta) meta.textContent = `${r.source || ''} - ${r.content_type || ''} - mode ${r.mode || 'auto'} - ${size} caratteri - ${now.toLocaleString('it-IT')}`;
       if (pre) pre.textContent = previewOut;
       window.state.experimentalLastPreview = previewOut;
     } catch (e) {
@@ -115,9 +245,10 @@
     }
   }
 
-  async function loadClalZangolato(persist) {
+  async function loadClalZangolato(persist, options = {}) {
+    const { silent = false, auto = false, fallbackToHistory = false } = options;
     const customUrl = (document.getElementById('experimental-url')?.value || '').trim();
-    setClalMeta('Caricamento dati CLAL...');
+    setClalMeta(auto ? 'Aggiornamento automatico dati CLAL...' : 'Caricamento dati CLAL...');
     try {
       const qs = [];
       if (customUrl) qs.push(`url=${encodeURIComponent(customUrl)}`);
@@ -126,17 +257,24 @@
       const r = await window.api('GET', path);
       const rows = Array.isArray(r.rows) ? r.rows : [];
       renderClalRows(rows, persist ? 'live+saved' : 'live');
-      const latest = r.latest ? `${r.latest.date_iso || r.latest.date_raw || '-'} ${fmtNum(r.latest.min_price)}-${fmtNum(r.latest.max_price)} €/kg` : 'n.d.';
-      setClalMeta(`Fonte: ${r.source || ''} · Righe: ${r.rows_count || 0} · Ultimo: ${latest}${persist ? ` · Snapshot salvati: ${r.inserted_count || 0}` : ''}`);
-      if (typeof window.showToast === 'function') window.showToast(persist ? 'Import CLAL completato e snapshot salvato' : 'Import CLAL completato', 'success');
+      const latest = r.latest ? `${r.latest.date_iso || r.latest.date_raw || '-'} ${fmtNum(r.latest.min_price)}-${fmtNum(r.latest.max_price)} EUR/kg` : 'n.d.';
+      const autoLabel = auto ? ' - aggiornamento automatico' : '';
+      setClalMeta(`Fonte: ${r.source || ''} - Righe: ${r.rows_count || 0} - Ultimo: ${latest}${persist ? ` - Nuovi snapshot: ${r.inserted_count || 0}` : ''}${autoLabel}`);
+      await loadClalStatus();
+      if (!silent && typeof window.showToast === 'function') window.showToast(persist ? 'Import CLAL completato e snapshot salvato' : 'Import CLAL completato', 'success');
     } catch (e) {
+      if (fallbackToHistory) {
+        await loadClalZangolatoHistory({ silent: true, reason: e.message });
+        return;
+      }
       setClalMeta(`Errore CLAL: ${e.message}`);
-      if (typeof window.showToast === 'function') window.showToast(e.message, 'warning');
+      if (!silent && typeof window.showToast === 'function') window.showToast(e.message, 'warning');
     }
   }
 
-  async function loadClalZangolatoHistory() {
-    setClalMeta('Caricamento storico...');
+  async function loadClalZangolatoHistory(options = {}) {
+    const { silent = false, reason = '' } = options;
+    setClalMeta(reason ? `Caricamento storico (${reason})...` : 'Caricamento storico...');
     try {
       const r = await window.api('GET', '/api/experimental/clal/zangolato/history?limit=120');
       const rows = (r.rows || []).map((x) => ({
@@ -147,14 +285,16 @@
         fetched_at: x.fetched_at,
       }));
       renderClalRows(rows, 'storico');
-      setClalMeta(`Storico snapshot: ${rows.length} record`);
+      setClalMeta(`Storico snapshot: ${rows.length} record${reason ? ` - live non disponibile: ${reason}` : ''}`);
+      await loadClalStatus();
     } catch (e) {
       setClalMeta(`Errore storico: ${e.message}`);
-      if (typeof window.showToast === 'function') window.showToast(e.message, 'warning');
+      if (!silent && typeof window.showToast === 'function') window.showToast(e.message, 'warning');
     }
   }
 
   window.renderSperimentale = renderSperimentale;
+  window.renderExperimentalCreamPanel = renderExperimentalCreamPanel;
   window.saveExperimentalConfig = saveExperimentalConfig;
   window.loadExperimentalSource = loadExperimentalSource;
   window.copyExperimentalPreview = copyExperimentalPreview;

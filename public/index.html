@@ -1725,7 +1725,7 @@
       <div class="page" id="page-sperimentale">
         <div class="page-header">
           <div class="page-title">Sperimentale</div>
-          <div class="page-sub">Acquisizione dati da sorgente esterna</div>
+          <div class="page-sub">Import automatico CLAL, storico snapshot e calcolo prezzo panna grezza</div>
         </div>
         <div class="card" style="max-width:980px;">
           <div class="card-header">
@@ -1755,7 +1755,10 @@
             <pre id="experimental-preview" style="white-space:pre-wrap;word-break:break-word;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:420px;overflow:auto;font-size:12px;"></pre>
             <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
               <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-                <div style="font-weight:700;color:var(--text1);">CLAL Burro Milano - Zangolato</div>
+                <div>
+                  <div style="font-weight:700;color:var(--text1);">CLAL Burro Milano - Zangolato</div>
+                  <div style="font-size:12px;color:var(--text3);margin-top:2px;">Import automatico del bollettino CLAL del lunedi tra le 15 e le 16, con storico senza duplicati.</div>
+                </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                   <button class="btn btn-outline btn-sm" onclick="loadClalZangolato(false)">Importa da CLAL</button>
                   <button class="btn btn-green btn-sm" onclick="loadClalZangolato(true)">Importa + salva snapshot</button>
@@ -1763,6 +1766,30 @@
                 </div>
               </div>
               <div id="experimental-clal-meta" style="font-size:12px;color:var(--text3);margin-bottom:8px;"></div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px;">
+                <div style="border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--surface2);">
+                  <div style="font-size:11px;color:var(--text3);text-transform:uppercase;">Ultimo CLAL min</div>
+                  <div id="experimental-clal-latest-min" style="font-size:24px;font-weight:800;color:var(--text1);margin-top:4px;">-</div>
+                </div>
+                <div style="border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--surface2);">
+                  <div style="font-size:11px;color:var(--text3);text-transform:uppercase;">Ultimo CLAL max</div>
+                  <div id="experimental-clal-latest-max" style="font-size:24px;font-weight:800;color:var(--text1);margin-top:4px;">-</div>
+                </div>
+                <div style="border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--surface2);">
+                  <div style="font-size:11px;color:var(--text3);text-transform:uppercase;">Data riferimento</div>
+                  <div id="experimental-clal-latest-date" style="font-size:18px;font-weight:700;color:var(--text1);margin-top:6px;">-</div>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px;">
+                <div style="border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--surface2);">
+                  <div style="font-size:11px;color:var(--text3);text-transform:uppercase;">Ultimo bollettino importato</div>
+                  <div id="experimental-clal-last-import" style="font-size:15px;font-weight:700;color:var(--text1);margin-top:6px;">-</div>
+                </div>
+                <div style="border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--surface2);">
+                  <div style="font-size:11px;color:var(--text3);text-transform:uppercase;">Prossimo aggiornamento automatico</div>
+                  <div id="experimental-clal-next-window" style="font-size:15px;font-weight:700;color:var(--text1);margin-top:6px;">-</div>
+                </div>
+              </div>
               <div style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;">
                 <table style="width:100%;border-collapse:collapse;">
                   <thead>
@@ -1774,6 +1801,45 @@
                     </tr>
                   </thead>
                   <tbody id="experimental-clal-rows"></tbody>
+                </table>
+              </div>
+            </div>
+            <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+                <div>
+                  <div style="font-weight:700;color:var(--text1);">Prezzo panna grezza</div>
+                  <div style="font-size:12px;color:var(--text3);margin-top:2px;">Formula: ((CLAL zangolato + spread) / coefficiente) x resa %</div>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="field">
+                  <label>Spread EUR</label>
+                  <input type="number" id="experimental-cream-spread" value="0.50" min="0" step="0.01" oninput="renderExperimentalCreamPanel()">
+                </div>
+                <div class="field">
+                  <label>Coefficiente</label>
+                  <input type="number" id="experimental-cream-coefficient" value="82" min="1" step="0.01" oninput="renderExperimentalCreamPanel()">
+                </div>
+                <div class="field">
+                  <label>Resa dal %</label>
+                  <input type="number" id="experimental-cream-fat-from" value="30" min="1" max="100" step="1" oninput="renderExperimentalCreamPanel()">
+                </div>
+                <div class="field">
+                  <label>Resa al %</label>
+                  <input type="number" id="experimental-cream-fat-to" value="40" min="1" max="100" step="1" oninput="renderExperimentalCreamPanel()">
+                </div>
+              </div>
+              <div id="experimental-cream-summary" style="font-size:13px;color:var(--text2);margin:8px 0 10px;"></div>
+              <div style="max-height:300px;overflow:auto;border:1px solid var(--border);border-radius:8px;">
+                <table style="width:100%;border-collapse:collapse;">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left;padding:8px 10px;">Resa panna</th>
+                      <th style="text-align:right;padding:8px 10px;">Prezzo min</th>
+                      <th style="text-align:right;padding:8px 10px;">Prezzo max</th>
+                    </tr>
+                  </thead>
+                  <tbody id="experimental-cream-rows"></tbody>
                 </table>
               </div>
             </div>
