@@ -212,6 +212,9 @@ function getSmtpTransporter() {
       port: SMTP_PORT,
       secure: SMTP_SECURE,
       auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
       tls: {
         rejectUnauthorized: SMTP_TLS_REJECT_UNAUTHORIZED,
         ...(SMTP_TLS_SERVERNAME ? { servername: SMTP_TLS_SERVERNAME } : {}),
