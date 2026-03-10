@@ -64,11 +64,14 @@ const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
 const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_SECURE = String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
+const SMTP_TLS_REJECT_UNAUTHORIZED = String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED || 'true').toLowerCase() === 'true';
+const SMTP_TLS_SERVERNAME = process.env.SMTP_TLS_SERVERNAME || '';
 const SMTP_FROM = process.env.SMTP_FROM || '';
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'Norbalat Ordini';
 const NOTIFY_EMAIL_TO = process.env.NOTIFY_EMAIL_TO || '';
 const NOTIFY_TIMEZONE = process.env.NOTIFY_TIMEZONE || 'Europe/Rome';
 const EXPERIMENTAL_SOURCE_URL = process.env.EXPERIMENTAL_SOURCE_URL || '';
+const CLAL_BURRO_ZANGOLATO_URL = 'https://www.clal.it/index.php?section=burro_milano#zangolato';
 
 const app  = express();
 const pool = new Pool({ connectionString: DATABASE_URL });
@@ -209,6 +212,10 @@ function getSmtpTransporter() {
       port: SMTP_PORT,
       secure: SMTP_SECURE,
       auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+      tls: {
+        rejectUnauthorized: SMTP_TLS_REJECT_UNAUTHORIZED,
+        ...(SMTP_TLS_SERVERNAME ? { servername: SMTP_TLS_SERVERNAME } : {}),
+      },
     });
   }
   return smtpTransporter;
@@ -545,6 +552,19 @@ async function createSchema() {
       dettagli          JSONB DEFAULT '{}'::jsonb
     );
 
+    CREATE TABLE IF NOT EXISTS experimental_clal_quotes (
+      id                BIGSERIAL PRIMARY KEY,
+      source_key        TEXT NOT NULL DEFAULT 'burro_milano_zangolato',
+      source_url        TEXT NOT NULL,
+      fetched_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ref_date          DATE,
+      date_raw          TEXT DEFAULT '',
+      min_price         NUMERIC,
+      max_price         NUMERIC,
+      payload           JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_by        INTEGER REFERENCES utenti(id) ON DELETE SET NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_ordini_data    ON ordini(data);
     CREATE INDEX IF NOT EXISTS idx_ordini_stato   ON ordini(stato);
     CREATE INDEX IF NOT EXISTS idx_ordini_agente  ON ordini(agente_id);
@@ -559,6 +579,7 @@ async function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_scorte_stato ON scorte_magazzino(stato, prodotto_id);
     CREATE INDEX IF NOT EXISTS idx_magazzino_chiusure_data_giro ON magazzino_chiusure_giornata(data, giro);
     CREATE INDEX IF NOT EXISTS idx_utenti_username_lower ON utenti (LOWER(username));
+    CREATE INDEX IF NOT EXISTS idx_exp_clal_source_fetched ON experimental_clal_quotes(source_key, fetched_at DESC);
 
     -- Migrazioni safe per DB esistenti
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS classificazione TEXT DEFAULT '';
@@ -2879,9 +2900,199 @@ app.get('/api/stats/dashboard', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+function decodeHtmlEntities(input = '') {
+  return String(input || '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+}
+
+function stripHtmlTags(input = '') {
+  return decodeHtmlEntities(String(input || '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+}
+
+function parseNumberLoose(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).replace(/\s+/g, '').replace(',', '.');
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseDateLoose(raw) {
+  const s = String(raw || '').trim();
+  const mIt = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mIt) {
+    const dd = mIt[1].padStart(2, '0');
+    const mm = mIt[2].padStart(2, '0');
+    return `${mIt[3]}-${mm}-${dd}`;
+  }
+  const mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (mIso) return s;
+  return null;
+}
+
+function parseItalianMonthDate(raw) {
+  const s = decodeHtmlEntities(String(raw || '')).replace(/\s+/g, ' ').trim();
+  const m = s.match(/(\d{1,2})\s+([A-Za-zÀ-ÿ]{3,})\s+(\d{4})/);
+  if (!m) return null;
+  const mmMap = {
+    gen: '01', feb: '02', mar: '03', apr: '04', mag: '05', giu: '06',
+    lug: '07', ago: '08', set: '09', ott: '10', nov: '11', dic: '12',
+  };
+  const mon = String(m[2] || '').toLowerCase().slice(0, 3);
+  const mm = mmMap[mon];
+  if (!mm) return null;
+  const dd = String(m[1]).padStart(2, '0');
+  return `${m[3]}-${mm}-${dd}`;
+}
+
+function extractTableRowsFromHtml(html) {
+  const out = [];
+  const trRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+  let tr;
+  while ((tr = trRe.exec(String(html || '')))) {
+    const rowHtml = tr[1];
+    const cells = [];
+    const tdRe = /<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi;
+    let td;
+    while ((td = tdRe.exec(rowHtml))) {
+      cells.push(stripHtmlTags(td[1]));
+    }
+    if (cells.length) out.push(cells);
+  }
+  return out;
+}
+
+function parseClalBurroZangolatoFromHtml(html) {
+  const scannedRows = extractTableRowsFromHtml(html).length;
+  const rows = [];
+  const scrapedAt = new Date().toISOString();
+  const htmlRaw = String(html || '');
+  const lower = htmlRaw.toLowerCase();
+  const anchorIdx = lower.search(/name\s*=\s*["']zangolato["']/i);
+  if (anchorIdx >= 0) {
+    const nextAnchor = lower.indexOf('<a name', anchorIdx + 20);
+    const section = htmlRaw.slice(anchorIdx, nextAnchor > anchorIdx ? nextAnchor : anchorIdx + 60000);
+    const rowRe = /<tr>\s*<td[^>]*class="data[^"]*"[^>]*>([\s\S]*?)<\/td>[\s\S]*?<td[^>]*class="value[^"]*"[^>]*>\s*([0-9]+(?:,[0-9]+)?)\s*<\/td>[\s\S]*?<td[^>]*class="value[^"]*"[^>]*>\s*([+\-]?[0-9]+(?:,[0-9]+)?)%/gi;
+    let m;
+    let idx = 0;
+    while ((m = rowRe.exec(section))) {
+      const dateRaw = stripHtmlTags(m[1]);
+      const price = parseNumberLoose(m[2]);
+      const deltaPct = parseNumberLoose(m[3]);
+      if (!Number.isFinite(price)) continue;
+      const dateIso = parseItalianMonthDate(dateRaw) || parseDateLoose(dateRaw);
+      rows.push({
+        row_index: idx++,
+        date_raw: dateRaw,
+        date_iso: dateIso,
+        min_price: price,
+        max_price: price,
+        delta_pct: deltaPct,
+        prices: [price],
+        cells: [dateRaw, String(m[2]), `${m[3]}%`],
+      });
+    }
+  }
+
+  if (!rows.length) {
+    const fallbackRows = extractTableRowsFromHtml(htmlRaw);
+    fallbackRows.forEach((cells, idx) => {
+      const line = cells.join(' | ');
+      if (!/zangolat/i.test(line)) return;
+      const joined = cells.join(' ');
+      const dateRawCell = cells.find(c => /(\d{1,2}\/\d{1,2}\/\d{4})|(\d{4}-\d{2}-\d{2})/.test(c)) || '';
+      const dateMatch = joined.match(/(\d{1,2}\/\d{1,2}\/\d{4})|(\d{4}-\d{2}-\d{2})/);
+      const dateRaw = dateRawCell || dateMatch?.[0] || '';
+      const dateIso = parseDateLoose(dateRaw);
+      const nums = cells
+        .map(parseNumberLoose)
+        .filter(n => Number.isFinite(n) && n > 0 && n < 100);
+      if (!nums.length) return;
+      rows.push({
+        row_index: idx,
+        date_raw: dateRaw,
+        date_iso: dateIso,
+        min_price: Math.min(...nums),
+        max_price: Math.max(...nums),
+        prices: nums,
+        cells,
+      });
+    });
+  }
+
+  rows.sort((a, b) => {
+    const da = String(a.date_iso || '');
+    const db = String(b.date_iso || '');
+    if (da && db) return db.localeCompare(da);
+    return b.row_index - a.row_index;
+  });
+
+  return {
+    source_key: 'burro_milano_zangolato',
+    source_url: CLAL_BURRO_ZANGOLATO_URL,
+    scraped_at: scrapedAt,
+    rows,
+    total_rows_scanned: scannedRows,
+  };
+}
+
+async function fetchExternalText(url) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const r = await fetch(url, {
+      signal: ctrl.signal,
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'User-Agent': 'Mozilla/5.0 NorbalatBot/1.0',
+      },
+    });
+    if (!r.ok) throw new Error(`Sorgente esterna errore ${r.status}`);
+    return await r.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function saveClalZangolatoSnapshot({ sourceUrl, parsed, userId }) {
+  const inserted = [];
+  for (const row of (parsed.rows || [])) {
+    const payload = {
+      row_index: row.row_index,
+      prices: row.prices || [],
+      cells: row.cells || [],
+      scraped_at: parsed.scraped_at,
+    };
+    const { rows } = await q(
+      `INSERT INTO experimental_clal_quotes
+       (source_key,source_url,ref_date,date_raw,min_price,max_price,payload,created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)
+       RETURNING id,fetched_at`,
+      [
+        'burro_milano_zangolato',
+        sourceUrl,
+        row.date_iso || null,
+        String(row.date_raw || ''),
+        row.min_price ?? null,
+        row.max_price ?? null,
+        JSON.stringify(payload),
+        userId || null,
+      ]
+    );
+    inserted.push(rows[0]);
+  }
+  return inserted;
+}
+
 async function getExperimentalSourceConfig() {
   const defaults = {
-    url: EXPERIMENTAL_SOURCE_URL || '',
+    url: EXPERIMENTAL_SOURCE_URL || CLAL_BURRO_ZANGOLATO_URL,
     mode: 'auto',
     product_selector: '',
     code_selector: '',
@@ -2983,6 +3194,81 @@ app.get('/api/experimental/source', authMiddleware, requireRole('admin','direzio
     res.json({ ok: true, source: url, mode, content_type: ct, preview });
   } catch (e) {
     res.status(500).json({ error: e.name === 'AbortError' ? 'Timeout sorgente esterna' : e.message });
+  }
+});
+
+app.get('/api/experimental/clal/zangolato', authMiddleware, requireRole('admin','direzione'), async (req, res) => {
+  try {
+    const zQuery = z.object({
+      url: z.string().url().optional(),
+      persist: z.union([z.string(), z.boolean()]).optional(),
+    });
+    const parsedQ = zQuery.safeParse(req.query || {});
+    if (!parsedQ.success) return validationError(res, parsedQ);
+    const sourceUrl = String(parsedQ.data.url || CLAL_BURRO_ZANGOLATO_URL).trim();
+    const persistRaw = parsedQ.data.persist;
+    const persist = persistRaw === true || String(persistRaw || '').toLowerCase() === 'true' || String(persistRaw || '') === '1';
+
+    const html = await fetchExternalText(sourceUrl);
+    const parsed = parseClalBurroZangolatoFromHtml(html);
+    if (!parsed.rows.length) {
+      return res.status(422).json({
+        error: 'Nessuna riga BURRO ZANGOLATO trovata nella sorgente',
+        source: sourceUrl,
+        scanned_rows: parsed.total_rows_scanned,
+      });
+    }
+
+    let inserted = [];
+    if (persist) {
+      inserted = await saveClalZangolatoSnapshot({ sourceUrl, parsed, userId: req.user?.id || null });
+      await logDB(
+        req.user.id,
+        `${req.user.nome} ${req.user.cognome || ''}`.trim(),
+        'Sperimentale CLAL',
+        `Snapshot zangolato: ${parsed.rows.length} righe`
+      );
+    }
+
+    const latest = parsed.rows[0];
+    res.json({
+      ok: true,
+      source: sourceUrl,
+      fetched_at: parsed.scraped_at,
+      total_rows_scanned: parsed.total_rows_scanned,
+      rows_count: parsed.rows.length,
+      latest: latest ? {
+        date_raw: latest.date_raw,
+        date_iso: latest.date_iso,
+        min_price: latest.min_price,
+        max_price: latest.max_price,
+      } : null,
+      rows: parsed.rows,
+      persisted: persist,
+      inserted_count: inserted.length,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.name === 'AbortError' ? 'Timeout sorgente CLAL' : e.message });
+  }
+});
+
+app.get('/api/experimental/clal/zangolato/history', authMiddleware, requireRole('admin','direzione'), async (req, res) => {
+  try {
+    const zQuery = z.object({ limit: z.coerce.number().int().min(1).max(500).optional() });
+    const parsed = zQuery.safeParse(req.query || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const limit = parsed.data.limit || 120;
+    const { rows } = await q(
+      `SELECT id, source_url, fetched_at, ref_date, date_raw, min_price, max_price, payload
+       FROM experimental_clal_quotes
+       WHERE source_key='burro_milano_zangolato'
+       ORDER BY fetched_at DESC, id DESC
+       LIMIT $1`,
+      [limit]
+    );
+    res.json({ ok: true, count: rows.length, rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
