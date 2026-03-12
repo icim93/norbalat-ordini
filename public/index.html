@@ -1612,6 +1612,37 @@
         </div>
       </div>
 
+      <div class="page" id="page-rese">
+        <div class="page-header">
+          <div class="page-title">Gestione Rese</div>
+          <div class="page-sub">Rese fornitori con calcolo automatico del prezzo venduto</div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <input type="text" class="search-input" id="search-rese" placeholder="🔍 Cerca fornitore o lotto…" oninput="renderResePage()">
+            <div style="display:flex;gap:8px;">
+              <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-fornitore-rese" onchange="renderResePage()"></select>
+              <button class="btn btn-green" id="rese-new-btn" onclick="openNewResa()">+ Nuova Resa</button>
+            </div>
+          </div>
+          <div class="table-scroll-wrap"><table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Fornitore</th>
+                <th>Quantità</th>
+                <th>Prezzo pagato</th>
+                <th>Resa %</th>
+                <th>Prezzo venduto</th>
+                <th>Lotto</th>
+                <th>Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="rese-table"></tbody>
+          </table></div>
+        </div>
+      </div>
+
       <!-- ─── PAGE: Prodotti ─── -->
       <div class="page" id="page-prodotti">
         <div class="page-header">
@@ -2597,6 +2628,48 @@
   </div>
 </div>
 
+<!-- Modal: Gestione Rese -->
+<div class="modal-overlay" id="modal-resa">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-resa-title">Nuova Resa</div>
+      <button class="modal-close" onclick="closeModal('modal-resa')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="field form-full">
+          <label>Fornitore *</label>
+          <select id="resa-fornitore"></select>
+        </div>
+        <div class="field">
+          <label>Quantità *</label>
+          <input type="number" id="resa-quantita" min="0.01" step="0.01" placeholder="0,00">
+        </div>
+        <div class="field">
+          <label>Prezzo pagato *</label>
+          <input type="number" id="resa-prezzo-pagato" min="0" step="0.01" placeholder="0,00" oninput="updateResaPrezzoVendutoPreview()">
+        </div>
+        <div class="field">
+          <label>Lotto</label>
+          <input type="text" id="resa-lotto" maxlength="120" placeholder="Lotto">
+        </div>
+        <div class="field">
+          <label>Resa % *</label>
+          <input type="number" id="resa-pct" min="0.01" max="100" step="0.01" placeholder="100" oninput="updateResaPrezzoVendutoPreview()">
+        </div>
+        <div class="field form-full">
+          <label>Prezzo venduto calcolato</label>
+          <input type="text" id="resa-prezzo-venduto" readonly style="background:var(--surface2);font-weight:700;">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-resa')">Annulla</button>
+      <button class="btn btn-green" onclick="saveResa()">Salva</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: CRM Cliente -->
 <div class="modal-overlay" id="modal-crm-cliente">
   <div class="modal" style="max-width:920px;">
@@ -2972,6 +3045,7 @@ let state = {
   clienti:   [],
   prodotti:  [],
   listini:   [],
+  rese:      [],
   ordini:    [],
   camions:   [],
   pianoData: '',
@@ -3062,11 +3136,13 @@ async function loadAllData() {
   try {
     if (!state.pianoData) state.pianoData = today();
     const canSeePiano = ['admin', 'autista', 'magazzino'].includes(state.currentUser?.ruolo);
-    const [utenti, clienti, prodotti, listini, ordini, camions, giri, scorte] = await Promise.all([
+    const canSeeRese = ['admin', 'direzione'].includes(state.currentUser?.ruolo);
+    const [utenti, clienti, prodotti, listini, rese, ordini, camions, giri, scorte] = await Promise.all([
       api('GET', '/api/utenti'),
       api('GET', '/api/clienti'),
       api('GET', '/api/prodotti'),
       api('GET', '/api/listini'),
+      canSeeRese ? api('GET', '/api/rese') : Promise.resolve([]),
       api('GET', '/api/ordini'),
       canSeePiano ? api('GET', `/api/camions?data=${state.pianoData}`) : Promise.resolve([]),
       api('GET', '/api/giri'),
@@ -3077,6 +3153,7 @@ async function loadAllData() {
     state.clienti  = (clienti  ||[]).map(normalizeCliente);
     state.prodotti = (prodotti ||[]).map(normalizeProdotto);
     state.listini  = (listini  ||[]).map(normalizeListino);
+    state.rese     = (rese     ||[]).map(normalizeResa);
     state.ordini   = (ordini   ||[]).map(normalizeOrdine);
     state.camions  = (camions  ||[]).map(normalizeCamion);
     state.giriCalendario = (giri||[]).map(g => ({...g, giorni: g.giorni||[]}));
@@ -5080,6 +5157,7 @@ async function importClientiExcel(input) {
 <script src="/js/modules/sperimentale.js"></script>
 <script src="/js/modules/listini.js"></script>
 <script src="/js/modules/listini-pdf.js"></script>
+<script src="/js/modules/rese-ui.js"></script>
 <script src="/js/modules/crm.js"></script>
 <script src="/js/modules/documenti-ui.js"></script>
 

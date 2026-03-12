@@ -647,6 +647,19 @@ async function createSchema() {
       updated_at  TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS rese_fornitori (
+      id             SERIAL PRIMARY KEY,
+      fornitore_id   INTEGER NOT NULL REFERENCES clienti(id),
+      quantita       NUMERIC NOT NULL DEFAULT 0,
+      prezzo_pagato  NUMERIC NOT NULL DEFAULT 0,
+      lotto          TEXT DEFAULT '',
+      resa_pct       NUMERIC NOT NULL DEFAULT 100,
+      prezzo_venduto NUMERIC,
+      created_by     INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      created_at     TIMESTAMPTZ DEFAULT NOW(),
+      updated_at     TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS app_settings (
       key         TEXT PRIMARY KEY,
       value       JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -722,6 +735,7 @@ async function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_activity_ts    ON activity_log(ts);
     CREATE INDEX IF NOT EXISTS idx_listini_prod_cliente ON listini(prodotto_id,cliente_id);
     CREATE INDEX IF NOT EXISTS idx_listini_validita ON listini(valido_dal,valido_al);
+    CREATE INDEX IF NOT EXISTS idx_rese_fornitore_created ON rese_fornitori(fornitore_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_crm_cliente_created ON clienti_crm_eventi(cliente_id,created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_doc_folders_parent ON doc_folders(parent_id);
     CREATE INDEX IF NOT EXISTS idx_doc_files_folder ON doc_files(folder_id);
@@ -764,6 +778,12 @@ async function createSchema() {
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS discount_pct    NUMERIC DEFAULT 0;
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS final_price     NUMERIC;
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS excluded_client_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS lotto TEXT DEFAULT '';
+    ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS resa_pct NUMERIC NOT NULL DEFAULT 100;
+    ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS prezzo_venduto NUMERIC;
+    ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES utenti(id) ON DELETE SET NULL;
+    ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE doc_folders ADD COLUMN IF NOT EXISTS allowed_roles JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE doc_folders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE doc_files   ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT 'application/octet-stream';
@@ -1128,6 +1148,8 @@ const PERMISSIONS = {
   'documenti:manage': ['admin', 'amministrazione', 'direzione'],
   'listini:view': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'listini:manage': ['admin', 'direzione'],
+  'rese:view': ['admin', 'direzione'],
+  'rese:manage': ['admin', 'direzione'],
   'onboarding:manage': ['admin', 'amministrazione'],
   'ordini:create': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'ordini:update': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
@@ -1197,6 +1219,13 @@ function asIntArray(v) {
   return [...new Set(v.map(x => parseInt(x, 10)).filter(Number.isFinite))];
 }
 
+function computePrezzoVenduto(prezzoPagato, resaPct) {
+  const paid = asNum(prezzoPagato);
+  const resa = asNum(resaPct);
+  if (paid === null || resa === null || paid < 0 || resa <= 0) return null;
+  return Math.round((paid / (resa / 100)) * 100) / 100;
+}
+
 function validationError(res, parsed) {
   return res.status(400).json({
     error: 'Payload non valido',
@@ -1224,6 +1253,14 @@ const zListinoPayload = z.object({
   valido_dal: z.string().min(1),
   valido_al: z.string().nullable().optional(),
   note: z.string().max(3000).optional().default(''),
+});
+
+const zResaPayload = z.object({
+  fornitore_id: z.coerce.number().int().positive(),
+  quantita: z.coerce.number().positive(),
+  prezzo_pagato: z.coerce.number().nonnegative(),
+  lotto: z.string().max(120).optional().default(''),
+  resa_pct: z.coerce.number().positive().max(100),
 });
 
 const zCrmEventoPayload = z.object({
@@ -1989,6 +2026,134 @@ app.delete('/api/listini/:id', authMiddleware, requirePermission('listini:manage
     await q('DELETE FROM listini WHERE id=$1', [id]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+async function getResaRecord(id) {
+  const { rows } = await q(
+    `SELECT r.*, c.nome AS fornitore_nome
+     FROM rese_fornitori r
+     JOIN clienti c ON c.id = r.fornitore_id
+     WHERE r.id=$1
+     LIMIT 1`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
+async function ensureFornitoreCliente(fornitoreId) {
+  const { rows } = await q(
+    `SELECT id, nome, e_fornitore
+     FROM clienti
+     WHERE id=$1
+     LIMIT 1`,
+    [fornitoreId]
+  );
+  const row = rows[0];
+  if (!row) {
+    const err = new Error('Fornitore non trovato');
+    err.status = 404;
+    throw err;
+  }
+  if (!row.e_fornitore) {
+    const err = new Error('Il soggetto selezionato non è marcato come fornitore');
+    err.status = 400;
+    throw err;
+  }
+  return row;
+}
+
+app.get('/api/rese', authMiddleware, requirePermission('rese:view'), async (req, res) => {
+  try {
+    const { rows } = await q(
+      `SELECT r.*, c.nome AS fornitore_nome
+       FROM rese_fornitori r
+       JOIN clienti c ON c.id = r.fornitore_id
+       ORDER BY r.created_at DESC, r.id DESC`
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.post('/api/rese', authMiddleware, requirePermission('rese:manage'), async (req, res) => {
+  try {
+    const parsed = zResaPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const payload = parsed.data;
+    const fornitore = await ensureFornitoreCliente(payload.fornitore_id);
+    const prezzoVenduto = computePrezzoVenduto(payload.prezzo_pagato, payload.resa_pct);
+    const { rows } = await q(
+      `INSERT INTO rese_fornitori
+       (fornitore_id, quantita, prezzo_pagato, lotto, resa_pct, prezzo_venduto, created_by, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
+       RETURNING *`,
+      [
+        payload.fornitore_id,
+        payload.quantita,
+        payload.prezzo_pagato,
+        String(payload.lotto || '').trim(),
+        payload.resa_pct,
+        prezzoVenduto,
+        req.user.id || null,
+      ]
+    );
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim() || 'Sistema', 'Gestione rese', `Nuova resa - ${fornitore.nome}`);
+    res.json({ ...rows[0], fornitore_nome: fornitore.nome });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.put('/api/rese/:id', authMiddleware, requirePermission('rese:manage'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const parsed = zResaPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const payload = parsed.data;
+    const existing = await getResaRecord(id);
+    if (!existing) return res.status(404).json({ error: 'Record resa non trovato' });
+    const fornitore = await ensureFornitoreCliente(payload.fornitore_id);
+    const prezzoVenduto = computePrezzoVenduto(payload.prezzo_pagato, payload.resa_pct);
+    await q(
+      `UPDATE rese_fornitori
+       SET fornitore_id=$1,
+           quantita=$2,
+           prezzo_pagato=$3,
+           lotto=$4,
+           resa_pct=$5,
+           prezzo_venduto=$6,
+           updated_at=NOW()
+       WHERE id=$7`,
+      [
+        payload.fornitore_id,
+        payload.quantita,
+        payload.prezzo_pagato,
+        String(payload.lotto || '').trim(),
+        payload.resa_pct,
+        prezzoVenduto,
+        id,
+      ]
+    );
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim() || 'Sistema', 'Gestione rese', `Modifica resa #${id} - ${fornitore.nome}`);
+    const updated = await getResaRecord(id);
+    res.json(updated);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/rese/:id', authMiddleware, requirePermission('rese:manage'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const existing = await getResaRecord(id);
+    if (!existing) return res.status(404).json({ error: 'Record resa non trovato' });
+    await q('DELETE FROM rese_fornitori WHERE id=$1', [id]);
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim() || 'Sistema', 'Gestione rese', `Elimina resa #${id} - ${existing.fornitore_nome}`);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 function folderRowToPayload(row) {

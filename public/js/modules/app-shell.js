@@ -10,6 +10,7 @@
       { page: 'clienti', icon: '🏢', label: 'Clienti' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
+      { page: 'rese', icon: '♻️', label: 'Gestione Rese' },
       { page: 'prodotti', icon: '🧀', label: 'Prodotti' },
       { page: 'utenti', icon: '👥', label: 'Utenti' },
       { page: 'piano', icon: '🚛', label: 'Piano Carico' },
@@ -44,6 +45,7 @@
     direzione: [
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
+      { page: 'rese', icon: '♻️', label: 'Gestione Rese' },
       { page: 'report', icon: '📊', label: 'Report' },
       { page: 'sperimentale', icon: '🧪', label: 'Sperimentale' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
@@ -118,6 +120,7 @@
     window.state.clienti = [];
     window.state.prodotti = [];
     window.state.listini = [];
+    window.state.rese = [];
     window.state.listinoProdottoId = null;
     window.state.ordini = [];
     window.state.camions = [];
@@ -212,6 +215,7 @@
     if (page === 'clienti') window.renderClientiTable();
     if (page === 'documenti') window.renderDocumentiPage();
     if (page === 'listini') window.renderListiniPage();
+    if (page === 'rese') window.renderResePage();
     if (page === 'prodotti') window.renderProdottiTable();
     if (page === 'utenti') window.renderUtentiTable();
     if (page === 'autista') window.renderAutistaView();

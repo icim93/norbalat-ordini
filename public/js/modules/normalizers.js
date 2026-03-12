@@ -73,6 +73,22 @@
     };
   }
 
+  function normalizeResa(r) {
+    return {
+      id: r.id,
+      fornitoreId: r.fornitore_id || null,
+      fornitoreNome: r.fornitore_nome || '',
+      quantita: (r.quantita !== undefined && r.quantita !== null) ? Number(r.quantita) : 0,
+      prezzoPagato: (r.prezzo_pagato !== undefined && r.prezzo_pagato !== null) ? Number(r.prezzo_pagato) : 0,
+      lotto: r.lotto || '',
+      resaPct: (r.resa_pct !== undefined && r.resa_pct !== null) ? Number(r.resa_pct) : 0,
+      prezzoVenduto: (r.prezzo_venduto !== undefined && r.prezzo_venduto !== null) ? Number(r.prezzo_venduto) : null,
+      createdBy: r.created_by || null,
+      createdAt: r.created_at || null,
+      updatedAt: r.updated_at || null,
+    };
+  }
+
   function normalizeOrdine(o) {
     return {
       id: o.id,
@@ -124,6 +140,7 @@
   window.normalizeCliente = normalizeCliente;
   window.normalizeProdotto = normalizeProdotto;
   window.normalizeListino = normalizeListino;
+  window.normalizeResa = normalizeResa;
   window.normalizeOrdine = normalizeOrdine;
   window.normalizeCamion = normalizeCamion;
 })();
