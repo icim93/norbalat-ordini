@@ -18,6 +18,28 @@
     return Math.round((((clal + spread) / 82) * resa) * 100) / 100;
   }
 
+  function computeScostamentoPrezzo(prezzoVenduto, prezzoPagato) {
+    const venduto = Number(prezzoVenduto);
+    const pagato = Number(prezzoPagato);
+    if (!Number.isFinite(venduto) || !Number.isFinite(pagato)) return null;
+    return Math.round((venduto - pagato) * 100) / 100;
+  }
+
+  function getPrezzoVendutoStyle(prezzoVenduto, prezzoPagato) {
+    const diff = computeScostamentoPrezzo(prezzoVenduto, prezzoPagato);
+    if (!Number.isFinite(diff)) return 'color:var(--text1);';
+    if (diff > 0) return 'color:var(--success);';
+    if (diff < 0) return 'color:var(--danger);';
+    return 'color:var(--text1);';
+  }
+
+  function formatScostamento(prezzoVenduto, prezzoPagato) {
+    const diff = computeScostamentoPrezzo(prezzoVenduto, prezzoPagato);
+    if (!Number.isFinite(diff)) return '<span style="color:var(--text3);">-</span>';
+    const sign = diff > 0 ? '+' : '';
+    return `<span style="${getPrezzoVendutoStyle(prezzoVenduto, prezzoPagato)}font-weight:700;">${sign}${window.eur(diff)}</span>`;
+  }
+
   function getFornitoriRese() {
     return [...window.state.clienti]
       .filter(c => c.eFornitore)
@@ -46,10 +68,12 @@
     const clal = document.getElementById('resa-clal')?.value;
     const buyer = document.getElementById('resa-buyer')?.value;
     const resa = document.getElementById('resa-pct')?.value;
+    const prezzoPagato = document.getElementById('resa-prezzo-pagato')?.value;
     const out = document.getElementById('resa-prezzo-venduto');
     if (!out) return;
     const prezzo = computePrezzoVendutoClient(clal, buyer, resa);
     out.value = Number.isFinite(prezzo) ? prezzo.toFixed(2) : '';
+    out.style.color = getPrezzoVendutoStyle(prezzo, prezzoPagato).replace('color:', '').replace(';', '');
   }
 
   function openNewResa() {
@@ -174,14 +198,15 @@
         <td style="font-family:'DM Mono',monospace;">${Number(r.quantita || 0).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
         <td style="font-family:'DM Mono',monospace;">${window.eur(r.prezzoPagato)}</td>
         <td style="font-family:'DM Mono',monospace;">${Number(r.resaPct || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</td>
-        <td style="font-family:'DM Mono',monospace;font-weight:700;">${window.eur(r.prezzoVenduto)}</td>
+        <td style="font-family:'DM Mono',monospace;font-weight:700;${getPrezzoVendutoStyle(r.prezzoVenduto, r.prezzoPagato)}">${window.eur(r.prezzoVenduto)}</td>
+        <td style="font-family:'DM Mono',monospace;">${formatScostamento(r.prezzoVenduto, r.prezzoPagato)}</td>
         <td>${r.lotto || '<span style="color:var(--text3);">-</span>'}</td>
         <td>
           ${canManageRese() ? `<button class="btn btn-outline btn-sm" onclick="openEditResa(${r.id})">Modifica</button>` : ''}
           ${canManageRese() ? `<button class="btn btn-danger btn-sm" onclick="deleteResa(${r.id})">Elimina</button>` : ''}
         </td>
       </tr>
-    `).join('') : '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">♻️</div><p>Nessuna resa registrata</p></div></td></tr>';
+    `).join('') : '<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">♻️</div><p>Nessuna resa registrata</p></div></td></tr>';
   }
 
   window.openNewResa = openNewResa;

@@ -16,7 +16,7 @@
       { page: 'piano', icon: '🚛', label: 'Piano Carico' },
       { page: 'report', icon: '📊', label: 'Report' },
       { page: 'impostazioni', icon: '⚙️', label: 'Impostazioni' },
-      { page: 'sperimentale', icon: '🧪', label: 'Sperimentale' },
+      { page: 'sperimentale', icon: '🧪', label: 'CLAL' },
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
     amministrazione: [
@@ -47,7 +47,7 @@
       { page: 'listini', icon: '💶', label: 'Listini' },
       { page: 'rese', icon: '♻️', label: 'Gestione Rese' },
       { page: 'report', icon: '📊', label: 'Report' },
-      { page: 'sperimentale', icon: '🧪', label: 'Sperimentale' },
+      { page: 'sperimentale', icon: '🧪', label: 'CLAL' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
