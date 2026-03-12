@@ -1,6 +1,18 @@
 let orderLines = [];
 let selectedOrders = new Set();
 
+function createEmptyOrderLine() {
+  return {
+    prodId: null,
+    prodottoNomeLibero: '',
+    qty: 1,
+    prezzoUnitario: null,
+    notaRiga: '',
+    showPesoApprox: false,
+    showAdvanced: false,
+  };
+}
+
 function openNewOrder() {
   if (typeof getModalitaOrdine === 'function'
     && getModalitaOrdine() === 'catalogo'
@@ -9,7 +21,7 @@ function openNewOrder() {
     return;
   }
   state.editingId = null;
-  orderLines = [{ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: null, showPesoApprox: false }];
+  orderLines = [createEmptyOrderLine()];
   document.getElementById('modal-ordine-title').textContent = 'Nuovo Ordine';
   document.getElementById('ord-data').value = today();
   document.getElementById('ord-stato').value = 'attesa';
@@ -43,6 +55,7 @@ function openEditOrder(id) {
     preparato: !!l.preparato,
     lotto: l.lotto || '',
     showPesoApprox: false,
+    showAdvanced: !!(l.prodottoNomeLibero || l.notaRiga || (l.prezzoUnitario !== undefined && l.prezzoUnitario !== null)),
   }));
   document.getElementById('modal-ordine-title').textContent = `Modifica Ordine #${id}`;
   document.getElementById('ord-data').value = o.data;
@@ -446,6 +459,14 @@ function toggleOrderLinePesoApprox(i) {
   const line = orderLines[i];
   if (!line) return;
   line.showPesoApprox = !line.showPesoApprox;
+  line.showAdvanced = true;
+  renderOrderLines();
+}
+
+function toggleOrderLineAdvanced(i) {
+  const line = orderLines[i];
+  if (!line) return;
+  line.showAdvanced = !line.showAdvanced;
   renderOrderLines();
 }
 
@@ -462,6 +483,7 @@ function renderOrderLines() {
     const curUM = l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi');
     const isPedana = curUM === 'Pedana';
     const showPesoApprox = !!l.showPesoApprox;
+    const showAdvanced = !!l.showAdvanced;
     const approxKg = estimateLineKg(l);
     const prezzoListino = p ? getListinoPrezzo(p.id, clienteId, dataOrdine) : null;
     const prezzo = Number.isFinite(Number(l.prezzoUnitario)) ? Number(l.prezzoUnitario) : null;
@@ -470,7 +492,7 @@ function renderOrderLines() {
     if (subtot !== null) { totale += subtot; righeConPrezzo++; }
     return `
     <div class="order-line" id="ord-line-${i}">
-      <div class="order-line-top">
+      <div class="order-line-header">
         <div class="ac-wrap order-line-search">
           <input type="text" class="ac-input${p ? ' has-value' : ''}"
             id="ac-prod-input-${i}"
@@ -483,14 +505,16 @@ function renderOrderLines() {
             style="width:100%;">
           <div class="ac-dropdown" id="ac-prod-dd-${i}"></div>
         </div>
-        <div class="order-line-controls">
+        <button class="line-delete order-line-delete-btn" onclick="removeOrderLine(${i})" style="border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:16px;color:var(--text3);display:flex;align-items:center;justify-content:center;" title="Rimuovi">x</button>
+      </div>
+      <div class="order-line-row">
         ${showPesoApprox
           ? `<input type="text" value="${approxKg !== null ? `${approxKg.toFixed(2)} kg ca.` : 'n.d.'}" readonly
               title="${approxKg !== null ? `Stima da packaging: ${p?.packaging || 'n.d.'}` : 'Packaging non leggibile per stima kg'}"
-              style="width:96px;flex-shrink:0;font-size:12px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);">`
+              style="width:100%;font-size:12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);">`
           : `<input type="number" class="qty-input" value="${l.qty||1}" min="1"
-              onchange="orderLines[${i}].qty=parseInt(this.value)||1;renderOrderLines()"
-              placeholder="Qta" style="width:56px;flex-shrink:0;">`
+              onchange="orderLines[${i}].qty=parseFloat(this.value)||1;renderOrderLines()"
+              placeholder="Quantità" style="width:100%;">`
         }
         <button class="btn btn-outline btn-sm" type="button"
           onclick="toggleOrderLinePesoApprox(${i})"
@@ -535,6 +559,103 @@ function renderOrderLines() {
       summary.textContent = '';
     } else {
       summary.innerHTML = `Totale stimato ordine: <b>${eur(totale)}</b>${(orderLines.length-righeConPrezzo)>0 ? ` - ${(orderLines.length-righeConPrezzo)} riga/e senza prezzo` : ''}`;
+    }
+  }
+}
+
+function renderOrderLines() {
+  const container = document.getElementById('ord-lines-container');
+  renderOrdineDeliveryDaysHint();
+  const clienteId = parseInt(document.getElementById('ord-cliente')?.value || acState.cliente?.value || 0) || null;
+  const dataOrdine = document.getElementById('ord-data')?.value || today();
+  let totale = 0;
+  let righeConPrezzo = 0;
+  container.innerHTML = orderLines.map((l, i) => {
+    const p = l.prodId ? getProdotto(l.prodId) : null;
+    const umOpts = ['Pezzi', 'Cartoni', 'Litri', 'Kg', 'Pedana'];
+    const curUM = l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi');
+    const isPedana = curUM === 'Pedana';
+    const showPesoApprox = !!l.showPesoApprox;
+    const showAdvanced = !!l.showAdvanced;
+    const approxKg = estimateLineKg(l);
+    const prezzoListino = p ? getListinoPrezzo(p.id, clienteId, dataOrdine) : null;
+    const prezzo = Number.isFinite(Number(l.prezzoUnitario)) ? Number(l.prezzoUnitario) : null;
+    const qty = Number(l.qty || 0);
+    const subtot = (prezzo !== null && Number.isFinite(qty)) ? prezzo * qty : null;
+    if (subtot !== null) { totale += subtot; righeConPrezzo++; }
+    return `
+    <div class="order-line" id="ord-line-${i}">
+      <div class="order-line-header">
+        <div class="ac-wrap order-line-search">
+          <input type="text" class="ac-input${p ? ' has-value' : ''}"
+            id="ac-prod-input-${i}"
+            value="${p ? '[' + p.codice + '] ' + p.nome : ''}"
+            placeholder="Cerca codice o nome prodotto..."
+            autocomplete="off"
+            oninput="acProdFilter(${i})"
+            onfocus="acProdOpen(${i})"
+            onkeydown="acProdKey(event,${i})"
+            style="width:100%;">
+          <div class="ac-dropdown" id="ac-prod-dd-${i}"></div>
+        </div>
+        <button class="line-delete order-line-delete-btn" onclick="removeOrderLine(${i})" style="border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:16px;color:var(--text3);display:flex;align-items:center;justify-content:center;" title="Rimuovi">x</button>
+      </div>
+      <div class="order-line-row">
+        ${showPesoApprox
+          ? `<input type="text" value="${approxKg !== null ? `${approxKg.toFixed(2)} kg ca.` : 'n.d.'}" readonly
+              title="${approxKg !== null ? `Stima da packaging: ${p?.packaging || 'n.d.'}` : 'Packaging non leggibile per stima kg'}"
+              style="width:100%;font-size:12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);">`
+          : `<input type="number" class="qty-input" value="${l.qty || 1}" min="1"
+              onchange="orderLines[${i}].qty=parseFloat(this.value)||1;renderOrderLines()"
+              placeholder="Quantita" style="width:100%;">`
+        }
+        <select
+          onchange="orderLines[${i}].unitaMisura=this.value;orderLines[${i}].isPedana=(this.value==='Pedana');orderLines[${i}]._umPersonalizzata=true;renderOrderLines()"
+          style="width:100%;font-size:12px;padding:8px 10px;border:1.5px solid ${isPedana ? 'var(--accent)' : 'var(--border)'};border-radius:6px;background:${isPedana ? 'var(--accent-light)' : 'var(--surface2)'};color:var(--text1);cursor:pointer;">
+          ${umOpts.map(u => `<option value="${u}" ${u === curUM ? 'selected' : ''}>${umPlurale(u, l.qty || 1)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="order-line-meta-row">
+        <button class="btn btn-outline btn-sm order-line-more-btn" type="button" onclick="toggleOrderLineAdvanced(${i})">
+          ${showAdvanced ? 'Nascondi altre opzioni' : 'Altre opzioni'}
+        </button>
+      </div>
+      ${showAdvanced ? `
+      <div class="order-line-advanced">
+        <div class="order-line-advanced-actions">
+          <button class="btn btn-outline btn-sm" type="button"
+            onclick="toggleOrderLinePesoApprox(${i})"
+            style="${showPesoApprox ? 'border-color:var(--accent);color:var(--accent);' : ''}">
+            ${showPesoApprox ? 'Mostra quantita' : 'Selettore Kg/Qta'}
+          </button>
+        </div>
+        <div class="order-line-advanced-grid">
+          <input type="text" value="${l.prodottoNomeLibero || ''}"
+            placeholder="Prodotto libero (opzionale)"
+            oninput="orderLines[${i}].prodottoNomeLibero=this.value"
+            style="font-size:12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
+          <input type="text" inputmode="decimal" value="${prezzo !== null ? prezzo.toFixed(2) : ''}"
+            placeholder="Prezzo"
+            oninput="const raw=String(this.value||'').trim();const norm=raw.replace(',','.');const n=Number(norm);orderLines[${i}].prezzoUnitario=(raw===''||!Number.isFinite(n)?null:n);"
+            style="font-size:12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
+        </div>
+        <input type="text" value="${l.notaRiga || ''}"
+          placeholder="Nota riga"
+          oninput="orderLines[${i}].notaRiga=this.value"
+          style="font-size:12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
+      </div>` : ''}
+      ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">${p.packaging}${isPedana ? ' - PEDANA INTERA' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">PEDANA INTERA</div>` : '')}
+      ${approxKg !== null ? `<div style="font-size:11px;color:var(--accent);padding-left:2px;">Stima peso: <b>${approxKg.toFixed(2)} kg</b></div>` : ''}
+      ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">${p.note}</div>` : ''}
+      ${p ? `<div style="font-size:11px;color:var(--text2);padding-left:2px;">Listino: ${prezzoListino !== null ? eur(prezzoListino) : 'n.d.'}${subtot !== null ? ` - Subtotale: <b>${eur(subtot)}</b>` : ''}</div>` : ''}
+    </div>`;
+  }).join('') || '<div style="padding:12px;color:var(--text3);font-size:13px;">Nessun prodotto aggiunto</div>';
+  const summary = document.getElementById('ord-price-summary');
+  if (summary) {
+    if (!orderLines.length) {
+      summary.textContent = '';
+    } else {
+      summary.innerHTML = `Totale stimato ordine: <b>${eur(totale)}</b>${(orderLines.length - righeConPrezzo) > 0 ? ` - ${(orderLines.length - righeConPrezzo)} riga/e senza prezzo` : ''}`;
     }
   }
 }
@@ -706,7 +827,7 @@ function acProdKey(e, i) {
 }
 
 function addOrderLine() {
-  orderLines.push({ prodId: null, prodottoNomeLibero: '', qty: 1, prezzoUnitario: null, showPesoApprox: false });
+  orderLines.push(createEmptyOrderLine());
   renderOrderLines();
   // Focus sul nuovo campo
   setTimeout(() => document.getElementById(`ac-prod-input-${orderLines.length-1}`)?.focus(), 50);

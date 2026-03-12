@@ -78,6 +78,8 @@
       id: r.id,
       fornitoreId: r.fornitore_id || null,
       fornitoreNome: r.fornitore_nome || '',
+      clalValue: (r.clal_value !== undefined && r.clal_value !== null) ? Number(r.clal_value) : null,
+      buyerCode: r.buyer_code || 'viga',
       quantita: (r.quantita !== undefined && r.quantita !== null) ? Number(r.quantita) : 0,
       prezzoPagato: (r.prezzo_pagato !== undefined && r.prezzo_pagato !== null) ? Number(r.prezzo_pagato) : 0,
       lotto: r.lotto || '',

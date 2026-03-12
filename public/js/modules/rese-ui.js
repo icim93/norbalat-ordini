@@ -1,16 +1,21 @@
 (function () {
   let editingResaId = null;
+  const BUYER_META = {
+    viga: { label: 'VIGA', spread: 1.40 },
+    ital_butter: { label: 'Ital Butter', spread: 1.25 },
+  };
 
   function canManageRese() {
     const r = window.state.currentUser?.ruolo;
     return r === 'admin' || r === 'direzione';
   }
 
-  function computePrezzoVendutoClient(prezzoPagato, resaPct) {
-    const paid = Number(prezzoPagato);
+  function computePrezzoVendutoClient(clalValue, buyerCode, resaPct) {
+    const clal = Number(clalValue);
     const resa = Number(resaPct);
-    if (!Number.isFinite(paid) || !Number.isFinite(resa) || paid < 0 || resa <= 0) return null;
-    return Math.round((paid / (resa / 100)) * 100) / 100;
+    const spread = BUYER_META[String(buyerCode || '')]?.spread;
+    if (!Number.isFinite(clal) || !Number.isFinite(resa) || !Number.isFinite(spread) || clal < 0 || resa <= 0) return null;
+    return Math.round((((clal + spread) / 82) * resa) * 100) / 100;
   }
 
   function getFornitoriRese() {
@@ -38,11 +43,12 @@
   }
 
   function updateResaPrezzoVendutoPreview() {
-    const paid = document.getElementById('resa-prezzo-pagato')?.value;
+    const clal = document.getElementById('resa-clal')?.value;
+    const buyer = document.getElementById('resa-buyer')?.value;
     const resa = document.getElementById('resa-pct')?.value;
     const out = document.getElementById('resa-prezzo-venduto');
     if (!out) return;
-    const prezzo = computePrezzoVendutoClient(paid, resa);
+    const prezzo = computePrezzoVendutoClient(clal, buyer, resa);
     out.value = Number.isFinite(prezzo) ? prezzo.toFixed(2) : '';
   }
 
@@ -50,7 +56,14 @@
     if (!canManageRese()) return;
     editingResaId = null;
     document.getElementById('modal-resa-title').textContent = 'Nuova Resa';
+    const latest = [...window.state.rese].sort((a, b) => {
+      const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return tb - ta || b.id - a.id;
+    })[0];
     fillResaFornitoreSelect('');
+    document.getElementById('resa-clal').value = Number.isFinite(latest?.clalValue) ? latest.clalValue : '';
+    document.getElementById('resa-buyer').value = latest?.buyerCode || 'viga';
     document.getElementById('resa-quantita').value = '';
     document.getElementById('resa-prezzo-pagato').value = '';
     document.getElementById('resa-lotto').value = '';
@@ -66,6 +79,8 @@
     editingResaId = id;
     document.getElementById('modal-resa-title').textContent = `Modifica Resa #${id}`;
     fillResaFornitoreSelect(row.fornitoreId);
+    document.getElementById('resa-clal').value = Number.isFinite(row.clalValue) ? row.clalValue : '';
+    document.getElementById('resa-buyer').value = row.buyerCode || 'viga';
     document.getElementById('resa-quantita').value = Number.isFinite(row.quantita) ? row.quantita : '';
     document.getElementById('resa-prezzo-pagato').value = Number.isFinite(row.prezzoPagato) ? row.prezzoPagato : '';
     document.getElementById('resa-lotto').value = row.lotto || '';
@@ -77,15 +92,19 @@
   async function saveResa() {
     if (!canManageRese()) return;
     const fornitoreId = parseInt(document.getElementById('resa-fornitore').value || '0', 10);
+    const clalValue = parseFloat(document.getElementById('resa-clal').value || '');
+    const buyerCode = document.getElementById('resa-buyer').value || 'viga';
     const quantita = parseFloat(document.getElementById('resa-quantita').value || '');
     const prezzoPagato = parseFloat(document.getElementById('resa-prezzo-pagato').value || '');
     const resaPct = parseFloat(document.getElementById('resa-pct').value || '');
     const lotto = (document.getElementById('resa-lotto').value || '').trim();
-    if (!fornitoreId || !Number.isFinite(quantita) || quantita <= 0 || !Number.isFinite(prezzoPagato) || prezzoPagato < 0 || !Number.isFinite(resaPct) || resaPct <= 0 || resaPct > 100) {
+    if (!fornitoreId || !Number.isFinite(clalValue) || clalValue < 0 || !BUYER_META[buyerCode] || !Number.isFinite(quantita) || quantita <= 0 || !Number.isFinite(prezzoPagato) || prezzoPagato < 0 || !Number.isFinite(resaPct) || resaPct <= 0 || resaPct > 100) {
       return window.showToast('Compila correttamente i campi obbligatori', 'warning');
     }
     const body = {
       fornitore_id: fornitoreId,
+      clal_value: clalValue,
+      buyer_code: buyerCode,
       quantita,
       prezzo_pagato: prezzoPagato,
       lotto,
@@ -150,6 +169,8 @@
       <tr>
         <td style="white-space:nowrap;">${window.formatDateTime(r.createdAt)}</td>
         <td><b>${r.fornitoreNome || '-'}</b></td>
+        <td>${BUYER_META[r.buyerCode]?.label || '-'}</td>
+        <td style="font-family:'DM Mono',monospace;">${Number.isFinite(r.clalValue) ? r.clalValue.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</td>
         <td style="font-family:'DM Mono',monospace;">${Number(r.quantita || 0).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</td>
         <td style="font-family:'DM Mono',monospace;">${window.eur(r.prezzoPagato)}</td>
         <td style="font-family:'DM Mono',monospace;">${Number(r.resaPct || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</td>
@@ -160,7 +181,7 @@
           ${canManageRese() ? `<button class="btn btn-danger btn-sm" onclick="deleteResa(${r.id})">Elimina</button>` : ''}
         </td>
       </tr>
-    `).join('') : '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">♻️</div><p>Nessuna resa registrata</p></div></td></tr>';
+    `).join('') : '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">♻️</div><p>Nessuna resa registrata</p></div></td></tr>';
   }
 
   window.openNewResa = openNewResa;

@@ -464,9 +464,15 @@
   .order-line { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
   .order-line:last-child { border-bottom: none; }
   .order-line-add { padding: 8px 12px; border-top: 1px solid var(--border); }
-  .order-line-top { display: flex; align-items: center; gap: 6px; }
+  .order-line-header { display: flex; align-items: center; gap: 8px; }
   .order-line-search { flex: 1; min-width: 0; position: relative; }
-  .order-line-controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .order-line-delete-btn { flex-shrink: 0; width: 28px; height: 28px; }
+  .order-line-row { display: grid; grid-template-columns: minmax(90px, 120px) minmax(120px, 1fr); gap: 8px; align-items: center; }
+  .order-line-meta-row { display: block; }
+  .order-line-more-btn { width: 100%; }
+  .order-line-advanced { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+  .order-line-advanced-grid { display: grid; grid-template-columns: 1fr 150px; gap: 8px; }
+  .order-line-advanced-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
   .qty-input {
     padding: 6px 8px;
@@ -1109,30 +1115,15 @@
       flex-direction: column;
       align-items: stretch !important;
     }
-    #modal-ordine .order-line-top {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 8px;
-    }
-    #modal-ordine .order-line-search {
+    #modal-ordine .order-line-header,
+    #modal-ordine .order-line-row,
+    #modal-ordine .order-line-advanced-grid,
+    #modal-ordine .order-line-advanced-actions {
       width: 100%;
     }
-    #modal-ordine .order-line-controls {
-      width: 100%;
-      display: grid;
-      grid-template-columns: minmax(72px, 96px) minmax(88px, 1fr) minmax(40px, 48px);
-      gap: 8px;
-      align-items: center;
-    }
-    #modal-ordine .order-line-controls > .btn,
-    #modal-ordine .order-line-controls > .line-delete,
-    #modal-ordine .order-line-controls > select,
-    #modal-ordine .order-line-controls > input {
-      width: 100% !important;
-      max-width: none !important;
-    }
-    #modal-ordine .order-line-controls > .btn {
-      min-height: 38px;
+    #modal-ordine .order-line-row,
+    #modal-ordine .order-line-advanced-grid {
+      grid-template-columns: 1fr;
     }
     #modal-pdf-giornaliero .field[style*="min-width:140px"],
     #modal-pdf-giornaliero .field[style*="min-width:180px"],
@@ -1203,8 +1194,8 @@
     .warehouse-card {
       padding: 14px;
     }
-    #modal-ordine .order-line-controls {
-      grid-template-columns: 1fr 1fr 44px;
+    #modal-ordine .order-line-header {
+      align-items: flex-start;
     }
     #page-autista > div[style*="margin-bottom:16px"] > div:last-child {
       grid-template-columns: 1fr;
@@ -1630,6 +1621,8 @@
               <tr>
                 <th>Data</th>
                 <th>Fornitore</th>
+                <th>Burrificio</th>
+                <th>CLAL</th>
                 <th>Quantità</th>
                 <th>Prezzo pagato</th>
                 <th>Resa %</th>
@@ -2642,8 +2635,23 @@
           <select id="resa-fornitore"></select>
         </div>
         <div class="field">
+          <label>Valore CLAL *</label>
+          <input type="number" id="resa-clal" min="0" step="0.01" placeholder="0,00" oninput="updateResaPrezzoVendutoPreview()">
+        </div>
+        <div class="field">
+          <label>Burrificio *</label>
+          <select id="resa-buyer" onchange="updateResaPrezzoVendutoPreview()">
+            <option value="viga">VIGA (+1.40)</option>
+            <option value="ital_butter">Ital Butter (+1.25)</option>
+          </select>
+        </div>
+        <div class="field">
           <label>Quantità *</label>
           <input type="number" id="resa-quantita" min="0.01" step="0.01" placeholder="0,00">
+        </div>
+        <div class="field">
+          <label>Resa % *</label>
+          <input type="number" id="resa-pct" min="0.01" max="100" step="0.01" placeholder="100" oninput="updateResaPrezzoVendutoPreview()">
         </div>
         <div class="field">
           <label>Prezzo pagato *</label>
@@ -2653,13 +2661,12 @@
           <label>Lotto</label>
           <input type="text" id="resa-lotto" maxlength="120" placeholder="Lotto">
         </div>
-        <div class="field">
-          <label>Resa % *</label>
-          <input type="number" id="resa-pct" min="0.01" max="100" step="0.01" placeholder="100" oninput="updateResaPrezzoVendutoPreview()">
-        </div>
         <div class="field form-full">
           <label>Prezzo venduto calcolato</label>
           <input type="text" id="resa-prezzo-venduto" readonly style="background:var(--surface2);font-weight:700;">
+        </div>
+        <div class="field form-full">
+          <div style="font-size:12px;color:var(--text3);">Formula: <b>(CLAL + spread burrificio) / 82 × resa %</b></div>
         </div>
       </div>
     </div>

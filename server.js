@@ -650,6 +650,8 @@ async function createSchema() {
     CREATE TABLE IF NOT EXISTS rese_fornitori (
       id             SERIAL PRIMARY KEY,
       fornitore_id   INTEGER NOT NULL REFERENCES clienti(id),
+      clal_value     NUMERIC,
+      buyer_code     TEXT DEFAULT 'viga',
       quantita       NUMERIC NOT NULL DEFAULT 0,
       prezzo_pagato  NUMERIC NOT NULL DEFAULT 0,
       lotto          TEXT DEFAULT '',
@@ -781,6 +783,8 @@ async function createSchema() {
     ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS lotto TEXT DEFAULT '';
     ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS resa_pct NUMERIC NOT NULL DEFAULT 100;
     ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS prezzo_venduto NUMERIC;
+    ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS clal_value NUMERIC;
+    ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS buyer_code TEXT DEFAULT 'viga';
     ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES utenti(id) ON DELETE SET NULL;
     ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
@@ -1219,11 +1223,17 @@ function asIntArray(v) {
   return [...new Set(v.map(x => parseInt(x, 10)).filter(Number.isFinite))];
 }
 
-function computePrezzoVenduto(prezzoPagato, resaPct) {
-  const paid = asNum(prezzoPagato);
+const RESA_BUYER_SPREADS = {
+  viga: 1.40,
+  ital_butter: 1.25,
+};
+
+function computePrezzoVenduto(clalValue, buyerCode, resaPct) {
+  const clal = asNum(clalValue);
   const resa = asNum(resaPct);
-  if (paid === null || resa === null || paid < 0 || resa <= 0) return null;
-  return Math.round((paid / (resa / 100)) * 100) / 100;
+  const spread = asNum(RESA_BUYER_SPREADS[String(buyerCode || '')]);
+  if (clal === null || resa === null || spread === null || resa <= 0) return null;
+  return Math.round((((clal + spread) / 82) * resa) * 100) / 100;
 }
 
 function validationError(res, parsed) {
@@ -1257,6 +1267,8 @@ const zListinoPayload = z.object({
 
 const zResaPayload = z.object({
   fornitore_id: z.coerce.number().int().positive(),
+  clal_value: z.coerce.number().nonnegative(),
+  buyer_code: z.enum(['viga', 'ital_butter']),
   quantita: z.coerce.number().positive(),
   prezzo_pagato: z.coerce.number().nonnegative(),
   lotto: z.string().max(120).optional().default(''),
@@ -2082,14 +2094,16 @@ app.post('/api/rese', authMiddleware, requirePermission('rese:manage'), async (r
     if (!parsed.success) return validationError(res, parsed);
     const payload = parsed.data;
     const fornitore = await ensureFornitoreCliente(payload.fornitore_id);
-    const prezzoVenduto = computePrezzoVenduto(payload.prezzo_pagato, payload.resa_pct);
+    const prezzoVenduto = computePrezzoVenduto(payload.clal_value, payload.buyer_code, payload.resa_pct);
     const { rows } = await q(
       `INSERT INTO rese_fornitori
-       (fornitore_id, quantita, prezzo_pagato, lotto, resa_pct, prezzo_venduto, created_by, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
+       (fornitore_id, clal_value, buyer_code, quantita, prezzo_pagato, lotto, resa_pct, prezzo_venduto, created_by, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),NOW())
        RETURNING *`,
       [
         payload.fornitore_id,
+        payload.clal_value,
+        payload.buyer_code,
         payload.quantita,
         payload.prezzo_pagato,
         String(payload.lotto || '').trim(),
@@ -2114,19 +2128,23 @@ app.put('/api/rese/:id', authMiddleware, requirePermission('rese:manage'), async
     const existing = await getResaRecord(id);
     if (!existing) return res.status(404).json({ error: 'Record resa non trovato' });
     const fornitore = await ensureFornitoreCliente(payload.fornitore_id);
-    const prezzoVenduto = computePrezzoVenduto(payload.prezzo_pagato, payload.resa_pct);
+    const prezzoVenduto = computePrezzoVenduto(payload.clal_value, payload.buyer_code, payload.resa_pct);
     await q(
       `UPDATE rese_fornitori
        SET fornitore_id=$1,
-           quantita=$2,
-           prezzo_pagato=$3,
-           lotto=$4,
-           resa_pct=$5,
-           prezzo_venduto=$6,
+           clal_value=$2,
+           buyer_code=$3,
+           quantita=$4,
+           prezzo_pagato=$5,
+           lotto=$6,
+           resa_pct=$7,
+           prezzo_venduto=$8,
            updated_at=NOW()
-       WHERE id=$7`,
+       WHERE id=$9`,
       [
         payload.fornitore_id,
+        payload.clal_value,
+        payload.buyer_code,
         payload.quantita,
         payload.prezzo_pagato,
         String(payload.lotto || '').trim(),
