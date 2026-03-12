@@ -52,7 +52,10 @@
     color: var(--text1);
     min-height: 100vh;
     font-size: 15px;
+    overflow-x: hidden;
   }
+
+  img { max-width: 100%; height: auto; }
 
   /* ── LOGIN ── */
   #screen-login {
@@ -975,6 +978,9 @@
   }
 
   @media (max-width: 768px) {
+    html, body, #screen-app, .app-layout, .main, .page, .card, .modal, .modal-body {
+      max-width: 100%;
+    }
     body { font-size: 14px; }
     .login-card { margin: 16px; padding: 32px 22px; }
     .login-roles,
@@ -986,6 +992,7 @@
       flex-direction: column;
     }
     .sidebar { display: none; }
+    .app-layout { display: block; }
     .hamburger-btn { display: inline-flex; }
     .topbar {
       padding: 10px 12px;
@@ -993,8 +1000,16 @@
       height: auto;
       gap: 10px;
     }
+    .topbar > div:first-child {
+      min-width: 0;
+      flex: 1;
+    }
     .topbar-brand { font-size: 15px; }
-    .topbar-user { gap: 8px; }
+    .topbar-user {
+      gap: 8px;
+      flex-shrink: 0;
+      min-width: 0;
+    }
     #topbar-username { display: none; }
     .topbar-logout { padding: 6px 10px; }
     .main { padding: 14px 12px calc(86px + env(safe-area-inset-bottom, 0px)); }
@@ -1007,6 +1022,17 @@
     .page-header > div[style*="justify-content:space-between"],
     .card-header > div[style*="justify-content:space-between"] {
       align-items: stretch !important;
+    }
+    .card-header > div[style*="display:flex;gap:8px"] {
+      width: 100%;
+      flex-wrap: wrap;
+    }
+    .card-header > div[style*="display:flex;gap:8px"] > * {
+      flex: 1 1 100%;
+      min-width: 0;
+    }
+    .card-header select[style*="width:auto"] {
+      width: 100% !important;
     }
     .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .card-header,
@@ -1030,6 +1056,33 @@
     .piano-pedane-grid,
     .pedane-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .mobile-view { max-width: none; }
+    .warehouse-card,
+    .mob-header,
+    .mob-actions {
+      min-width: 0;
+    }
+    .warehouse-card {
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .wh-num {
+      min-width: auto;
+    }
+    .mob-header,
+    .mob-line {
+      gap: 8px;
+    }
+    .mob-client,
+    .wh-client,
+    .drawer-user-name,
+    .drawer-user-role {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .mob-actions {
+      flex-direction: column;
+    }
     .modal-overlay {
       padding: 8px;
       align-items: flex-end;
@@ -1046,6 +1099,18 @@
     .modal-footer .btn {
       width: 100%;
       justify-content: center;
+    }
+    #modal-ordine .modal-body > div[style*="display:flex;gap:16px;margin-top:6px;"],
+    #modal-catalogo .modal-body .field[style*="display:flex;align-items:flex-end;gap:12px"],
+    #modal-pdf-giornaliero .modal-body > div[style*="display:flex;gap:16px;align-items:flex-start"] {
+      flex-direction: column;
+      align-items: stretch !important;
+    }
+    #modal-pdf-giornaliero .field[style*="min-width:140px"],
+    #modal-pdf-giornaliero .field[style*="min-width:180px"],
+    #modal-pdf-giornaliero .field[style*="min-width:200px"] {
+      min-width: 0 !important;
+      width: 100%;
     }
     .mobile-nav { display: block; }
     #page-documenti .doc-layout { grid-template-columns: 1fr; }
@@ -1086,6 +1151,11 @@
     .page-title { font-size: 19px; }
     .stat-value { font-size: 24px; }
     .topbar-role { display: none; }
+    .topbar-logout {
+      padding-left: 8px;
+      padding-right: 8px;
+      font-size: 12px;
+    }
     .brand-text {
       max-width: 124px;
       overflow: hidden;
@@ -1102,6 +1172,9 @@
     }
     .pedana-input { min-height: 52px; }
     .table-scroll-wrap table { min-width: 520px; }
+    .warehouse-card {
+      padding: 14px;
+    }
     #page-autista > div[style*="margin-bottom:16px"] > div:last-child {
       grid-template-columns: 1fr;
     }
