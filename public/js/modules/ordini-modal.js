@@ -470,8 +470,8 @@ function renderOrderLines() {
     if (subtot !== null) { totale += subtot; righeConPrezzo++; }
     return `
     <div class="order-line" id="ord-line-${i}">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <div class="ac-wrap" style="flex:1;min-width:0;position:relative;">
+      <div class="order-line-top">
+        <div class="ac-wrap order-line-search">
           <input type="text" class="ac-input${p ? ' has-value' : ''}"
             id="ac-prod-input-${i}"
             value="${p ? '['+p.codice+'] '+p.nome : ''}"
@@ -483,6 +483,7 @@ function renderOrderLines() {
             style="width:100%;">
           <div class="ac-dropdown" id="ac-prod-dd-${i}"></div>
         </div>
+        <div class="order-line-controls">
         ${showPesoApprox
           ? `<input type="text" value="${approxKg !== null ? `${approxKg.toFixed(2)} kg ca.` : 'n.d.'}" readonly
               title="${approxKg !== null ? `Stima da packaging: ${p?.packaging || 'n.d.'}` : 'Packaging non leggibile per stima kg'}"
@@ -503,6 +504,7 @@ function renderOrderLines() {
           ${umOpts.map(u => `<option value="${u}" ${u===curUM?'selected':''}>${umPlurale(u, l.qty||1)}</option>`).join('')}
         </select>
         <button class="line-delete" onclick="removeOrderLine(${i})" style="flex-shrink:0;width:32px;height:32px;border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:16px;color:var(--text3);display:flex;align-items:center;justify-content:center;" title="Rimuovi">x</button>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 150px;gap:8px;margin-top:6px;">
         <input type="text" value="${l.prodottoNomeLibero||''}"

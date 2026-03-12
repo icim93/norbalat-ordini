@@ -464,6 +464,9 @@
   .order-line { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
   .order-line:last-child { border-bottom: none; }
   .order-line-add { padding: 8px 12px; border-top: 1px solid var(--border); }
+  .order-line-top { display: flex; align-items: center; gap: 6px; }
+  .order-line-search { flex: 1; min-width: 0; position: relative; }
+  .order-line-controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
   .qty-input {
     padding: 6px 8px;
@@ -1106,6 +1109,31 @@
       flex-direction: column;
       align-items: stretch !important;
     }
+    #modal-ordine .order-line-top {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 8px;
+    }
+    #modal-ordine .order-line-search {
+      width: 100%;
+    }
+    #modal-ordine .order-line-controls {
+      width: 100%;
+      display: grid;
+      grid-template-columns: minmax(72px, 96px) minmax(88px, 1fr) minmax(40px, 48px);
+      gap: 8px;
+      align-items: center;
+    }
+    #modal-ordine .order-line-controls > .btn,
+    #modal-ordine .order-line-controls > .line-delete,
+    #modal-ordine .order-line-controls > select,
+    #modal-ordine .order-line-controls > input {
+      width: 100% !important;
+      max-width: none !important;
+    }
+    #modal-ordine .order-line-controls > .btn {
+      min-height: 38px;
+    }
     #modal-pdf-giornaliero .field[style*="min-width:140px"],
     #modal-pdf-giornaliero .field[style*="min-width:180px"],
     #modal-pdf-giornaliero .field[style*="min-width:200px"] {
@@ -1174,6 +1202,9 @@
     .table-scroll-wrap table { min-width: 520px; }
     .warehouse-card {
       padding: 14px;
+    }
+    #modal-ordine .order-line-controls {
+      grid-template-columns: 1fr 1fr 44px;
     }
     #page-autista > div[style*="margin-bottom:16px"] > div:last-child {
       grid-template-columns: 1fr;
