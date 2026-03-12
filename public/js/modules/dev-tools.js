@@ -67,12 +67,11 @@ function escHtml(value) {
 
 
 function ensureDevPanelDom() {
-  const root = document.querySelector('#page-profilo > div');
+  const root = document.getElementById('profilo-dev-slot') || document.querySelector('#page-profilo > div');
   if (!root || document.getElementById('profilo-dev-card')) return;
   const card = document.createElement('div');
   card.id = 'profilo-dev-card';
   card.className = 'card';
-  card.style.marginTop = '20px';
   card.innerHTML = `
     <div class="card-header">
       <div class="card-title">Sviluppatore <span id="dev-health-badge" class="badge badge-gray">N/D</span></div>

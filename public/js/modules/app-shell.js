@@ -3,21 +3,56 @@
 
   const navConfigs = {
     admin: [
-      { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
-      { page: 'ordini', icon: '📋', label: 'Ordini' },
-      { page: 'magazzino', icon: '📦', label: 'Magazzino' },
-      { page: 'autista', icon: '🚚', label: 'Vista Autista' },
-      { page: 'clienti', icon: '🏢', label: 'Clienti' },
-      { page: 'documenti', icon: '🗂️', label: 'Documenti' },
-      { page: 'listini', icon: '💶', label: 'Listini' },
-      { page: 'rese', icon: '♻️', label: 'Gestione Rese' },
-      { page: 'prodotti', icon: '🧀', label: 'Prodotti' },
-      { page: 'utenti', icon: '👥', label: 'Utenti' },
-      { page: 'piano', icon: '🚛', label: 'Piano Carico' },
-      { page: 'report', icon: '📊', label: 'Report' },
-      { page: 'impostazioni', icon: '⚙️', label: 'Impostazioni' },
-      { page: 'sperimentale', icon: '🧪', label: 'CLAL' },
-      { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
+      {
+        section: 'Dashboard',
+        items: [
+          { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
+        ],
+      },
+      {
+        section: 'Ordini',
+        items: [
+          { page: 'ordini', icon: '📋', label: 'Ordini' },
+        ],
+      },
+      {
+        section: 'Magazzino',
+        items: [
+          { page: 'magazzino', icon: '📦', label: 'Magazzino' },
+          { page: 'piano', icon: '🚛', label: 'Piano Carico' },
+          { page: 'autista', icon: '🚚', label: 'Vista Autista' },
+        ],
+      },
+      {
+        section: 'Anagrafiche',
+        items: [
+          { page: 'clienti', icon: '🏢', label: 'Clienti' },
+          { page: 'prodotti', icon: '🧀', label: 'Prodotti' },
+          { page: 'utenti', icon: '👥', label: 'Utenti' },
+        ],
+      },
+      {
+        section: 'Statistiche',
+        items: [
+          { page: 'report', icon: '📊', label: 'Report' },
+        ],
+      },
+      {
+        section: 'Utility',
+        items: [
+          { page: 'listini', icon: '💶', label: 'Listini' },
+          { page: 'rese', icon: '♻️', label: 'Gestione Rese' },
+          { page: 'sperimentale', icon: '🧪', label: 'CLAL' },
+          { page: 'documenti', icon: '🗂️', label: 'Documenti' },
+          { page: 'impostazioni', icon: '⚙️', label: 'Impostazioni' },
+        ],
+      },
+      {
+        section: 'Profilo',
+        items: [
+          { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
+        ],
+      },
     ],
     amministrazione: [
       { page: 'clienti', icon: '🏢', label: 'Clienti' },
@@ -52,6 +87,51 @@
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
   };
+
+  function getFlatNavItems(config) {
+    return (config || []).flatMap(entry => Array.isArray(entry.items) ? entry.items : [entry]);
+  }
+
+  function renderNavButton(item, prefix = 'nav', extra = '') {
+    return `
+    <button class="${extra || 'nav-item'}" id="${prefix}-${item.page}" onclick="goTo('${item.page}')">
+      <span class="${extra === 'drawer-nav-item' ? 'drawer-nav-icon' : 'nav-icon'}">${item.icon}</span>${item.label}
+    </button>
+  `;
+  }
+
+  function renderSidebarNav(config) {
+    const hasSections = (config || []).some(entry => Array.isArray(entry.items));
+    if (!hasSections) {
+      return config.map(item => renderNavButton(item)).join('');
+    }
+    return config.map(group => `
+      <div class="nav-section">
+        <div class="nav-section-label">${group.section}</div>
+        <div class="nav-section-items">
+          ${group.items.map(item => renderNavButton(item)).join('')}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderDrawerNav(config) {
+    const hasSections = (config || []).some(entry => Array.isArray(entry.items));
+    const renderItem = (item) => `
+      <button class="drawer-nav-item" id="dnav-${item.page}" onclick="goTo('${item.page}');closeDrawer()">
+        <span class="drawer-nav-icon">${item.icon}</span>${item.label}
+      </button>
+    `;
+    if (!hasSections) {
+      return config.map(renderItem).join('');
+    }
+    return config.map(group => `
+      <div class="drawer-nav-section">
+        <div class="drawer-nav-section-label">${group.section}</div>
+        ${group.items.map(renderItem).join('')}
+      </div>
+    `).join('');
+  }
 
   function selectRole(role, el) {
     selectedRole = role;
@@ -147,23 +227,16 @@
 
   function setupNav() {
     const role = window.state.currentUser.ruolo;
-    const items = navConfigs[role] || navConfigs.admin;
+    const config = navConfigs[role] || navConfigs.admin;
+    const items = getFlatNavItems(config);
     const u = window.state.currentUser;
     const roleLabels = { admin: 'Admin / Ufficio', amministrazione: 'Amministrazione', autista: 'Autista / Agente', magazzino: 'Magazzino', direzione: 'Direzione' };
     const sidebar = document.getElementById('sidebar-nav');
-    sidebar.innerHTML = items.map(i => `
-    <button class="nav-item" id="nav-${i.page}" onclick="goTo('${i.page}')">
-      <span class="nav-icon">${i.icon}</span> ${i.label}
-    </button>
-  `).join('');
+    sidebar.innerHTML = renderSidebarNav(config);
 
     const drawerNav = document.getElementById('drawer-nav');
     if (drawerNav) {
-      drawerNav.innerHTML = items.map(i => `
-      <button class="drawer-nav-item" id="dnav-${i.page}" onclick="goTo('${i.page}');closeDrawer()">
-        <span class="drawer-nav-icon">${i.icon}</span>${i.label}
-      </button>
-    `).join('');
+      drawerNav.innerHTML = renderDrawerNav(config);
     }
 
     const dn = document.getElementById('drawer-username');

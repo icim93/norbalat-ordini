@@ -238,6 +238,16 @@
   .nav-item:hover { background: var(--surface2); color: var(--text1); }
   .nav-item.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
   .nav-item .nav-icon { font-size: 18px; flex-shrink: 0; }
+  .nav-section { margin-bottom: 16px; }
+  .nav-section-label {
+    padding: 6px 14px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #88a8bf;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+  }
+  .nav-section-items { display: flex; flex-direction: column; gap: 2px; }
 
   /* ── MAIN CONTENT ── */
   .main { flex: 1; padding: 28px; overflow-y: auto; }
@@ -975,11 +985,68 @@
     font-weight: 700;
   }
   .drawer-nav-icon { font-size: 20px; width: 26px; text-align: center; flex-shrink: 0; }
+  .drawer-nav-section { margin-bottom: 16px; }
+  .drawer-nav-section-label {
+    padding: 0 14px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text3);
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+  }
   .drawer-footer {
     padding: 14px 16px;
     border-top: 1px solid var(--border);
     flex-shrink: 0;
   }
+  .profile-layout {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+  .profile-sidebar {
+    position: sticky;
+    top: 82px;
+  }
+  .profile-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
+  }
+  .profile-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text2);
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+  .profile-nav-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-light);
+  }
+  .profile-nav-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-light);
+    box-shadow: inset 0 0 0 1px rgba(30,139,195,0.08);
+  }
+  .profile-nav-icon { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
+  .profile-section { display: none; }
+  .profile-section.active { display: block; }
+  .profile-actions { display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
   #page-documenti .doc-layout {
     display: grid;
     grid-template-columns: 320px 1fr;
@@ -1155,6 +1222,16 @@
     }
     #page-profilo > div[style*="max-width:800px"] > div[style*="display:grid;grid-template-columns:1fr 1fr"] {
       grid-template-columns: 1fr !important;
+    }
+    .profile-layout {
+      grid-template-columns: 1fr;
+    }
+    .profile-sidebar {
+      position: static;
+    }
+    .profile-nav {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     }
     .truck-shell::before { display: none; }
     .toast-container {
@@ -2088,7 +2165,7 @@
           <div class="page-title">Il mio profilo</div>
           <div class="page-sub" id="profilo-sub">Gestisci le tue informazioni personali</div>
         </div>
-        <div style="max-width:800px;margin:0 auto;">
+        <div style="max-width:980px;margin:0 auto;">
           <!-- Header card -->
           <div class="card" style="margin-bottom:20px;background:linear-gradient(135deg,#0f2233,#1e3a52);color:#fff;border:none;overflow:visible;">
             <div style="padding:28px 32px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
@@ -2100,49 +2177,81 @@
               </div>
             </div>
           </div>
-          <!-- 2 colonne -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
-            <div class="card">
-              <div class="card-header"><div class="card-title">✏️ Informazioni personali</div></div>
-              <div style="padding:16px 20px 20px;">
-                <div class="field" style="margin-bottom:12px;"><label>Nome *</label><input type="text" id="profilo-nome" placeholder="Il tuo nome"></div>
-                <div class="field" style="margin-bottom:12px;"><label>Cognome</label><input type="text" id="profilo-cognome" placeholder="Il tuo cognome"></div>
-                <div class="field"><label>Username *</label><input type="text" id="profilo-username" placeholder="username" autocomplete="off"></div>
+          <div class="profile-layout">
+            <aside class="profile-sidebar">
+              <div class="card">
+                <div class="card-header"><div class="card-title">Sezioni profilo</div></div>
+                <div class="profile-nav" id="profilo-nav">
+                  <button class="profile-nav-btn" id="profilo-nav-account" onclick="setProfiloSection('account')">
+                    <span class="profile-nav-icon">👤</span><span>Account</span>
+                  </button>
+                  <button class="profile-nav-btn" id="profilo-nav-security" onclick="setProfiloSection('security')">
+                    <span class="profile-nav-icon">🔒</span><span>Sicurezza</span>
+                  </button>
+                  <button class="profile-nav-btn" id="profilo-nav-preferences" onclick="setProfiloSection('preferences')">
+                    <span class="profile-nav-icon">🖥️</span><span>Preferenze</span>
+                  </button>
+                  <button class="profile-nav-btn" id="profilo-nav-admin" onclick="setProfiloSection('admin-tools')">
+                    <span class="profile-nav-icon">🛠️</span><span>Strumenti Admin</span>
+                  </button>
+                </div>
               </div>
-            </div>
-            <div class="card">
-              <div class="card-header"><div class="card-title">🔒 Cambio password</div></div>
-              <div style="padding:16px 20px 20px;">
-                <div class="field" style="margin-bottom:12px;"><label>Password attuale *</label><input type="password" id="profilo-pass-old" placeholder="••••••" autocomplete="current-password"></div>
-                <div class="field" style="margin-bottom:12px;"><label>Nuova password</label><input type="password" id="profilo-pass-new" placeholder="••••••" autocomplete="new-password"></div>
-                <div class="field" style="margin-bottom:10px;"><label>Conferma nuova password</label><input type="password" id="profilo-pass-new2" placeholder="••••••" autocomplete="new-password"></div>
-                <div style="font-size:12px;color:var(--text3);">Lascia vuoto se non vuoi cambiare la password.</div>
+            </aside>
+            <div>
+              <div class="profile-actions">
+                <button class="btn btn-green" onclick="saveProfilo()">💾 Salva modifiche</button>
+                <button class="btn btn-outline" onclick="renderProfilo()">↩️ Annulla</button>
               </div>
-            </div>
-          </div>
-          <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
-            <button class="btn btn-green" onclick="saveProfilo()">💾 Salva modifiche</button>
-            <button class="btn btn-outline" onclick="renderProfilo()">↩️ Annulla</button>
-          </div>
-          <div id="profilo-feedback" style="display:none;margin-bottom:20px;font-size:13px;border-radius:8px;padding:10px 14px;"></div>
-          <!-- Preferenze -->
-          <div class="card">
-            <div class="card-header"><div class="card-title">🖥️ Preferenze visualizzazione</div></div>
-            <div style="padding:16px 20px 20px;">
-              <div style="font-size:13px;color:var(--text2);margin-bottom:14px;">Scegli come vuoi inserire i nuovi ordini. La preferenza viene salvata su questo dispositivo.</div>
-              <div class="modality-toggle" id="modality-toggle">
-                <button class="modality-btn" id="mod-btn-classico" onclick="setModalitaOrdine('classico')">
-                  <span class="mod-icon">📋</span>
-                  <span class="mod-label">Modalità classica</span>
-                  <span class="mod-desc">Cerca prodotto, aggiungi riga per riga</span>
-                </button>
-                <button class="modality-btn" id="mod-btn-catalogo" onclick="setModalitaOrdine('catalogo')">
-                  <span class="mod-icon">🛒</span>
-                  <span class="mod-label">Modalità catalogo</span>
-                  <span class="mod-desc">Griglia per categoria, aggiungi al carrello</span>
-                </button>
-              </div>
-              <div id="modality-feedback" style="margin-top:10px;font-size:12px;color:var(--accent);display:none;"></div>
+              <div id="profilo-feedback" style="display:none;margin-bottom:20px;font-size:13px;border-radius:8px;padding:10px 14px;"></div>
+
+              <section class="profile-section" id="profilo-section-account">
+                <div class="card">
+                  <div class="card-header"><div class="card-title">✏️ Informazioni personali</div></div>
+                  <div style="padding:16px 20px 20px;">
+                    <div class="field" style="margin-bottom:12px;"><label>Nome *</label><input type="text" id="profilo-nome" placeholder="Il tuo nome"></div>
+                    <div class="field" style="margin-bottom:12px;"><label>Cognome</label><input type="text" id="profilo-cognome" placeholder="Il tuo cognome"></div>
+                    <div class="field"><label>Username *</label><input type="text" id="profilo-username" placeholder="username" autocomplete="off"></div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="profile-section" id="profilo-section-security">
+                <div class="card">
+                  <div class="card-header"><div class="card-title">🔒 Cambio password</div></div>
+                  <div style="padding:16px 20px 20px;">
+                    <div class="field" style="margin-bottom:12px;"><label>Password attuale *</label><input type="password" id="profilo-pass-old" placeholder="••••••" autocomplete="current-password"></div>
+                    <div class="field" style="margin-bottom:12px;"><label>Nuova password</label><input type="password" id="profilo-pass-new" placeholder="••••••" autocomplete="new-password"></div>
+                    <div class="field" style="margin-bottom:10px;"><label>Conferma nuova password</label><input type="password" id="profilo-pass-new2" placeholder="••••••" autocomplete="new-password"></div>
+                    <div style="font-size:12px;color:var(--text3);">Lascia vuoto se non vuoi cambiare la password.</div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="profile-section" id="profilo-section-preferences">
+                <div class="card">
+                  <div class="card-header"><div class="card-title">🖥️ Preferenze visualizzazione</div></div>
+                  <div style="padding:16px 20px 20px;">
+                    <div style="font-size:13px;color:var(--text2);margin-bottom:14px;">Scegli come vuoi inserire i nuovi ordini. La preferenza viene salvata su questo dispositivo.</div>
+                    <div class="modality-toggle" id="modality-toggle">
+                      <button class="modality-btn" id="mod-btn-classico" onclick="setModalitaOrdine('classico')">
+                        <span class="mod-icon">📋</span>
+                        <span class="mod-label">Modalità classica</span>
+                        <span class="mod-desc">Cerca prodotto, aggiungi riga per riga</span>
+                      </button>
+                      <button class="modality-btn" id="mod-btn-catalogo" onclick="setModalitaOrdine('catalogo')">
+                        <span class="mod-icon">🛒</span>
+                        <span class="mod-label">Modalità catalogo</span>
+                        <span class="mod-desc">Griglia per categoria, aggiungi al carrello</span>
+                      </button>
+                    </div>
+                    <div id="modality-feedback" style="margin-top:10px;font-size:12px;color:var(--accent);display:none;"></div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="profile-section" id="profilo-section-admin-tools">
+                <div id="profilo-dev-slot"></div>
+              </section>
             </div>
           </div>
         </div>
@@ -3045,6 +3154,7 @@ window.BASE_URL = BASE_URL;
 let state = {
   currentUser: null,
   currentPage: null,
+  currentProfileSection: 'account',
   editingId: null,
   token: null,
 
@@ -4481,6 +4591,7 @@ function renderProfilo() {
   fb.style.display = 'none';
   fb.textContent = '';
 
+  syncProfiloSections();
   ensureDevPanelDom();
   renderDevPanel();
 
@@ -4488,6 +4599,32 @@ function renderProfilo() {
   const mod = getModalitaOrdine();
   document.getElementById('mod-btn-classico')?.classList.toggle('active', mod === 'classico');
   document.getElementById('mod-btn-catalogo')?.classList.toggle('active', mod === 'catalogo');
+}
+
+function syncProfiloSections() {
+  const isAdmin = state.currentUser?.ruolo === 'admin';
+  if (!isAdmin && state.currentProfileSection === 'admin-tools') {
+    state.currentProfileSection = 'account';
+  }
+  const sections = ['account', 'security', 'preferences', 'admin-tools'];
+  sections.forEach(section => {
+    const btn = document.getElementById(`profilo-nav-${section === 'admin-tools' ? 'admin' : section}`);
+    const panel = document.getElementById(`profilo-section-${section}`);
+    if (btn) {
+      btn.style.display = (!isAdmin && section === 'admin-tools') ? 'none' : '';
+      btn.classList.toggle('active', state.currentProfileSection === section);
+    }
+    if (panel) {
+      panel.style.display = (!isAdmin && section === 'admin-tools') ? 'none' : '';
+      panel.classList.toggle('active', state.currentProfileSection === section);
+    }
+  });
+}
+
+function setProfiloSection(section) {
+  state.currentProfileSection = section;
+  syncProfiloSections();
+  if (section === 'admin-tools') renderDevPanel();
 }
 
 async function saveProfilo() {
