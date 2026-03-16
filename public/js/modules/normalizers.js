@@ -48,6 +48,10 @@
       packaging: p.packaging || '',
       pesoFisso: !!p.peso_fisso,
       note: p.note || '',
+      schedaTecnicaNome: p.scheda_tecnica_nome || '',
+      schedaTecnicaMime: p.scheda_tecnica_mime || '',
+      schedaTecnicaUploadedAt: p.scheda_tecnica_uploaded_at || null,
+      hasSchedaTecnica: !!p.has_scheda_tecnica,
     };
   }
 

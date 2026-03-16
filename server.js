@@ -526,7 +526,11 @@ async function createSchema() {
       um          TEXT NOT NULL,
       packaging   TEXT DEFAULT '',
       peso_fisso  BOOLEAN DEFAULT FALSE,
-      note        TEXT DEFAULT ''
+      note        TEXT DEFAULT '',
+      scheda_tecnica_nome TEXT DEFAULT '',
+      scheda_tecnica_mime TEXT DEFAULT '',
+      scheda_tecnica_data BYTEA,
+      scheda_tecnica_uploaded_at TIMESTAMPTZ
     );
 
     CREATE TABLE IF NOT EXISTS ordini (
@@ -795,6 +799,10 @@ async function createSchema() {
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS stato_cliente TEXT DEFAULT '';
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS followup_date DATE;
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS priorita TEXT DEFAULT 'media';
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_nome TEXT DEFAULT '';
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_mime TEXT DEFAULT '';
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_data BYTEA;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_uploaded_at TIMESTAMPTZ;
     CREATE INDEX IF NOT EXISTS idx_crm_followup ON clienti_crm_eventi(followup_date);
     UPDATE clienti_crm_eventi SET priorita = 'media' WHERE priorita IS NULL OR priorita = '';
     ALTER TABLE listini     ALTER COLUMN prezzo DROP NOT NULL;
@@ -1840,7 +1848,14 @@ app.post('/api/clienti/:id/crm-eventi', authMiddleware, requirePermission('clien
 // ─── PRODOTTI ────────────────────────────────────────────────────
 app.get('/api/prodotti', authMiddleware, async (req, res) => {
   try {
-    const { rows } = await q('SELECT * FROM prodotti ORDER BY categoria,nome');
+    const { rows } = await q(`
+      SELECT
+        id, codice, nome, categoria, um, packaging, peso_fisso, note,
+        scheda_tecnica_nome, scheda_tecnica_mime, scheda_tecnica_uploaded_at,
+        (scheda_tecnica_data IS NOT NULL) AS has_scheda_tecnica
+      FROM prodotti
+      ORDER BY categoria,nome
+    `);
     res.json(rows);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -1878,6 +1893,69 @@ app.put('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req, r
 app.delete('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req, res) => {
   try {
     await q('DELETE FROM prodotti WHERE id=$1', [parseInt(req.params.id)]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/prodotti/:id/scheda', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { file_name='', mime_type='application/octet-stream', content_base64='' } = req.body || {};
+    const safeName = path.basename(String(file_name || '').trim());
+    const ext = path.extname(safeName).toLowerCase();
+    const inferredMime = ext === '.pdf'
+      ? 'application/pdf'
+      : ext === '.doc'
+        ? 'application/msword'
+        : ext === '.docx'
+          ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          : String(mime_type || '').trim();
+    const allowed = new Set([
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ]);
+    if (!id || !safeName || !content_base64) return res.status(400).json({ error: 'File mancante' });
+    if (!allowed.has(inferredMime)) return res.status(400).json({ error: 'Formato file non supportato' });
+    const base64 = String(content_base64).includes(',') ? String(content_base64).split(',').pop() : String(content_base64);
+    const buffer = Buffer.from(base64, 'base64');
+    if (!buffer.length) return res.status(400).json({ error: 'Contenuto file non valido' });
+    if (buffer.length > 15 * 1024 * 1024) return res.status(400).json({ error: 'File troppo grande' });
+    await q(
+      `UPDATE prodotti
+       SET scheda_tecnica_nome=$1, scheda_tecnica_mime=$2, scheda_tecnica_data=$3, scheda_tecnica_uploaded_at=NOW()
+       WHERE id=$4`,
+      [safeName, inferredMime, buffer, id]
+    );
+    res.json({ ok: true, file_name: safeName, mime_type: inferredMime, uploaded_at: new Date().toISOString() });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/prodotti/:id/scheda', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { rows } = await q(
+      `SELECT scheda_tecnica_nome, scheda_tecnica_mime, scheda_tecnica_data
+       FROM prodotti WHERE id=$1`,
+      [id]
+    );
+    const row = rows[0];
+    if (!row || !row.scheda_tecnica_data) return res.status(404).json({ error: 'Scheda tecnica non trovata' });
+    res.setHeader('Content-Type', row.scheda_tecnica_mime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${String(row.scheda_tecnica_nome || 'scheda-tecnica').replace(/"/g, '')}"`);
+    res.send(row.scheda_tecnica_data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/prodotti/:id/scheda', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await q(
+      `UPDATE prodotti
+       SET scheda_tecnica_nome='', scheda_tecnica_mime='', scheda_tecnica_data=NULL, scheda_tecnica_uploaded_at=NULL
+       WHERE id=$1`,
+      [id]
+    );
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
