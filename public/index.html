@@ -1131,6 +1131,62 @@
     font-weight: 700;
     color: var(--text1);
   }
+  .piano-order-palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .piano-order-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid rgba(30,139,195,0.22);
+    border-radius: 999px;
+    background: var(--accent-light);
+    color: var(--accent-dark);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: grab;
+    user-select: none;
+  }
+  .piano-order-tag small {
+    font-size: 10px;
+    color: var(--text2);
+    font-weight: 600;
+  }
+  .piano-order-tag.dragging { opacity: 0.55; }
+  .pedana-card.drop-ready {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(30,139,195,0.14);
+  }
+  .pedana-assignments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pedana-assignment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: rgba(30,139,195,0.12);
+    color: var(--accent-dark);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .pedana-assignment-chip button {
+    border: none;
+    background: none;
+    color: inherit;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+  }
   #camion-selector {
     display: flex;
     flex-wrap: wrap;
@@ -4065,11 +4121,135 @@ async function confermaConsegnaRapida(id) {
 // ═══════════════════════════════════════════════
 
 let pianoSelectedCamionId = null;
+const PIANO_ORDER_MARKER_RE = /^\[\[ORD:(\d+)]]$/;
+
+function parsePedanaNota(nota) {
+  const text = String(nota || '');
+  const assignments = [];
+  const freeLines = [];
+  text.split(/\r?\n/).forEach(line => {
+    const trimmed = String(line || '').trim();
+    const match = trimmed.match(PIANO_ORDER_MARKER_RE);
+    if (match) {
+      const id = Number(match[1]);
+      if (Number.isFinite(id) && !assignments.includes(id)) assignments.push(id);
+    } else {
+      freeLines.push(line);
+    }
+  });
+  return {
+    assegnazioni: assignments,
+    testoLibero: freeLines.join('\n').replace(/^\s+|\s+$/g, ''),
+  };
+}
+
+function serializePedanaNota(pedana) {
+  const tags = (pedana.assegnazioni || []).map(id => `[[ORD:${id}]]`);
+  const freeText = String(pedana.testoLibero || '').trim();
+  return [...tags, freeText].filter(Boolean).join('\n');
+}
+
+function hydrateCamionPedane(camion) {
+  if (!camion || !Array.isArray(camion.pedane)) return camion;
+  camion.pedane = camion.pedane.map(p => {
+    const parsed = parsePedanaNota(p.nota || '');
+    return {
+      ...p,
+      assegnazioni: parsed.assegnazioni,
+      testoLibero: parsed.testoLibero,
+      nota: serializePedanaNota({ ...p, ...parsed }),
+    };
+  });
+  return camion;
+}
+
+function getPianoOrdineLabel(orderId) {
+  const ordine = state.ordini.find(o => o.id === Number(orderId));
+  if (!ordine) return `Ordine #${orderId}`;
+  const cliente = getCliente(ordine.clienteId);
+  return `#${ordine.id} ${cliente?.nome || 'Cliente'}`;
+}
+
+function getCamionOrderAssignmentStats(camion) {
+  const counts = {};
+  (camion?.pedane || []).forEach(p => {
+    (p.assegnazioni || []).forEach(orderId => {
+      counts[orderId] = (counts[orderId] || 0) + 1;
+    });
+  });
+  return counts;
+}
+
+function setPedanaTestoLibero(camionId, pedanaIdx, value) {
+  const camion = state.camions.find(c => c.id === camionId);
+  const pedana = camion?.pedane?.[pedanaIdx];
+  if (!pedana) return;
+  pedana.testoLibero = String(value || '');
+  pedana.nota = serializePedanaNota(pedana);
+}
+
+function assignOrdineToPedana(camionId, pedanaIdx, orderId) {
+  const camion = state.camions.find(c => c.id === camionId);
+  const pedana = camion?.pedane?.[pedanaIdx];
+  const ordineId = Number(orderId);
+  if (!pedana || !Number.isFinite(ordineId)) return;
+  pedana.assegnazioni = Array.isArray(pedana.assegnazioni) ? pedana.assegnazioni : [];
+  if (!pedana.assegnazioni.includes(ordineId)) pedana.assegnazioni.push(ordineId);
+  pedana.nota = serializePedanaNota(pedana);
+}
+
+function removeOrdineFromPedana(camionId, pedanaIdx, orderId) {
+  const camion = state.camions.find(c => c.id === camionId);
+  const pedana = camion?.pedane?.[pedanaIdx];
+  const ordineId = Number(orderId);
+  if (!pedana || !Number.isFinite(ordineId)) return;
+  pedana.assegnazioni = (pedana.assegnazioni || []).filter(id => id !== ordineId);
+  pedana.nota = serializePedanaNota(pedana);
+  renderPianoPage();
+}
+
+function onPianoOrderDragStart(event, orderId) {
+  event.dataTransfer.effectAllowed = 'copy';
+  event.dataTransfer.setData('text/plain', String(orderId));
+  event.currentTarget?.classList.add('dragging');
+}
+
+function onPianoOrderDragEnd(event) {
+  event.currentTarget?.classList.remove('dragging');
+}
+
+function onPedanaDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'copy';
+  event.currentTarget?.classList.add('drop-ready');
+}
+
+function onPedanaDragLeave(event) {
+  event.currentTarget?.classList.remove('drop-ready');
+}
+
+function onPedanaDrop(event, camionId, pedanaIdx) {
+  event.preventDefault();
+  event.currentTarget?.classList.remove('drop-ready');
+  const orderId = Number(event.dataTransfer.getData('text/plain'));
+  if (!Number.isFinite(orderId)) return;
+  assignOrdineToPedana(camionId, pedanaIdx, orderId);
+  renderPianoPage();
+}
+
+function escapePianoHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 async function loadCamionsForPianoData() {
   state.pianoData = state.pianoData || today();
   const rows = await api('GET', `/api/camions?data=${state.pianoData}`);
-  state.camions = (rows || []).map(normalizeCamion);
+  state.camions = (rows || []).map(normalizeCamion).map(hydrateCamionPedane);
 }
 
 async function changePianoData(v) {
@@ -4084,7 +4264,11 @@ async function nuovoPianoGiorno() {
   if (!await customConfirm(`Svuotare tutte le pedane per il giorno ${state.pianoData}?`, 'Svuota', 'Nuovo piano giornaliero')) return;
   await loadCamionsForPianoData();
   for (const c of state.camions) {
-    c.pedane.forEach(p => p.nota = '');
+    c.pedane.forEach(p => {
+      p.assegnazioni = [];
+      p.testoLibero = '';
+      p.nota = '';
+    });
     await api('PATCH', `/api/camions/${c.id}/pedane`, {
       data: state.pianoData,
       pedane: c.pedane.map(p => ({ numero: p.n, nota: '' })),
@@ -4158,28 +4342,48 @@ function renderPianoBody(isEditor, isConferma) {
   const fallbackLayout = camion.pedane.length === 12 ? 'sym12' : (camion.pedane.length === 5 ? 'ford5' : 'asym8');
   const layout = PIANO_LAYOUTS[layoutKey] || PIANO_LAYOUTS[fallbackLayout] || PIANO_LAYOUTS.asym8;
   const gridTemplate = getPianoGridTemplate(layout);
+  const assignmentStats = getCamionOrderAssignmentStats(camion);
+  const ordiniById = new Map(state.ordini.map(o => [Number(o.id), o]));
 
   const pedaneHtml = layout.slots.map(slot => {
-    const p = camion.pedane[slot.n - 1] || { nota: '' };
-    const nota = p.nota || '';
-    const filled = nota.trim().length > 0;
+    const p = camion.pedane[slot.n - 1] || { nota: '', testoLibero: '', assegnazioni: [] };
+    const testoLibero = String(p.testoLibero || '');
+    const assegnazioni = Array.isArray(p.assegnazioni) ? p.assegnazioni : [];
+    const filled = assegnazioni.length > 0 || testoLibero.trim().length > 0;
     const spanStyle = `grid-column:${slot.c + 1} / span ${slot.cs || 1};grid-row:${slot.r + 1} / span ${slot.rs || 1};`;
     const minH = getPianoSlotMinHeight(slot, layoutKey);
-    const escapedNota = nota.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const escapedTesto = escapePianoHtml(testoLibero);
+    const chipsHtml = assegnazioni.length
+      ? `<div class="pedana-assignments">${assegnazioni.map(orderId => {
+          const ordine = ordiniById.get(Number(orderId));
+          const cliente = ordine ? getCliente(ordine.clienteId) : null;
+          const label = `#${orderId} ${cliente?.nome || 'Cliente'}`;
+          return `<span class="pedana-assignment-chip">
+            <span>${escapePianoHtml(label)}</span>
+            ${isEditor ? `<button type="button" onclick="removeOrdineFromPedana(${camion.id},${slot.n - 1},${orderId})" title="Rimuovi ordine">×</button>` : ''}
+          </span>`;
+        }).join('')}</div>`
+      : '';
     if (isEditor) {
-      return `<div class="pedana-card ${filled?'has-content':''}" data-lane="${slot.lane || ''}" data-orientation="${slot.orientation || 'std'}" style="${spanStyle}min-height:${minH}px;display:flex;flex-direction:column;gap:6px;">
+      return `<div class="pedana-card ${filled?'has-content':''}" data-lane="${slot.lane || ''}" data-orientation="${slot.orientation || 'std'}"
+        ondragover="onPedanaDragOver(event)" ondragleave="onPedanaDragLeave(event)" ondrop="onPedanaDrop(event,${camion.id},${slot.n-1})"
+        style="${spanStyle}min-height:${minH}px;display:flex;flex-direction:column;gap:6px;">
         <div class="pedana-label">
           <span>P${slot.n}</span>
           <span class="pedana-status">${filled?'● occupata':'vuota'}</span>
         </div>
         <div class="pedana-content">
           <div class="pedana-hint">${slot.lane || 'corsia'}${slot.orientation ? ` · ${slot.orientation}` : ''}</div>
+          ${chipsHtml}
           <textarea class="pedana-input" id="pedana-txt-${camion.id}-${slot.n}"
           placeholder="Contenuto pedana…" style="flex:1;min-height:56px;resize:none;"
           oninput="livePedanaUpdate(${camion.id},${slot.n-1},this.value);
-            this.closest('.pedana-card').classList.toggle('has-content',this.value.trim().length>0);
-            this.closest('.pedana-card').querySelector('.pedana-status').textContent=this.value.trim()?'● occupata':'vuota';"
-        >${escapedNota}</textarea>
+            const card=this.closest('.pedana-card');
+            const hasAssignments=card.querySelectorAll('.pedana-assignment-chip').length>0;
+            const filled=(this.value.trim().length>0)||hasAssignments;
+            card.classList.toggle('has-content',filled);
+            card.querySelector('.pedana-status').textContent=filled?'● occupata':'vuota';"
+        >${escapedTesto}</textarea>
         </div>
       </div>`;
     } else {
@@ -4189,7 +4393,8 @@ function renderPianoBody(isEditor, isConferma) {
         </div>
         <div class="pedana-content">
           <div class="pedana-hint">${slot.lane || 'corsia'}${slot.orientation ? ` · ${slot.orientation}` : ''}</div>
-          <div class="pedana-readonly ${filled?'':'pedana-empty'}">${filled?escapedNota.replace(/\n/g,'<br>'):'—'}</div>
+          ${chipsHtml}
+          <div class="pedana-readonly ${(testoLibero.trim().length || assegnazioni.length)?'':'pedana-empty'}">${testoLibero.trim().length?escapedTesto.replace(/\n/g,'<br>'):(assegnazioni.length?'Note assenti':'—')}</div>
         </div>
       </div>`;
     }
@@ -4207,6 +4412,28 @@ function renderPianoBody(isEditor, isConferma) {
   const layoutLegend = layout.legend || 'Schema camion configurato';
   const asymVoidNote = layoutKey === 'asym8'
     ? `<div class="truck-void-note">Spazio libero<br>dietro sinistra</div>`
+    : '';
+  const orderPaletteHtml = isEditor && ordiniGiro.length
+    ? `<div class="card piano-order-palette" style="margin-bottom:20px;">
+        <div class="card-header">
+          <div class="card-title">Tag ordini da trascinare</div>
+          <div style="font-size:12px;color:var(--text3);">Trascina un ordine su una o piu pedane. Lo stesso ordine puo occupare piu pedane.</div>
+        </div>
+        <div style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;">
+          ${ordiniGiro.map(o => {
+            const cliente = getCliente(o.clienteId);
+            const count = assignmentStats[o.id] || 0;
+            const giro = getOrdineGiroEffettivo(o);
+            const quantita = Array.isArray(o.linee) ? o.linee.reduce((sum, line) => sum + (Number(line.quantita) || 0), 0) : 0;
+            return `<div class="piano-order-tag" draggable="true"
+              ondragstart="onPianoOrderDragStart(event,${o.id})" ondragend="onPianoOrderDragEnd(event)">
+              <div style="font-weight:800;font-size:13px;">#${o.id} ${escapePianoHtml(cliente?.nome || 'Cliente')}</div>
+              <div style="font-size:11px;color:var(--text2);">${escapePianoHtml(giro || 'giro non definito')} · ${quantita} colli</div>
+              <div style="font-size:11px;color:${count ? 'var(--accent)' : 'var(--text3)'};font-weight:700;">${count ? `${count} ped.` : 'non assegnato'}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`
     : '';
 
   body.innerHTML = `
@@ -4260,6 +4487,7 @@ function renderPianoBody(isEditor, isConferma) {
         </div>`:''}
       </div>
     </div>
+    ${orderPaletteHtml}
     <div class="card" style="margin-bottom:20px;">
       <div class="card-header">
         <div class="card-title">📦 Piano di carico · schema ${layoutKey}</div>
@@ -4331,16 +4559,17 @@ async function setAutistaInUso(camionId, autistaId) {
 
 function livePedanaUpdate(camionId, idx, valore) {
   const c = state.camions.find(c => c.id === camionId);
-  if (c) c.pedane[idx].nota = valore;
+  if (c) setPedanaTestoLibero(camionId, idx, valore);
 }
 
 async function salvaPianoCamion(camionId) {
   const camion = state.camions.find(c => c.id === camionId);
   if (!camion) return;
   // Leggi valori correnti dai textarea
-  camion.pedane.forEach((p, i) => {
+  camion.pedane.forEach(p => {
     const inp = document.getElementById(`pedana-txt-${camionId}-${p.n}`);
-    if (inp) p.nota = inp.value;
+    if (inp) p.testoLibero = inp.value;
+    p.nota = serializePedanaNota(p);
   });
   try {
     await api('PATCH', `/api/camions/${camionId}/pedane`, {
@@ -4359,7 +4588,11 @@ async function resetPianoCamion(camionId) {
   if (!await customConfirm('Resettare tutte le pedane di questo camion?', 'Reset', 'Piano di Carico')) return;
   const camion = state.camions.find(c => c.id === camionId);
   if (!camion) return;
-  camion.pedane.forEach(p => p.nota = '');
+  camion.pedane.forEach(p => {
+    p.assegnazioni = [];
+    p.testoLibero = '';
+    p.nota = '';
+  });
   try {
     await api('PATCH', `/api/camions/${camionId}/pedane`, {
       data: state.pianoData,
