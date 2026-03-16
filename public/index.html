@@ -1157,6 +1157,11 @@
     font-weight: 600;
   }
   .piano-order-tag.dragging { opacity: 0.55; }
+  .piano-order-tag.is-assigned {
+    opacity: 0.48;
+    border-style: dashed;
+    background: color-mix(in srgb, var(--accent-light) 70%, #ffffff);
+  }
   .pedana-card.drop-ready {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(30,139,195,0.14);
@@ -2786,9 +2791,11 @@
           <label>Consegnatario</label>
           <div id="ord-consegnatario-box" style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:8px;">
             <span>🚚</span><span id="ord-consegnatario-nome">—</span>
-            <span style="font-size:11px;color:var(--text3);margin-left:auto;">auto dal giro</span>
+            <span style="font-size:11px;color:var(--text3);margin-left:auto;">suggerito dal giro</span>
           </div>
-          <input type="hidden" id="ord-autista-di-giro">
+          <select id="ord-autista-di-giro" style="margin-top:6px;font-size:12px;padding:8px 10px;">
+            <option value="">— Nessun autista —</option>
+          </select>
         </div>
         <div class="field">
           <label>Data Consegna *</label>
@@ -2974,6 +2981,10 @@
         <div class="field">
           <label>Località</label>
           <input type="text" id="cl-localita" placeholder="es. BARI">
+        </div>
+        <div class="field">
+          <label>Alias cliente</label>
+          <input type="text" id="cl-alias" placeholder="es. Candile">
         </div>
         <div class="field">
           <label>Giro</label>
@@ -4121,6 +4132,7 @@ async function confermaConsegnaRapida(id) {
 // ═══════════════════════════════════════════════
 
 let pianoSelectedCamionId = null;
+let pianoDraggingOrderId = null;
 const PIANO_ORDER_MARKER_RE = /^\[\[ORD:(\d+)]]$/;
 
 function parsePedanaNota(nota) {
@@ -4209,12 +4221,15 @@ function removeOrdineFromPedana(camionId, pedanaIdx, orderId) {
 }
 
 function onPianoOrderDragStart(event, orderId) {
+  pianoDraggingOrderId = Number(orderId);
   event.dataTransfer.effectAllowed = 'copy';
   event.dataTransfer.setData('text/plain', String(orderId));
+  event.dataTransfer.setData('application/x-piano-order', String(orderId));
   event.currentTarget?.classList.add('dragging');
 }
 
 function onPianoOrderDragEnd(event) {
+  pianoDraggingOrderId = null;
   event.currentTarget?.classList.remove('dragging');
 }
 
@@ -4231,9 +4246,14 @@ function onPedanaDragLeave(event) {
 function onPedanaDrop(event, camionId, pedanaIdx) {
   event.preventDefault();
   event.currentTarget?.classList.remove('drop-ready');
-  const orderId = Number(event.dataTransfer.getData('text/plain'));
+  const orderId = Number(
+    event.dataTransfer.getData('application/x-piano-order')
+    || event.dataTransfer.getData('text/plain')
+    || pianoDraggingOrderId
+  );
   if (!Number.isFinite(orderId)) return;
   assignOrdineToPedana(camionId, pedanaIdx, orderId);
+  pianoDraggingOrderId = null;
   renderPianoPage();
 }
 
@@ -4372,11 +4392,12 @@ function renderPianoBody(isEditor, isConferma) {
           <span>P${slot.n}</span>
           <span class="pedana-status">${filled?'● occupata':'vuota'}</span>
         </div>
-        <div class="pedana-content">
+        <div class="pedana-content" ondragover="onPedanaDragOver(event)" ondragleave="onPedanaDragLeave(event)" ondrop="onPedanaDrop(event,${camion.id},${slot.n-1})">
           <div class="pedana-hint">${slot.lane || 'corsia'}${slot.orientation ? ` · ${slot.orientation}` : ''}</div>
           ${chipsHtml}
           <textarea class="pedana-input" id="pedana-txt-${camion.id}-${slot.n}"
           placeholder="Contenuto pedana…" style="flex:1;min-height:56px;resize:none;"
+          ondragover="onPedanaDragOver(event)" ondragleave="onPedanaDragLeave(event)" ondrop="onPedanaDrop(event,${camion.id},${slot.n-1})"
           oninput="livePedanaUpdate(${camion.id},${slot.n-1},this.value);
             const card=this.closest('.pedana-card');
             const hasAssignments=card.querySelectorAll('.pedana-assignment-chip').length>0;
@@ -4425,7 +4446,7 @@ function renderPianoBody(isEditor, isConferma) {
             const count = assignmentStats[o.id] || 0;
             const giro = getOrdineGiroEffettivo(o);
             const quantita = Array.isArray(o.linee) ? o.linee.reduce((sum, line) => sum + (Number(line.quantita) || 0), 0) : 0;
-            return `<div class="piano-order-tag" draggable="true"
+            return `<div class="piano-order-tag ${count ? 'is-assigned' : ''}" draggable="true"
               ondragstart="onPianoOrderDragStart(event,${o.id})" ondragend="onPianoOrderDragEnd(event)">
               <div style="font-weight:800;font-size:13px;">#${o.id} ${escapePianoHtml(cliente?.nome || 'Cliente')}</div>
               <div style="font-size:11px;color:var(--text2);">${escapePianoHtml(giro || 'giro non definito')} · ${quantita} colli</div>

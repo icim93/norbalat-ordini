@@ -17,6 +17,7 @@
     return {
       id: c.id,
       nome: c.nome || '',
+      alias: c.alias || '',
       localita: c.localita || '',
       giro: c.giro || '',
       agenteId: c.agente_id || null,

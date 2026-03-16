@@ -34,7 +34,7 @@ function openNewOrder() {
   if (giroOverrideEl) giroOverrideEl.value = '';
   acState.cliente = { value: null, query: '', focusIdx: -1 };
   const defaultAgente = state.currentUser.isAgente ? state.currentUser.id : null;
-  populateOrderSelects(null, defaultAgente);
+  populateOrderSelects(null, defaultAgente, null);
   renderOrderLines();
   openModal('modal-ordine');
   // focus rimosso: apriva automaticamente il dropdown cliente
@@ -67,9 +67,8 @@ function openEditOrder(id) {
   if (altroVettoreEl) altroVettoreEl.checked = o.altroVettore || false;
   const giroOverrideEl = document.getElementById('ord-giro-override');
   acState.cliente = { value: o.clienteId, query: '', focusIdx: -1 };
-  populateOrderSelects(o.clienteId, o.agenteId);
+  populateOrderSelects(o.clienteId, o.agenteId, o.autistaDiGiro || null);
   if (giroOverrideEl) giroOverrideEl.value = o.giroOverride || '';
-  if (o.autistaDiGiro) document.getElementById('ord-autista-di-giro').value = o.autistaDiGiro;
   updateConsegnatarioDisplay(o.clienteId);
   renderOrderLines();
   openModal('modal-ordine');
@@ -160,12 +159,12 @@ function acRender(type) {
     let totalShown = 0;
     giri.forEach(g => {
       let gruppo = clientiOrdinabili().filter(c => c.giro === g);
-      if (q) gruppo = gruppo.filter(c => c.nome.toLowerCase().includes(q) || c.localita.toLowerCase().includes(q));
+      if (q) gruppo = gruppo.filter(c => c.nome.toLowerCase().includes(q) || (c.alias || '').toLowerCase().includes(q) || c.localita.toLowerCase().includes(q));
       if (!gruppo.length) return;
       html += `<div class="ac-group-label">${g ? g.toUpperCase() : 'NON ASSEGNATO'}</div>`;
       gruppo.forEach(cl => {
         html += `<div class="ac-item" data-id="${cl.id}" onmousedown="acSelect('cat-cliente',${cl.id})">
-          <span>${acHighlight(cl.nome, q)}</span>
+          <span>${acHighlight(cl.nome, q)}${cl.alias ? ` <span class="ac-sub">(${acHighlight(cl.alias, q)})</span>` : ''}</span>
           <span class="ac-sub">${cl.localita}${cl.giro ? ' · ' + cl.giro : ''}</span>
         </div>`;
         totalShown++;
@@ -181,10 +180,10 @@ function acRender(type) {
     const dd = document.getElementById('ac-tentata-dd');
     if (!dd) return;
     let clienti = clientiOrdinabili();
-    if (q) clienti = clienti.filter(c => c.nome.toLowerCase().includes(q) || c.localita.toLowerCase().includes(q));
+    if (q) clienti = clienti.filter(c => c.nome.toLowerCase().includes(q) || (c.alias || '').toLowerCase().includes(q) || c.localita.toLowerCase().includes(q));
     dd.innerHTML = clienti.slice(0,15).map(c => `
       <div class="ac-item" data-id="${c.id}" onmousedown="acSelect('tentata',${c.id})">
-        <span>${acHighlight(c.nome, q)}</span>
+        <span>${acHighlight(c.nome, q)}${c.alias ? ` <span class="ac-sub">(${acHighlight(c.alias, q)})</span>` : ''}</span>
         <span class="ac-sub">${c.localita}${c.giro ? ' · ' + c.giro : ''}</span>
       </div>`).join('') || '<div class="ac-empty">Nessun cliente trovato</div>';
     return;
@@ -201,13 +200,14 @@ function acRender(type) {
     let gruppo = clientiOrdinabili().filter(c => c.giro === g);
     if (q) gruppo = gruppo.filter(c =>
       c.nome.toLowerCase().includes(q) ||
+      (c.alias || '').toLowerCase().includes(q) ||
       c.localita.toLowerCase().includes(q)
     );
     if (!gruppo.length) return;
     html += `<div class="ac-group-label">${g ? g.toUpperCase() : 'NON ASSEGNATO'}</div>`;
     gruppo.forEach(c => {
       html += `<div class="ac-item" data-id="${c.id}" onmousedown="acSelect('cliente',${c.id})">
-        <span>${acHighlight(c.nome, q)}</span>
+        <span>${acHighlight(c.nome, q)}${c.alias ? ` <span class="ac-sub">(${acHighlight(c.alias, q)})</span>` : ''}</span>
         <span class="ac-sub">${c.localita}${c.giro ? ' · ' + c.giro : ''}</span>
       </div>`;
       totalShown++;
@@ -351,7 +351,10 @@ document.addEventListener('click', function(e) {
 
 function getDefaultUM(prodotto) {
   if (!prodotto) return 'Pezzi';
+  const codice = String(prodotto.codice || '').toUpperCase();
+  const nome = String(prodotto.nome || '').toUpperCase();
   const cat = (prodotto.categoria || '').toUpperCase();
+  if (codice.includes('BUR125') || codice.includes('BUR250') || nome.includes('BURRO 125') || nome.includes('BURRO 250')) return 'Cartoni';
   if (cat.includes('PANNA')) return 'Cartoni';
   return 'Pezzi';
 }
@@ -445,11 +448,60 @@ function parseKgPerUnitaFromPackaging(packagingRaw) {
   return null;
 }
 
+function parseUnitsPerCartone(packagingRaw) {
+  const src = String(packagingRaw || '').toLowerCase().replace(',', '.').replace(/\s+/g, ' ');
+  if (!src) return null;
+  const match = src.match(/1\s*(?:ct|cartone|cartoni)\s*=?\s*(\d+(?:\.\d+)?)\s*(?:pz|pezzo|pezzi|forma|forme|lt|litri?)/);
+  if (!match) return null;
+  const units = Number(match[1]);
+  return Number.isFinite(units) && units > 0 ? units : null;
+}
+
+function parseKgFromProductLabel(prodotto) {
+  const src = `${prodotto?.codice || ''} ${prodotto?.nome || ''}`.toLowerCase().replace(',', '.');
+  const gramMatch = src.match(/(?:^|[^0-9])(\d{2,4})\s*g(?:r)?(?:\b|[^a-z])/);
+  if (gramMatch) {
+    const grams = Number(gramMatch[1]);
+    if (Number.isFinite(grams) && grams > 0) return grams / 1000;
+  }
+  const kiloMatch = src.match(/(?:^|[^0-9])(\d+(?:\.\d+)?)\s*kg(?:\b|[^a-z])/);
+  if (kiloMatch) {
+    const kg = Number(kiloMatch[1]);
+    if (Number.isFinite(kg) && kg > 0) return kg;
+  }
+  return null;
+}
+
+function getKgPerSelectedUnita(prodotto, unitaMisura) {
+  const um = String(unitaMisura || '').trim().toLowerCase();
+  if (um === 'kg') return 1;
+  if (um === 'litri') return 1;
+
+  const kgPerPezzo = parseKgPerUnitaFromPackaging(prodotto?.packaging || '') || parseKgFromProductLabel(prodotto);
+  if (um === 'pezzi') return kgPerPezzo;
+  if (um === 'cartoni') {
+    const unitsPerCartone = parseUnitsPerCartone(prodotto?.packaging || '');
+    if (Number.isFinite(unitsPerCartone) && Number.isFinite(kgPerPezzo)) return unitsPerCartone * kgPerPezzo;
+    const src = String(prodotto?.packaging || '').toLowerCase().replace(',', '.').replace(/\s+/g, ' ');
+    const directKg = src.match(/1\s*(?:ct|cartone|cartoni)\s*=?\s*(\d+(?:\.\d+)?)\s*kg/);
+    if (directKg) {
+      const kg = Number(directKg[1]);
+      if (Number.isFinite(kg) && kg > 0) return kg;
+    }
+    const directLt = src.match(/1\s*(?:ct|cartone|cartoni)\s*=?\s*(\d+(?:\.\d+)?)\s*lt/);
+    if (directLt) {
+      const lt = Number(directLt[1]);
+      if (Number.isFinite(lt) && lt > 0) return lt;
+    }
+  }
+  return null;
+}
+
 function estimateLineKg(line) {
   if (!line?.prodId) return null;
   const p = getProdotto(line.prodId);
   if (!p?.id) return null;
-  const kgPer = parseKgPerUnitaFromPackaging(p.packaging || '');
+  const kgPer = getKgPerSelectedUnita(p, line.unitaMisura || getDefaultUM(p));
   const qty = Number(line.qty || 0);
   if (!Number.isFinite(kgPer) || !Number.isFinite(qty) || qty <= 0) return null;
   return Math.round(kgPer * qty * 100) / 100;
@@ -842,22 +894,34 @@ function getAutistaDiGiro(giro) {
   return state.utenti.find(u => u.ruolo === 'autista' && (u.giriConsegna||[]).includes(giro)) || null;
 }
 
-function updateConsegnatarioDisplay(clienteId) {
+function populateAutistaDiGiroSelect(selectedId, suggestedId) {
+  const sel = document.getElementById('ord-autista-di-giro');
+  if (!sel) return;
+  const autisti = state.utenti.filter(u => u.ruolo === 'autista');
+  sel.innerHTML = '<option value="">- Nessun autista -</option>' + autisti.map(a => {
+    const fullName = (a.nome + ' ' + (a.cognome || '')).trim();
+    const isSuggested = suggestedId && a.id === suggestedId;
+    return `<option value="${a.id}" ${a.id === selectedId ? 'selected' : ''}>${fullName}${isSuggested ? ' · suggerito' : ''}</option>`;
+  }).join('');
+}
+
+function updateConsegnatarioDisplay(clienteId, keepSelection = true) {
   const c = clienteId ? getCliente(clienteId) : null;
   const giroOverride = (document.getElementById('ord-giro-override')?.value || '').trim();
   const giroRef = giroOverride || c?.giro || '';
   const aut = giroRef ? getAutistaDiGiro(giroRef) : null;
   const box = document.getElementById('ord-consegnatario-nome');
-  const hidden = document.getElementById('ord-autista-di-giro');
+  const select = document.getElementById('ord-autista-di-giro');
+  const currentSelected = parseInt(select?.value || 0, 10) || null;
+  const selectedId = keepSelection && currentSelected ? currentSelected : (aut?.id || null);
+  populateAutistaDiGiroSelect(selectedId, aut?.id || null);
   if (!box) return;
   if (aut) {
     box.textContent = (aut.nome + ' ' + (aut.cognome||'')).trim();
     box.style.color = 'var(--text1)';
-    if (hidden) hidden.value = aut.id;
   } else {
     box.textContent = c ? '— nessun autista per questo giro' : '—';
     box.style.color = 'var(--text3)';
-    if (hidden) hidden.value = '';
   }
   renderOrdineDeliveryDaysHint();
 }
@@ -913,6 +977,77 @@ function populateOrderSelects(clienteId, agenteId) {
   if (!agenteId && state.currentUser.ruolo === 'autista') {
     selAgente.value = state.currentUser.id;
   }
+}
+
+function updateConsegnatarioDisplay(clienteId, keepSelection = true) {
+  const c = clienteId ? getCliente(clienteId) : null;
+  const giroOverride = (document.getElementById('ord-giro-override')?.value || '').trim();
+  const giroRef = giroOverride || c?.giro || '';
+  const aut = giroRef ? getAutistaDiGiro(giroRef) : null;
+  const box = document.getElementById('ord-consegnatario-nome');
+  const select = document.getElementById('ord-autista-di-giro');
+  const currentSelected = parseInt(select?.value || 0, 10) || null;
+  const selectedId = keepSelection && currentSelected ? currentSelected : (aut?.id || null);
+  populateAutistaDiGiroSelect(selectedId, aut?.id || null);
+  if (!box) return;
+  if (aut) {
+    box.textContent = (aut.nome + ' ' + (aut.cognome || '')).trim();
+    box.style.color = 'var(--text1)';
+  } else {
+    box.textContent = c ? '— nessun autista suggerito per questo giro' : '—';
+    box.style.color = 'var(--text3)';
+  }
+  renderOrdineDeliveryDaysHint();
+}
+
+function populateOrderSelects(clienteId, agenteId, autistaId = null) {
+  const agenti = state.utenti.filter(u => u.isAgente);
+  const selAgente = document.getElementById('ord-agente');
+  selAgente.innerHTML = '<option value="">— Seleziona agente —</option>' + agenti.map(a =>
+    `<option value="${a.id}" ${a.id == agenteId ? 'selected' : ''}>${(a.nome + ' ' + (a.cognome || '')).trim()}</option>`
+  ).join('');
+
+  const giroSel = document.getElementById('ord-giro-override');
+  if (giroSel) {
+    const giri = [...new Set(state.giriCalendario.map(g => (g.giro || '').trim()).filter(Boolean))].sort();
+    giroSel.innerHTML = '<option value="">Usa giro cliente</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
+  }
+
+  const inp = document.getElementById('ac-cliente-input');
+  if (!inp) return;
+  if (clienteId) {
+    const c = getCliente(clienteId);
+    inp.value = c.nome;
+    inp.classList.add('has-value');
+    document.getElementById('ord-cliente').value = clienteId;
+    acState.cliente.value = clienteId;
+    if (!agenteId && c.agenteId) selAgente.value = c.agenteId;
+    const noteBox = document.getElementById('ord-cliente-note-box');
+    const noteText = document.getElementById('ord-cliente-note-text');
+    if (noteBox && noteText) {
+      if (c.note && c.note.trim()) {
+        noteText.textContent = c.note;
+        noteBox.style.display = 'block';
+      } else {
+        noteBox.style.display = 'none';
+      }
+    }
+  } else {
+    inp.value = '';
+    inp.classList.remove('has-value');
+    const ordCliente = document.getElementById('ord-cliente');
+    if (ordCliente) ordCliente.value = '';
+    acState.cliente.value = null;
+    document.getElementById('ord-cliente-note-box').style.display = 'none';
+  }
+
+  if (!agenteId && state.currentUser.ruolo === 'autista') {
+    selAgente.value = state.currentUser.id;
+  }
+  const giroRef = (giroSel?.value || getCliente(clienteId)?.giro || '').trim();
+  const suggestedAutista = getAutistaDiGiro(giroRef);
+  populateAutistaDiGiroSelect(autistaId || suggestedAutista?.id || null, suggestedAutista?.id || null);
+  updateConsegnatarioDisplay(clienteId, true);
 }
 
 

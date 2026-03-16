@@ -497,6 +497,7 @@ async function createSchema() {
     CREATE TABLE IF NOT EXISTS clienti (
       id               SERIAL PRIMARY KEY,
       nome             TEXT NOT NULL,
+      alias            TEXT DEFAULT '',
       localita         TEXT DEFAULT '',
       giro             TEXT DEFAULT '',
       agente_id        INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
@@ -820,12 +821,14 @@ async function createSchema() {
       ) THEN
         ALTER TABLE utenti DROP CONSTRAINT utenti_ruolo_check;
       END IF;
-      ALTER TABLE utenti
-        ADD CONSTRAINT utenti_ruolo_check
-        CHECK (ruolo IN ('admin','autista','magazzino','direzione','amministrazione'));
-    EXCEPTION
-      WHEN duplicate_object THEN NULL;
-    END $$;
+    ALTER TABLE utenti
+      ADD CONSTRAINT utenti_ruolo_check
+      CHECK (ruolo IN ('admin','autista','magazzino','direzione','amministrazione'));
+  EXCEPTION
+    WHEN duplicate_object THEN NULL;
+  END $$;
+
+  ALTER TABLE clienti ADD COLUMN IF NOT EXISTS alias TEXT DEFAULT '';
 
     DO $$
     BEGIN
@@ -1691,18 +1694,18 @@ app.post('/api/clienti/lookup-piva', authMiddleware, requirePermission('clienti:
   }
 });
 
-app.post('/api/clienti', authMiddleware, requirePermission('clienti:create'), async (req, res) => {
-  try {
-    const { nome, localita='', giro='', agente_id=null, autista_di_giro=null,
+  app.post('/api/clienti', authMiddleware, requirePermission('clienti:create'), async (req, res) => {
+    try {
+    const { nome, alias='', localita='', giro='', agente_id=null, autista_di_giro=null,
             note='', piva='', codice_fiscale='', codice_univoco='', pec='',
             cond_pagamento='', e_fornitore=false, classificazione='' } = req.body;
-    if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
-    const r = await q(
-      `INSERT INTO clienti (nome,localita,giro,agente_id,autista_di_giro,note,piva,codice_fiscale,codice_univoco,pec,cond_pagamento,e_fornitore,classificazione,onboarding_stato,onboarding_checklist,fido,sbloccato)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'in_attesa',$14::jsonb,0,FALSE)
-       RETURNING id,nome,localita,giro,piva,codice_fiscale,codice_univoco,pec,onboarding_stato,fido,sbloccato`,
-      [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, JSON.stringify({})]
-    );
+      if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
+      const r = await q(
+      `INSERT INTO clienti (nome,alias,localita,giro,agente_id,autista_di_giro,note,piva,codice_fiscale,codice_univoco,pec,cond_pagamento,e_fornitore,classificazione,onboarding_stato,onboarding_checklist,fido,sbloccato)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'in_attesa',$15::jsonb,0,FALSE)
+         RETURNING id,nome,alias,localita,giro,piva,codice_fiscale,codice_univoco,pec,onboarding_stato,fido,sbloccato`,
+      [nome, alias, localita, giro, agente_id||null, autista_di_giro||null, note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, JSON.stringify({})]
+      );
     const u = req.user;
     const creator = `${u.nome} ${u.cognome||''}`.trim();
     await logDB(u.id, creator, 'Nuovo cliente', nome);
@@ -1711,18 +1714,18 @@ app.post('/api/clienti', authMiddleware, requirePermission('clienti:create'), as
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/clienti/:id', authMiddleware, requirePermission('clienti:update'), async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const { nome, localita='', giro='', agente_id=null, autista_di_giro=null,
-            note='', piva='', codice_fiscale='', codice_univoco='', pec='',
-            cond_pagamento='', e_fornitore=false, classificazione='' } = req.body;
-    if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
-    await q(
-      `UPDATE clienti SET nome=$1,localita=$2,giro=$3,agente_id=$4,autista_di_giro=$5,
-       note=$6,piva=$7,codice_fiscale=$8,codice_univoco=$9,pec=$10,cond_pagamento=$11,e_fornitore=$12,classificazione=$13 WHERE id=$14`,
-      [nome, localita, giro, agente_id||null, autista_di_giro||null, note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, id]
-    );
+  app.put('/api/clienti/:id', authMiddleware, requirePermission('clienti:update'), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { nome, alias='', localita='', giro='', agente_id=null, autista_di_giro=null,
+              note='', piva='', codice_fiscale='', codice_univoco='', pec='',
+              cond_pagamento='', e_fornitore=false, classificazione='' } = req.body;
+      if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
+      await q(
+      `UPDATE clienti SET nome=$1,alias=$2,localita=$3,giro=$4,agente_id=$5,autista_di_giro=$6,
+         note=$7,piva=$8,codice_fiscale=$9,codice_univoco=$10,pec=$11,cond_pagamento=$12,e_fornitore=$13,classificazione=$14 WHERE id=$15`,
+      [nome, alias, localita, giro, agente_id||null, autista_di_giro||null, note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, id]
+      );
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

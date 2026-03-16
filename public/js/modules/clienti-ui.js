@@ -27,7 +27,11 @@ function renderClientiTable() {
   const q = (document.getElementById('search-clienti')?.value || '').toLowerCase();
   const filterGiro = document.getElementById('filter-giro')?.value || '';
   let list = state.clienti;
-  if (q) list = list.filter(c => c.nome.toLowerCase().includes(q) || c.localita.toLowerCase().includes(q));
+  if (q) list = list.filter(c =>
+    c.nome.toLowerCase().includes(q) ||
+    (c.alias || '').toLowerCase().includes(q) ||
+    c.localita.toLowerCase().includes(q)
+  );
   if (filterGiro) list = list.filter(c => c.giro === filterGiro);
   renderClientiStatusStrip(list);
   if (typeof refreshNavBadges === 'function') refreshNavBadges();
@@ -88,6 +92,7 @@ function renderClientiTable() {
           <div class="anag-avatar">${escapeHtml((c.nome || '?').charAt(0).toUpperCase())}</div>
           <div class="table-main-meta">
             <b style="font-size:13px;">${escapeHtml(c.nome)}</b>
+            ${c.alias ? `<div class="table-subline">Alias autista: <b>${escapeHtml(c.alias)}</b></div>` : ''}
             ${noteShort ? `<div class="table-subline">Nota: ${noteShort}</div>` : ''}
             <div class="inline-badges">
               ${tipo ? `<span class="badge badge-soft">${tipo}</span>` : ''}
@@ -124,6 +129,7 @@ function openNewCliente() {
   state.editingId = null;
   document.getElementById('modal-cliente-title').textContent = 'Nuovo Cliente';
   document.getElementById('cl-nome').value = '';
+  document.getElementById('cl-alias').value = '';
   document.getElementById('cl-localita').value = '';
   document.getElementById('cl-giro').value = '';
   document.getElementById('cl-note').value = '';
@@ -144,6 +150,7 @@ function openEditCliente(id) {
   state.editingId = id;
   document.getElementById('modal-cliente-title').textContent = 'Modifica Cliente';
   document.getElementById('cl-nome').value = c.nome;
+  document.getElementById('cl-alias').value = c.alias || '';
   document.getElementById('cl-localita').value = c.localita;
   document.getElementById('cl-giro').value = c.giro;
   document.getElementById('cl-note').value = c.note || '';
@@ -216,6 +223,7 @@ async function saveCliente() {
   }
   const body = {
     nome,
+    alias: document.getElementById('cl-alias').value.trim(),
     localita: document.getElementById('cl-localita').value.trim(),
     giro: document.getElementById('cl-giro').value,
     agente_id: parseInt(document.getElementById('cl-agente').value) || null,
