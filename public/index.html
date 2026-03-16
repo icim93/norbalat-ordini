@@ -2318,6 +2318,7 @@
                 <button class="btn btn-outline btn-sm" onclick="resetMagazzinoFilters()">Reset</button>
                 <button class="btn btn-outline btn-sm" onclick="openPDFGiornaliero()">PDF</button>
                 <button id="magazzino-undo-btn" class="btn btn-outline btn-sm" onclick="undoMagazzinoLastAction()" disabled style="opacity:0.5;">UNDO</button>
+                <button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="prendiInCaricoTutti()">Prendi in carico tutti</button>
                 <button class="btn btn-green btn-sm" onclick="chiudiGiornataMagazzino()">Conferma giornata</button>
               </div>
             </div>
@@ -2325,6 +2326,16 @@
           <div class="status-strip" id="magazzino-status-strip"></div>
         </div>
         <div id="magazzino-list"></div>
+
+        <!-- Ordini già preparati con pesi e lotti -->
+        <div class="card" style="margin-top:20px;" id="magazzino-preparati-card">
+          <div class="card-header">
+            <div class="card-title">✅ Ordini preparati — riepilogo pesi e lotti</div>
+            <div style="font-size:13px;color:var(--text2);">Verifica finale prima della spedizione</div>
+          </div>
+          <div id="magazzino-preparati-list" style="padding:0 16px 8px;"></div>
+        </div>
+
         <!-- Piano di carico (view per magazzino) -->
         <div class="card" style="margin-top:20px;" id="piano-carico-magaz-card">
           <div class="card-header">
@@ -4690,52 +4701,87 @@ function renderMagazzino() {
     if (filterGiro) msg = `Nessun ordine per il giro <b>${filterGiro}</b> - ${isOggi ? 'oggi' : formatDate(filterData)}`;
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><p>${msg}</p></div>`;
     renderScortePanels();
+    renderOrdiniPreparati(filterData, filterGiro);
     return;
   }
+
+  let _navIdx = 0;
 
   container.innerHTML = ordini.map((o, i) => {
     const c = getCliente(o.clienteId);
     const a = getAgente(o.agenteId);
     const inPrep = o.stato === 'preparazione';
     const isCons = o.stato === 'consegnato';
-    const stef = o.stef ? `<span class="badge" style="background:var(--blue-light);color:var(--blue);font-size:10px;margin-left:4px;">STEF</span>` : '';
-    const altroVettore = o.altroVettore ? `<span class="badge" style="background:#fff1e0;color:#b86a00;font-size:10px;margin-left:4px;">Altro vettore</span>` : '';
-    const dataNonCerta = o.dataNonCerta ? `<span class="badge" style="background:var(--accent2-light);color:var(--accent2);font-size:10px;margin-left:4px;">Data non certa</span>` : '';
+    const stefBadge = o.stef ? `<span class="badge" style="background:var(--blue-light);color:var(--blue);font-size:10px;margin-left:4px;">STEF</span>` : '';
+    const altroBadge = o.altroVettore ? `<span class="badge" style="background:#fff1e0;color:#b86a00;font-size:10px;margin-left:4px;">Altro vettore</span>` : '';
+    const dataBadge = o.dataNonCerta ? `<span class="badge" style="background:var(--accent2-light);color:var(--accent2);font-size:10px;margin-left:4px;">Data non certa</span>` : '';
     const isHighlighted = state.magazzinoHighlightOrderId === o.id;
 
-    const checkLines = inPrep ? o.linee.map((l, li) => {
-      const p = l.prodId ? getProdotto(l.prodId) : { codice: 'LIB', nome: l.prodottoNomeLibero || 'Prodotto libero', pesoFisso: true };
-      const checked = l.preparato ? 'checked' : '';
-      const pesoInput = !p.pesoFisso
-        ? `<input type="number" step="0.1" min="0" placeholder="kg eff." value="${l.pesoEffettivo||''}"
-             style="width:80px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;"
-             onchange="setLinePesoEffettivo(${o.id},${li},this.value)">`
-        : `<span style="font-size:12px;color:var(--text3);">(fisso)</span>`;
-      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);">
-        <input type="checkbox" ${checked} onchange="toggleLineaPreparata(${o.id},${li},this.checked)"
-          style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;">
-        <span style="flex:1;font-size:13px;${l.preparato?'text-decoration:line-through;color:var(--text3);':''}">${l.qty}x [${p.codice}] ${p.nome}</span>
-        ${pesoInput}
-        <input type="text" value="${l.lotto || ''}" placeholder="Lotto"
-          onchange="setLineLotto(${o.id},${li},this.value)"
-          style="width:110px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;">
-      </div>`;
-    }).join('') : '';
+    let checkLines = '';
+    if (inPrep) {
+      // Controlla se tutte le righe hanno lotto compilato (per abilitare Pronto)
+      checkLines = o.linee.map((l, li) => {
+        const p = l.prodId ? getProdotto(l.prodId) : { codice: 'LIB', nome: l.prodottoNomeLibero || 'Prodotto libero', pesoFisso: true };
+        const checked = l.preparato ? 'checked' : '';
+        const barratoStyle = l.preparato ? 'text-decoration:line-through;color:var(--text3);' : '';
+        const lottoMancante = !l.lotto || !String(l.lotto).trim();
+        const lottoBorderStyle = lottoMancante ? 'border-color:#e74c3c;' : 'border-color:var(--border);';
+
+        // Indici per navigazione Enter
+        const navPeso = !p.pesoFisso ? _navIdx++ : -1;
+        const navLotto = _navIdx++;
+
+        const pesoInput = !p.pesoFisso
+          ? `<input type="number" step="0.1" min="0" placeholder="kg eff." value="${l.pesoEffettivo || ''}"
+               data-mgnav="${navPeso}"
+               style="width:80px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;"
+               oninput="onLinePesoInput(${o.id},${li},this)"
+               onchange="setLinePesoEffettivo(${o.id},${li},this.value)"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();magazzinoNavNext(${navPeso})}">`
+          : `<span style="font-size:12px;color:var(--text3);">(fisso)</span>`;
+
+        // Bottone split: solo per righe non-pedana con qty > 1
+        const splitBtn = (!l.isPedana && Number(l.qty) > 1)
+          ? `<button class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 6px;" title="Dividi in due lotti distinti" onclick="splitLineaOrdine(${o.id},${li})">✂</button>`
+          : '';
+
+        return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);">
+          <input type="checkbox" data-line-cb="${o.id}-${li}" ${checked}
+            onchange="toggleLineaPreparata(${o.id},${li},this.checked)"
+            style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
+          <span data-line-nome="${o.id}-${li}" style="flex:1;font-size:13px;${barratoStyle}">${l.qty}x [${p.codice}] ${p.nome}</span>
+          ${pesoInput}
+          <input type="text" value="${escapeHtml(l.lotto || '')}" placeholder="Lotto *"
+            data-mgnav="${navLotto}"
+            style="width:110px;font-size:12px;padding:3px 6px;border:1px solid;border-radius:5px;${lottoBorderStyle}"
+            oninput="onLineLottoInput(${o.id},${li},this)"
+            onchange="setLineLotto(${o.id},${li},this.value)"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();magazzinoNavNext(${navLotto})}">
+          ${splitBtn}
+        </div>`;
+      }).join('');
+    }
+
+    const allLottiOk = inPrep && o.linee.length > 0 && o.linee.every(l => l.lotto && String(l.lotto).trim());
+    const prontoDisabled = inPrep && !allLottiOk ? 'disabled title="Inserire il lotto per tutte le righe"' : '';
+    const prontoStyle = inPrep && !allLottiOk
+      ? 'background:#ccc;color:#888;cursor:not-allowed;border:1px solid #bbb;'
+      : '';
 
     return `
-    <div class="warehouse-card" style="${isCons ? 'opacity:0.6;' : ''}${isHighlighted ? 'border:2px solid var(--accent);' : ''}">
+    <div class="warehouse-card" data-ordine-id="${o.id}" style="${isCons ? 'opacity:0.6;' : ''}${isHighlighted ? 'border:2px solid var(--accent);' : ''}">
       <div class="wh-num">${String(i+1).padStart(2,'0')}</div>
       <div class="wh-info" style="flex:1;">
-        <div class="wh-client">${c.nome} ${stef} ${altroVettore} ${dataNonCerta}</div>
+        <div class="wh-client">${escapeHtml(c.nome)} ${stefBadge} ${altroBadge} ${dataBadge}</div>
         <div class="wh-detail">
           ${getOrdineGiroEffettivo(o) ? `<span class="badge badge-blue" style="font-size:10px;margin-right:6px;">${getOrdineGiroEffettivo(o)}</span>` : ''}
           Agente: ${a.nomeCompleto}${o.autistaDiGiro ? ` · ${getAgente(o.autistaDiGiro).nomeCompleto}` : ''}
         </div>
         ${inPrep
           ? `<div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;">${checkLines}</div>`
-          : `<div class="wh-detail" style="margin-top:4px;">${o.linee.map(l => { const p = l.prodId ? getProdotto(l.prodId) : { codice: 'LIB', nome: l.prodottoNomeLibero || 'Prodotto libero' }; return `${l.qty}x [${p.codice}] ${p.nome.split(' ').slice(0,2).join(' ')}`; }).join(', ')}</div>`
+          : `<div class="wh-detail" style="margin-top:4px;">${o.linee.map(l => { const p = l.prodId ? getProdotto(l.prodId) : { codice:'LIB', nome: l.prodottoNomeLibero||'Prodotto libero' }; return `${l.qty}x [${p.codice}] ${p.nome.split(' ').slice(0,2).join(' ')}`; }).join(', ')}</div>`
         }
-        ${o.note ? `<div style="font-size:12px;color:var(--text2);margin-top:4px;">📝 ${o.note}</div>` : ''}
+        ${o.note ? `<div style="font-size:12px;color:var(--text2);margin-top:4px;">📝 ${escapeHtml(o.note)}</div>` : ''}
       </div>
       <div class="wh-status">
         ${statoBadge(o.stato)}
@@ -4743,13 +4789,14 @@ function renderMagazzino() {
           ? `<span style="font-size:12px;color:var(--accent);margin-top:4px;">Completato</span>`
           : !inPrep
             ? `<button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="setOrdinePrepara(${o.id})">Preso in carico</button>`
-            : `<button class="btn btn-green btn-sm" onclick="confermaConsegna(${o.id})">Pronto</button>`
+            : `<button class="btn btn-green btn-sm" data-pronto-ordine="${o.id}" ${prontoDisabled} style="${prontoStyle}" onclick="confermaConsegna(${o.id})">Pronto</button>`
         }
       </div>
     </div>`;
   }).join('');
 
   renderScortePanels();
+  renderOrdiniPreparati(filterData, filterGiro);
   if (state.magazzinoHighlightOrderId) {
     setTimeout(() => { state.magazzinoHighlightOrderId = null; }, 1400);
   }
@@ -4757,9 +4804,13 @@ function renderMagazzino() {
 
 async function setOrdinePrepara(id) {
   try {
+    const prevStato = state.ordini.find(x => x.id === id)?.stato || 'attesa';
     await api('PATCH', `/api/ordini/${id}/stato`, { stato: 'preparazione' });
-    const o = state.ordini.find(x => x.id === id);
-    if (o) o.stato = 'preparazione';
+    // Auto-espandi righe pedane (qty > 1 → una riga per pedana)
+    await api('POST', `/api/ordini/${id}/auto-espandi-pedane`);
+    // Ricarica l'ordine per avere le righe aggiornate
+    await reloadOrdineState(id);
+    pushMagazzinoUndo({ type: 'stato', ordineId: id, prevStato });
     showToast('Ordine preso in carico!', 'success');
     renderMagazzino();
   } catch (e) {
@@ -4814,6 +4865,181 @@ function setLineLotto(ordineId, lineIdx, val) {
   saveLineaPreparazione(ordineId, lineIdx, { lotto: next });
 }
 
+// Handler oninput per campo lotto: auto-tick + aggiorna stato Pronto
+function onLineLottoInput(ordineId, lineIdx, el) {
+  const o = state.ordini.find(x => x.id === ordineId);
+  if (!o) return;
+  const line = o.linee[lineIdx];
+  if (!line) return;
+  // Aggiorna stato ottimistico per il calcolo del pulsante Pronto
+  line.lotto = String(el.value || '').trim();
+  // Aggiorna bordo campo (rosso se vuoto, normale se compilato)
+  el.style.borderColor = line.lotto ? 'var(--border)' : '#e74c3c';
+  // Auto-tick se c'è qualcosa scritto
+  if (el.value.trim() && !line.preparato) {
+    line.preparato = true;
+    saveLineaPreparazione(ordineId, lineIdx, { preparato: true });
+    const cb = document.querySelector(`[data-line-cb="${ordineId}-${lineIdx}"]`);
+    if (cb) cb.checked = true;
+    const nm = document.querySelector(`[data-line-nome="${ordineId}-${lineIdx}"]`);
+    if (nm) { nm.style.textDecoration = 'line-through'; nm.style.color = 'var(--text3)'; }
+  }
+  // Salva al blur per non spammare richieste — qui aggiorniamo solo il pulsante
+  updateMagazzinoProntoBtn(ordineId);
+}
+
+// Handler oninput per campo peso: auto-tick
+function onLinePesoInput(ordineId, lineIdx, el) {
+  const o = state.ordini.find(x => x.id === ordineId);
+  if (!o) return;
+  const line = o.linee[lineIdx];
+  if (!line) return;
+  if (el.value.trim() && !line.preparato) {
+    line.preparato = true;
+    saveLineaPreparazione(ordineId, lineIdx, { preparato: true });
+    const cb = document.querySelector(`[data-line-cb="${ordineId}-${lineIdx}"]`);
+    if (cb) cb.checked = true;
+    const nm = document.querySelector(`[data-line-nome="${ordineId}-${lineIdx}"]`);
+    if (nm) { nm.style.textDecoration = 'line-through'; nm.style.color = 'var(--text3)'; }
+  }
+  // Il peso si salva già all'onchange via setLinePesoEffettivo; qui solo sync visivo
+  const n = parseFloat(String(el.value).replace(',', '.'));
+  line.pesoEffettivo = Number.isFinite(n) ? n : null;
+}
+
+// Aggiorna il pulsante Pronto senza re-render completo
+function updateMagazzinoProntoBtn(ordineId) {
+  const o = state.ordini.find(x => x.id === ordineId);
+  if (!o) return;
+  const allOk = o.linee.length > 0 && o.linee.every(l => l.lotto && String(l.lotto).trim());
+  const btn = document.querySelector(`[data-pronto-ordine="${ordineId}"]`);
+  if (!btn) return;
+  btn.disabled = !allOk;
+  btn.style.background    = allOk ? '' : '#ccc';
+  btn.style.color         = allOk ? '' : '#888';
+  btn.style.cursor        = allOk ? '' : 'not-allowed';
+  btn.style.borderColor   = allOk ? '' : '#bbb';
+  btn.title               = allOk ? '' : 'Inserire il lotto per tutte le righe';
+}
+
+// Navigazione Enter tra campi peso/lotto
+function magazzinoNavNext(currentIdx) {
+  const all = [...document.querySelectorAll('[data-mgnav]')]
+    .map(el => ({ el, idx: Number(el.getAttribute('data-mgnav')) }))
+    .sort((a, b) => a.idx - b.idx);
+  const next = all.find(x => x.idx > currentIdx);
+  if (next) { next.el.focus(); if (next.el.select) next.el.select(); }
+}
+
+// Ricarica singolo ordine dal server e aggiorna state.ordini
+async function reloadOrdineState(id) {
+  try {
+    const fresh = await api('GET', `/api/ordini/${id}`);
+    const normalized = normalizeOrdine(fresh);
+    const idx = state.ordini.findIndex(x => x.id === id);
+    if (idx >= 0) state.ordini[idx] = normalized;
+  } catch (_) { /* non blocca */ }
+}
+
+// Prendi in carico tutti gli ordini in attesa (data+giro correnti)
+async function prendiInCaricoTutti() {
+  const filterData = document.getElementById('filter-magazzino-data')?.value || today();
+  const filterGiro = document.getElementById('filter-magazzino-giro')?.value || '';
+  let daInCaricare = state.ordini.filter(o =>
+    o.dato === filterData || o.data === filterData
+  ).filter(o => o.stato === 'attesa');
+  if (filterGiro) daInCaricare = daInCaricare.filter(o => getOrdineGiroEffettivo(o) === filterGiro);
+  if (!daInCaricare.length) { showToast('Nessun ordine in attesa da prendere in carico', 'info'); return; }
+  const ids = daInCaricare.map(o => o.id);
+  let ok = 0;
+  for (const id of ids) {
+    try {
+      await api('PATCH', `/api/ordini/${id}/stato`, { stato: 'preparazione' });
+      await api('POST', `/api/ordini/${id}/auto-espandi-pedane`);
+      await reloadOrdineState(id);
+      ok++;
+    } catch (_) { /* continua sugli altri */ }
+  }
+  // Undo bulk
+  pushMagazzinoUndo({ type: 'stato_bulk', ordineIds: ids.slice(0, ok), prevStato: 'attesa' });
+  showToast(`${ok} ordine${ok !== 1 ? 'i' : ''} preso${ok !== 1 ? 'i' : ''} in carico`, 'success');
+  renderMagazzino();
+}
+
+// Split manuale di una riga per doppio lotto
+async function splitLineaOrdine(ordineId, lineIdx) {
+  const o = state.ordini.find(x => x.id === ordineId);
+  if (!o) return;
+  const line = o.linee[lineIdx];
+  if (!line) return;
+  const origQty = Number(line.qty);
+  if (origQty <= 1) { showToast('Quantità già minima, impossibile dividere', 'warning'); return; }
+  const input = prompt(
+    `Dividi la riga "${line.prodottoNomeLibero || getProdotto(line.prodId)?.nome || '?'}" (qty totale: ${origQty})\n` +
+    `Quante unità vuoi separare nel secondo lotto? (1–${origQty - 1})`,
+    '1'
+  );
+  if (input === null) return;
+  const qtySplit = parseInt(input, 10);
+  if (!Number.isFinite(qtySplit) || qtySplit < 1 || qtySplit >= origQty) {
+    showToast('Quantità non valida', 'warning');
+    return;
+  }
+  try {
+    await api('POST', `/api/ordini/${ordineId}/linee/${line.id}/split`, { qty_split: qtySplit });
+    await reloadOrdineState(ordineId);
+    renderMagazzino();
+    showToast(`Riga divisa: ${origQty - qtySplit} + ${qtySplit}`, 'success');
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
+}
+
+// Sezione riepilogo ordini preparati (in fondo alla pagina magazzino)
+function renderOrdiniPreparati(filterData, filterGiro) {
+  const card = document.getElementById('magazzino-preparati-card');
+  const list = document.getElementById('magazzino-preparati-list');
+  if (!card || !list) return;
+
+  const data = filterData || today();
+  let ordiniPrep = state.ordini.filter(o =>
+    o.data === data && (o.stato === 'preparazione' || o.stato === 'consegnato')
+  );
+  if (filterGiro) ordiniPrep = ordiniPrep.filter(o => getOrdineGiroEffettivo(o) === filterGiro);
+  // Mostra solo quelli con tutte le righe preparate
+  ordiniPrep = ordiniPrep.filter(o => o.linee.length > 0 && o.linee.every(l => l.preparato));
+
+  if (!ordiniPrep.length) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+
+  list.innerHTML = ordiniPrep.map(o => {
+    const cl = getCliente(o.clienteId);
+    const giro = getOrdineGiroEffettivo(o);
+    const righe = o.linee.map(l => {
+      const p = l.prodId ? getProdotto(l.prodId) : null;
+      const nome = l.prodottoNomeLibero || p?.nome || 'Prodotto libero';
+      const peso = l.pesoEffettivo ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>` : (p?.pesoFisso ? '<span style="color:var(--text3);">(fisso)</span>' : '<span style="color:#e74c3c;">peso mancante</span>');
+      const lotto = l.lotto ? `<span style="color:var(--accent);font-weight:600;">${escapeHtml(l.lotto)}</span>` : '<span style="color:#e74c3c;">lotto mancante</span>';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:3px 0;font-size:12px;border-bottom:1px dotted var(--border);">
+        <span style="flex:1;">${l.qty}× ${escapeHtml(nome)}</span>
+        <span>${peso}</span>
+        <span>Lotto: ${lotto}</span>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--border);">
+      <div style="font-weight:700;font-size:13px;margin-bottom:4px;">
+        #${o.id} — ${escapeHtml(cl.nome)}
+        ${giro ? `<span class="badge badge-blue" style="font-size:10px;margin-left:6px;">${giro}</span>` : ''}
+        ${statoBadge(o.stato)}
+      </div>
+      ${righe}
+    </div>`;
+  }).join('');
+}
+
 function pushMagazzinoUndo(action) {
   if (!action) return;
   state.magazzinoUndoStack = Array.isArray(state.magazzinoUndoStack) ? state.magazzinoUndoStack : [];
@@ -4834,6 +5060,25 @@ async function undoMagazzinoLastAction() {
   if (!Array.isArray(state.magazzinoUndoStack) || !state.magazzinoUndoStack.length) return;
   const action = state.magazzinoUndoStack.pop();
   updateMagazzinoUndoButton();
+
+  // Undo cambio stato ordine (singolo o bulk)
+  if (action.type === 'stato' || action.type === 'stato_bulk') {
+    const ids = action.type === 'stato_bulk' ? (action.ordineIds || []) : [action.ordineId];
+    for (const oid of ids) {
+      const o = state.ordini.find(x => x.id === oid);
+      if (!o) continue;
+      try {
+        await api('PATCH', `/api/ordini/${oid}/stato`, { stato: action.prevStato });
+        o.stato = action.prevStato;
+        if (action.prevStato === 'attesa') o.linee.forEach(l => { l.preparato = false; });
+      } catch (_) {}
+    }
+    renderMagazzino();
+    showToast('Stato ordine ripristinato', 'success');
+    return;
+  }
+
+  // Undo modifica campo riga
   const o = state.ordini.find(x => x.id === action?.ordineId);
   const line = o?.linee?.[action?.lineIdx];
   if (!o || !line) {
@@ -5779,11 +6024,16 @@ async function saveCatalogoOrder() {
   }
 }
 
-function openPDFGiornaliero() {
+async function openPDFGiornaliero() {
   document.getElementById('pdf-data').value = today();
   document.querySelectorAll('.pdf-giro-cb').forEach(cb => cb.checked = false);
   const mag = document.querySelector('input[name="pdf-tipo"][value="magazzino"]');
   if (mag) mag.checked = true;
+  // Ricarica ordini per avere i dati freschi (pesi e lotti aggiornati)
+  try {
+    const freschi = await api('GET', '/api/ordini');
+    state.ordini = freschi.map(normalizeOrdine);
+  } catch (_) { /* usa dati in cache */ }
   updatePDFPreview();
   openModal('modal-pdf-giornaliero');
 }
@@ -5845,7 +6095,7 @@ function updatePDFPreview() {
     </div>`;
   }
 
-  // ── REPORT FATTURAZIONE: nome prodotto + peso effettivo ──
+  // ── REPORT FATTURAZIONE: nome prodotto + peso effettivo + lotto ──
   function ordineHtmlFatt(o) {
     const cl = getCliente(o.clienteId);
     const linee = o.linee.map(l => {
@@ -5853,11 +6103,17 @@ function updatePDFPreview() {
       const nome = l.prodottoNomeLibero || p?.nome || 'Prodotto libero';
       const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
       const qty = l.qty || 1;
-      const peso = l.pesoEffettivo ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>` : `<span style="color:#bbb;">${qty} ${um} — peso da inserire</span>`;
+      const peso = l.pesoEffettivo
+        ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>`
+        : (p?.pesoFisso ? `<span style="color:#555;">${qty} ${um}</span>` : `<span style="color:#c0392b;">peso mancante</span>`);
+      const lotto = l.lotto
+        ? `<span style="color:#1a6196;font-weight:600;">Lotto: ${l.lotto}</span>`
+        : `<span style="color:#c0392b;">lotto mancante</span>`;
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
-      return `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;border-bottom:1px dotted #eee;">
-        <span>${nome}${nota}</span>
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;font-size:12px;border-bottom:1px dotted #eee;">
+        <span style="flex:1;">${nome}${nota}</span>
         <span style="white-space:nowrap;margin-left:8px;">${peso}</span>
+        <span style="white-space:nowrap;margin-left:12px;font-size:11px;">${lotto}</span>
       </div>`;
     }).join('');
     return `<div style="margin-bottom:10px;padding-bottom:6px;">

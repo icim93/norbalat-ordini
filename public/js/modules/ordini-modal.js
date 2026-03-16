@@ -1188,11 +1188,18 @@ function openDettaglio(id) {
 async function confermaConsegna(id) {
   id = parseInt(id);
   try {
-    await api('PATCH', `/api/ordini/${id}/stato`, { stato: 'consegnato' });
     const o = state.ordini.find(x => x.id === id);
+    const prevStato = o?.stato || 'preparazione';
+    await api('PATCH', `/api/ordini/${id}/stato`, { stato: 'consegnato' });
     if (o) o.stato = 'consegnato';
-    showToast('Consegna confermata! ✅', 'success');
-    closeModal('modal-dettaglio');
+    // Push undo per tornare indietro dallo stato pronto
+    if (typeof pushMagazzinoUndo === 'function') {
+      pushMagazzinoUndo({ type: 'stato', ordineId: id, prevStato });
+    }
+    showToast('Ordine pronto! ✅', 'success');
+    if (typeof closeModal === 'function') closeModal('modal-dettaglio');
+    // Ricarica l'ordine per aggiornare pesi/lotti in memoria (usati dal PDF)
+    if (typeof reloadOrdineState === 'function') await reloadOrdineState(id);
     renderPage(state.currentPage);
   } catch(e) { showToast(e.message, 'warning'); }
 }

@@ -2742,6 +2742,80 @@ app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, r
   }
 });
 
+// ─── SPLIT LINEA (doppio lotto) ──────────────────────────────────
+app.post('/api/ordini/:ordineId/linee/:lineId/split', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const ordineId = parseInt(req.params.ordineId, 10);
+  const lineId   = parseInt(req.params.lineId,   10);
+  const qtySplit = Number(req.body?.qty_split || 1);
+  if (!Number.isFinite(qtySplit) || qtySplit <= 0)
+    return res.status(400).json({ error: 'qty_split non valido' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      'SELECT * FROM ordine_linee WHERE id=$1 AND ordine_id=$2 LIMIT 1',
+      [lineId, ordineId]
+    );
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Riga non trovata' });
+    }
+    const line    = rows[0];
+    const origQty = Number(line.qty);
+    if (qtySplit >= origQty) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `qty_split (${qtySplit}) deve essere < qty originale (${origQty})` });
+    }
+    await client.query('UPDATE ordine_linee SET qty=$1 WHERE id=$2', [origQty - qtySplit, lineId]);
+    const ins = await client.query(
+      `INSERT INTO ordine_linee
+         (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE,'') RETURNING id`,
+      [ordineId, line.prodotto_id, line.prodotto_nome_libero || '', qtySplit,
+       line.prezzo_unitario, !!line.is_pedana, line.nota_riga || '', line.unita_misura || 'pezzi']
+    );
+    await client.query('COMMIT');
+    res.json({ ok: true, new_linea_id: ins.rows[0].id });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch {}
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+});
+
+// ─── AUTO-ESPANDI PEDANE (qty > 1 → N righe da qty=1) ────────────
+app.post('/api/ordini/:ordineId/auto-espandi-pedane', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const ordineId = parseInt(req.params.ordineId, 10);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: linee } = await client.query(
+      'SELECT * FROM ordine_linee WHERE ordine_id=$1 AND is_pedana=TRUE AND qty > 1 ORDER BY id',
+      [ordineId]
+    );
+    let nuoveLinee = 0;
+    for (const line of linee) {
+      const qty = Number(line.qty);
+      if (qty <= 1) continue;
+      await client.query('UPDATE ordine_linee SET qty=1 WHERE id=$1', [line.id]);
+      for (let i = 1; i < qty; i++) {
+        await client.query(
+          `INSERT INTO ordine_linee
+             (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+           VALUES ($1,$2,$3,1,$4,TRUE,$5,$6,FALSE,'')`,
+          [ordineId, line.prodotto_id, line.prodotto_nome_libero || '',
+           line.prezzo_unitario, line.nota_riga || '', line.unita_misura || 'pezzi']
+        );
+        nuoveLinee++;
+      }
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true, expanded: linee.length, nuove_linee: nuoveLinee });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch {}
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+});
+
 async function createResidualOrderFromMissingLines({ ordine, missingLinee, reqUser, noteSuffix = '', client }) {
   const effectiveGiro = String(ordine.giro_effettivo || ordine.giro_override || ordine.cliente_giro || '').trim();
   const nextDate = await getNextDeliveryDate(effectiveGiro, ordine.data);
