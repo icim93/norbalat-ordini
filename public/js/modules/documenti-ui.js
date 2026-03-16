@@ -30,6 +30,21 @@
     return `${(v / (1024 * 1024)).toFixed(2)} MB`;
   }
 
+  function getDocSearchQuery() {
+    return String(document.getElementById('doc-search-input')?.value || '').trim().toLowerCase();
+  }
+
+  function resetDocumentiFilters() {
+    const input = document.getElementById('doc-search-input');
+    if (input) input.value = '';
+    filterDocumentiFiles();
+  }
+
+  function filterDocumentiFiles() {
+    renderDocFolderHeader();
+    renderDocFilesTable();
+  }
+
   function getFolderById(id) {
     return window.state.docFolders.find(f => f.id === id) || null;
   }
@@ -100,7 +115,11 @@
     const tbody = document.getElementById('doc-files-body');
     if (!tbody) return;
     const canManage = window.state.docCanManage && isDocsManager();
-    const files = window.state.docCurrentFiles || [];
+    const query = getDocSearchQuery();
+    const allFiles = window.state.docCurrentFiles || [];
+    const files = query
+      ? allFiles.filter(f => String(f.file_name || '').toLowerCase().includes(query) || String(f.mime_type || '').toLowerCase().includes(query))
+      : allFiles;
     if (!files.length) {
       tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text3);padding:14px;">Nessun file in questa cartella</td></tr>';
       return;
@@ -122,10 +141,23 @@
     const folder = getFolderById(window.state.docCurrentFolderId);
     const nameEl = document.getElementById('doc-current-folder-name');
     const visEl = document.getElementById('doc-current-folder-roles');
+    const strip = document.getElementById('doc-status-strip');
     if (nameEl) nameEl.textContent = folder ? folder.name : 'Nessuna cartella selezionata';
     if (visEl) {
       const roles = folder?.allowed_roles || [];
       visEl.textContent = roles.length ? `Visibile a: ${roles.map(r => ROLE_LABELS[r] || r).join(', ')}` : 'Visibile a tutti';
+    }
+    if (strip) {
+      const files = window.state.docCurrentFiles || [];
+      const recent = files.filter(f => {
+        const created = new Date(f.created_at || 0).getTime();
+        return Number.isFinite(created) && (Date.now() - created) <= (7 * 24 * 60 * 60 * 1000);
+      }).length;
+      strip.innerHTML = [
+        `<span class="status-pill"><span>Cartelle</span><strong>${window.state.docFolders.length}</strong></span>`,
+        `<span class="status-pill info"><span>File cartella</span><strong>${files.length}</strong></span>`,
+        recent ? `<span class="status-pill success"><span>Nuovi 7g</span><strong>${recent}</strong></span>` : '',
+      ].filter(Boolean).join('');
     }
   }
 
@@ -168,6 +200,7 @@
       renderDocFolderHeader();
       renderDocManagerPanel();
       renderDocFilesTable();
+      if (typeof window.refreshNavBadges === 'function') window.refreshNavBadges();
     } catch (e) {
       window.showToast(e.message || 'Errore caricamento documenti', 'warning');
     }
@@ -180,6 +213,7 @@
     renderDocFolderHeader();
     renderDocManagerPanel();
     renderDocFilesTable();
+    if (typeof window.refreshNavBadges === 'function') window.refreshNavBadges();
   }
 
   async function createDocFolder() {
@@ -325,4 +359,6 @@
   window.uploadDocFile = uploadDocFile;
   window.downloadDocFile = downloadDocFile;
   window.deleteDocFile = deleteDocFile;
+  window.filterDocumentiFiles = filterDocumentiFiles;
+  window.resetDocumentiFilters = resetDocumentiFilters;
 })();

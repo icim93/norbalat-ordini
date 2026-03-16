@@ -24,6 +24,15 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function statoBadge(stato) {
     const map = {
       attesa: ['badge-orange', 'In attesa'],
@@ -65,6 +74,7 @@
   window.getAgente = getAgente;
   window.getProdotto = getProdotto;
   window.today = today;
+  window.escapeHtml = escapeHtml;
   window.statoBadge = statoBadge;
   window.lineeResume = lineeResume;
   window.formatDate = formatDate;

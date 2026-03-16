@@ -1,5 +1,6 @@
 ﻿(function () {
   let selectedRole = 'admin';
+  const navOpenSections = new Set();
 
   const navConfigs = {
     admin: [
@@ -92,12 +93,86 @@
     return (config || []).flatMap(entry => Array.isArray(entry.items) ? entry.items : [entry]);
   }
 
+  function getSectionKey(section) {
+    return String(section || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+  }
+
+  function getSectionForPage(config, page) {
+    const group = (config || []).find(entry => Array.isArray(entry.items) && entry.items.some(item => item.page === page));
+    return group?.section || null;
+  }
+
+  function ensurePageSectionOpen(config, page) {
+    const section = getSectionForPage(config, page);
+    if (section) navOpenSections.add(getSectionKey(section));
+  }
+
+  function getNavBadgeValue(page) {
+    const ordini = window.state.ordini || [];
+    const clienti = window.state.clienti || [];
+    const scorte = window.state.scorte || [];
+    const crmSummary = window.state.crmSummary || {};
+    if (page === 'ordini') {
+      return ordini.filter(o => o.stato === 'attesa' || o.stato === 'preparazione').length;
+    }
+    if (page === 'magazzino') {
+      const today = typeof window.today === 'function' ? window.today() : '';
+      return ordini.filter(o => o.data === today && o.stato !== 'consegnato' && o.stato !== 'annullato').length;
+    }
+    if (page === 'clienti') {
+      if (typeof window.canApproveOnboarding === 'function' && window.canApproveOnboarding()) {
+        return clienti.filter(c => ['bozza', 'in_attesa', 'in_verifica', 'sospeso'].includes(c.onboardingStato)).length;
+      }
+      const today = typeof window.today === 'function' ? window.today() : '';
+      return Object.values(crmSummary).filter(c => c?.followup_date && String(c.followup_date).slice(0, 10) <= today).length;
+    }
+    if (page === 'report') {
+      return scorte.filter(s => s.stato === 'attiva').length;
+    }
+    if (page === 'documenti') {
+      return Array.isArray(window.state.docCurrentFiles) ? window.state.docCurrentFiles.length : 0;
+    }
+    if (page === 'piano') {
+      return (window.state.camions || []).filter(c => !c.confermato).length;
+    }
+    if (page === 'autista') {
+      const today = typeof window.today === 'function' ? window.today() : '';
+      const userId = window.state.currentUser?.id;
+      return ordini.filter(o => o.data === today && (o.agenteId === userId || o.autistaDiGiro === userId) && o.stato !== 'annullato').length;
+    }
+    return 0;
+  }
+
+  function renderNavBadge(page, type) {
+    const value = getNavBadgeValue(page);
+    const cls = type === 'drawer' ? 'drawer-nav-badge' : 'nav-item-badge';
+    return `<span class="${cls}" data-nav-badge="${page}" style="${value ? '' : 'display:none;'}">${value || ''}</span>`;
+  }
+
   function renderNavButton(item, prefix = 'nav', extra = '') {
+    const isDrawer = extra === 'drawer-nav-item';
     return `
     <button class="${extra || 'nav-item'}" id="${prefix}-${item.page}" onclick="goTo('${item.page}')">
-      <span class="${extra === 'drawer-nav-item' ? 'drawer-nav-icon' : 'nav-icon'}">${item.icon}</span>${item.label}
+      <span class="${isDrawer ? 'drawer-nav-icon' : 'nav-icon'}">${item.icon}</span>
+      <span class="${isDrawer ? 'drawer-nav-label' : 'nav-item-label'}">${item.label}${renderNavBadge(item.page, isDrawer ? 'drawer' : 'sidebar')}</span>
     </button>
   `;
+  }
+
+  function renderSectionToggle(section, type) {
+    const key = getSectionKey(section);
+    const baseClass = type === 'drawer' ? 'drawer-nav-section-toggle' : 'nav-section-toggle';
+    const labelClass = type === 'drawer' ? 'drawer-nav-section-label' : 'nav-section-label';
+    const chevronClass = type === 'drawer' ? 'drawer-nav-section-chevron' : 'nav-section-chevron';
+    return `
+      <button class="${baseClass}" type="button" data-section-toggle="${key}" onclick="toggleNavSection('${key}')">
+        <span class="${labelClass}">${section}</span>
+        <span class="${chevronClass}">▾</span>
+      </button>
+    `;
   }
 
   function renderSidebarNav(config) {
@@ -106,9 +181,9 @@
       return config.map(item => renderNavButton(item)).join('');
     }
     return config.map(group => `
-      <div class="nav-section">
-        <div class="nav-section-label">${group.section}</div>
-        <div class="nav-section-items">
+      <div class="nav-section" data-section="${getSectionKey(group.section)}">
+        ${renderSectionToggle(group.section, 'sidebar')}
+        <div class="nav-section-items" data-section-items="${getSectionKey(group.section)}">
           ${group.items.map(item => renderNavButton(item)).join('')}
         </div>
       </div>
@@ -126,11 +201,40 @@
       return config.map(renderItem).join('');
     }
     return config.map(group => `
-      <div class="drawer-nav-section">
-        <div class="drawer-nav-section-label">${group.section}</div>
-        ${group.items.map(renderItem).join('')}
+      <div class="drawer-nav-section" data-section="${getSectionKey(group.section)}">
+        ${renderSectionToggle(group.section, 'drawer')}
+        <div class="drawer-nav-section-items" data-section-items="${getSectionKey(group.section)}">
+          ${group.items.map(renderItem).join('')}
+        </div>
       </div>
     `).join('');
+  }
+
+  function syncCollapsibleNav() {
+    document.querySelectorAll('[data-section]').forEach(sectionEl => {
+      const key = sectionEl.getAttribute('data-section');
+      sectionEl.classList.toggle('open', navOpenSections.has(key));
+    });
+  }
+
+  function refreshNavBadges() {
+    document.querySelectorAll('[data-nav-badge]').forEach(el => {
+      const page = el.getAttribute('data-nav-badge');
+      const value = getNavBadgeValue(page);
+      if (value) {
+        el.textContent = String(value);
+        el.style.display = '';
+      } else {
+        el.style.display = 'none';
+      }
+    });
+  }
+
+  function toggleNavSection(sectionKey) {
+    if (!sectionKey) return;
+    if (navOpenSections.has(sectionKey)) navOpenSections.delete(sectionKey);
+    else navOpenSections.add(sectionKey);
+    syncCollapsibleNav();
   }
 
   function selectRole(role, el) {
@@ -229,6 +333,8 @@
     const role = window.state.currentUser.ruolo;
     const config = navConfigs[role] || navConfigs.admin;
     const items = getFlatNavItems(config);
+    navOpenSections.clear();
+    ensurePageSectionOpen(config, window.state.currentPage || items[0]?.page);
     const u = window.state.currentUser;
     const roleLabels = { admin: 'Admin / Ufficio', amministrazione: 'Amministrazione', autista: 'Autista / Agente', magazzino: 'Magazzino', direzione: 'Direzione' };
     const sidebar = document.getElementById('sidebar-nav');
@@ -252,6 +358,9 @@
       </button>
     `).join('');
     }
+
+    syncCollapsibleNav();
+    refreshNavBadges();
   }
 
   function openDrawer() {
@@ -268,6 +377,10 @@
 
   function goTo(page) {
     closeDrawer();
+    const role = window.state.currentUser?.ruolo;
+    const config = navConfigs[role] || navConfigs.admin;
+    ensurePageSectionOpen(config, page);
+    syncCollapsibleNav();
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-item, .mobile-nav-item, .drawer-nav-item').forEach(n => n.classList.remove('active'));
     const el = document.getElementById('page-' + page);
@@ -311,6 +424,8 @@
   window.openDrawer = openDrawer;
   window.closeDrawer = closeDrawer;
   window.goTo = goTo;
+  window.refreshNavBadges = refreshNavBadges;
+  window.toggleNavSection = toggleNavSection;
   window.renderPage = renderPage;
 })();
 

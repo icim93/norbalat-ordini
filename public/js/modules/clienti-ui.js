@@ -1,63 +1,120 @@
+function resetClientiFilters() {
+  const search = document.getElementById('search-clienti');
+  const giro = document.getElementById('filter-giro');
+  if (search) search.value = '';
+  if (giro) giro.value = '';
+  renderClientiTable();
+}
+
+function renderClientiStatusStrip(list) {
+  const strip = document.getElementById('clienti-status-strip');
+  if (!strip) return;
+  const pending = list.filter(c => ['bozza', 'in_attesa', 'in_verifica'].includes(c.onboardingStato)).length;
+  const sospesi = list.filter(c => c.onboardingStato === 'sospeso').length;
+  const dueFollowups = list.filter(c => {
+    const crm = state.crmSummary?.[c.id];
+    return crm?.followup_date && String(crm.followup_date).slice(0, 10) <= today();
+  }).length;
+  strip.innerHTML = [
+    `<span class="status-pill"><span>Visualizzati</span><strong>${list.length}</strong></span>`,
+    pending ? `<span class="status-pill warn"><span>Onboarding aperti</span><strong>${pending}</strong></span>` : '',
+    dueFollowups ? `<span class="status-pill alert"><span>Follow-up scaduti</span><strong>${dueFollowups}</strong></span>` : '',
+    sospesi ? `<span class="status-pill info"><span>Sospesi</span><strong>${sospesi}</strong></span>` : '',
+  ].filter(Boolean).join('');
+}
+
 function renderClientiTable() {
   const q = (document.getElementById('search-clienti')?.value || '').toLowerCase();
   const filterGiro = document.getElementById('filter-giro')?.value || '';
   let list = state.clienti;
   if (q) list = list.filter(c => c.nome.toLowerCase().includes(q) || c.localita.toLowerCase().includes(q));
   if (filterGiro) list = list.filter(c => c.giro === filterGiro);
+  renderClientiStatusStrip(list);
+  if (typeof refreshNavBadges === 'function') refreshNavBadges();
 
   const tbody = document.getElementById('clienti-table');
+  const giroColors = {
+    'bari nord': 'badge-blue',
+    murgia: 'badge-green',
+    taranto: 'badge-orange',
+    lecce: 'badge-red',
+    'valle itria': 'badge-gray',
+    calabria: 'badge-gray',
+    foggia: 'badge-gray',
+    diretto: 'badge-green',
+    '': 'badge-gray',
+  };
+  const onboardingStatoLabels = {
+    bozza: 'Bozza',
+    in_attesa: 'In attesa',
+    in_verifica: 'In verifica',
+    approvato: 'Approvato',
+    rifiutato: 'Rifiutato',
+    sospeso: 'Sospeso',
+  };
+  const onboardingStatoBadge = {
+    bozza: 'badge-gray',
+    in_attesa: 'badge-orange',
+    in_verifica: 'badge-blue',
+    approvato: 'badge-green',
+    rifiutato: 'badge-red',
+    sospeso: 'badge-red',
+  };
+  const canManageOnboarding = canApproveOnboarding();
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">-</div><p>Nessun cliente trovato</p></div></td></tr>';
+    return;
+  }
+
   tbody.innerHTML = list.map(c => {
     const nOrdini = state.ordini.filter(o => o.clienteId === c.id).length;
-    const giroColors = {'bari nord':'badge-blue','murgia':'badge-green','taranto':'badge-orange','lecce':'badge-red','valle itria':'badge-gray','calabria':'badge-gray','foggia':'badge-gray','diretto':'badge-green','':`badge-gray`};
-    const onboardingStatoLabels = {
-      bozza: 'Bozza',
-      in_attesa: 'In attesa',
-      in_verifica: 'In verifica',
-      approvato: 'Approvato',
-      rifiutato: 'Rifiutato',
-      sospeso: 'Sospeso',
-    };
-    const onboardingStatoBadge = {
-      bozza: 'badge-gray',
-      in_attesa: 'badge-orange',
-      in_verifica: 'badge-blue',
-      approvato: 'badge-green',
-      rifiutato: 'badge-red',
-      sospeso: 'badge-red',
-    };
     const onboardingLabel = onboardingStatoLabels[c.onboardingStato] || 'In attesa';
     const onboardingBadge = onboardingStatoBadge[c.onboardingStato] || 'badge-gray';
     const fidoTxt = (Number(c.fido || 0)).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-    const canManageOnboarding = canApproveOnboarding();
     const crm = state.crmSummary?.[c.id];
     const crmFollowup = crm?.followup_date ? formatDate(String(crm.followup_date).slice(0, 10)) : '';
-    const crmSoon = crm?.followup_date && String(crm.followup_date).slice(0, 10) <= today();
+    const crmDue = crm?.followup_date && String(crm.followup_date).slice(0, 10) <= today();
+    const rowClass = [
+      crmDue ? 'table-row-critical' : '',
+      c.onboardingStato === 'sospeso' ? 'table-row-warning' : '',
+    ].filter(Boolean).join(' ');
+    const noteShort = c.note ? escapeHtml(c.note.substring(0, 50)) + (c.note.length > 50 ? '...' : '') : '';
+    const tipo = c.classificazione ? escapeHtml(c.classificazione) : '';
     return `
-    <tr>
+    <tr class="${rowClass}">
       <td>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div class="anag-avatar">${c.nome.charAt(0)}</div>
-          <div>
-            <b style="font-size:13px;">${c.nome}</b>
-            ${c.note ? `<div style="font-size:11px;color:var(--blue);margin-top:1px;">📌 ${c.note.substring(0,50)}${c.note.length>50?'…':''}</div>` : ''}
-            ${c.classificazione ? `<div style="font-size:10px;color:var(--text3);margin-top:1px;">${c.classificazione === 'Caseificio' ? '🧀' : c.classificazione === 'Alimentari' ? '🏪' : '🔄'} ${c.classificazione}${c.eFornitore?' · 🔁 Fornitore':''}</div>` : (c.eFornitore ? '<div style="font-size:10px;color:var(--text3);margin-top:1px;">🔁 Fornitore</div>' : '')}
-            ${crm ? `<div style="font-size:10px;color:${crmSoon ? 'var(--danger)' : 'var(--text3)'};margin-top:2px;">CRM: ${crm.esito || crm.stato_cliente || crm.tipo || 'aggiornato'} ${crmFollowup ? `· FU ${crmFollowup}` : ''}</div>` : ''}
+        <div class="table-main-cell">
+          <div class="anag-avatar">${escapeHtml((c.nome || '?').charAt(0).toUpperCase())}</div>
+          <div class="table-main-meta">
+            <b style="font-size:13px;">${escapeHtml(c.nome)}</b>
+            ${noteShort ? `<div class="table-subline">Nota: ${noteShort}</div>` : ''}
+            <div class="inline-badges">
+              ${tipo ? `<span class="badge badge-soft">${tipo}</span>` : ''}
+              ${c.eFornitore ? '<span class="badge badge-gray">Fornitore</span>' : ''}
+              ${crmDue ? '<span class="badge badge-red">Follow-up urgente</span>' : ''}
+            </div>
           </div>
         </div>
       </td>
-      <td style="color:var(--text2);">${c.localita}</td>
-      <td>${c.giro ? `<span class="badge ${giroColors[c.giro]||'badge-gray'}">${c.giro}</span>` : '<span style="color:var(--text3)">—</span>'}</td>
+      <td style="color:var(--text2);">${escapeHtml(c.localita || '-')}</td>
+      <td>${c.giro ? `<span class="badge ${giroColors[c.giro] || 'badge-gray'}">${escapeHtml(c.giro)}</span>` : '<span style="color:var(--text3)">-</span>'}</td>
       <td><span style="font-family:'DM Mono',monospace;font-weight:700;">${nOrdini}</span></td>
-      <td><span style="font-family:'DM Mono',monospace;">€ ${fidoTxt}</span></td>
-      <td><span class="badge ${onboardingBadge}">${onboardingLabel}</span></td>
+      <td><span style="font-family:'DM Mono',monospace;">EUR ${fidoTxt}</span></td>
       <td>
-        ${canManageOnboarding ? `<button class="btn btn-outline btn-sm" title="Imposta in verifica" aria-label="Imposta in verifica" onclick="setClienteOnboardingStatus(${c.id},'in_verifica')">🔎</button>` : ''}
-        ${canManageOnboarding ? `<button class="btn btn-green btn-sm" title="Approva onboarding" aria-label="Approva onboarding" onclick="approveClienteOnboarding(${c.id})">✅</button>` : ''}
-        ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" title="Rifiuta onboarding" aria-label="Rifiuta onboarding" onclick="setClienteOnboardingStatus(${c.id},'rifiutato')">⛔</button>` : ''}
-        ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" title="Sospendi onboarding" aria-label="Sospendi onboarding" onclick="setClienteOnboardingStatus(${c.id},'sospeso')">⏸️</button>` : ''}
-        <button class="btn btn-outline btn-sm" title="Apri CRM cliente" aria-label="Apri CRM cliente" onclick="openCrmCliente(${c.id})">📇</button>
-        <button class="btn btn-outline btn-sm" title="Modifica cliente" aria-label="Modifica cliente" onclick="openEditCliente(${c.id})">✏️</button>
-        <button class="btn btn-danger btn-sm" title="Elimina cliente" aria-label="Elimina cliente" onclick="deleteCliente(${c.id})">🗑️</button>
+        <span class="badge ${onboardingBadge}">${onboardingLabel}</span>
+        ${crm ? `<div class="table-subline">CRM: ${escapeHtml(crm.esito || crm.stato_cliente || crm.tipo || 'aggiornato')}${crmFollowup ? ` · FU ${crmFollowup}` : ''}</div>` : ''}
+      </td>
+      <td>
+        <div class="table-actions">
+          ${canManageOnboarding ? `<button class="btn btn-outline btn-sm" title="Imposta in verifica" aria-label="Imposta in verifica" onclick="setClienteOnboardingStatus(${c.id},'in_verifica')">Verifica</button>` : ''}
+          ${canManageOnboarding ? `<button class="btn btn-green btn-sm" title="Approva onboarding" aria-label="Approva onboarding" onclick="approveClienteOnboarding(${c.id})">Approva</button>` : ''}
+          ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" title="Rifiuta onboarding" aria-label="Rifiuta onboarding" onclick="setClienteOnboardingStatus(${c.id},'rifiutato')">Rifiuta</button>` : ''}
+          ${canManageOnboarding ? `<button class="btn btn-orange btn-sm" title="Sospendi onboarding" aria-label="Sospendi onboarding" onclick="setClienteOnboardingStatus(${c.id},'sospeso')">Sospendi</button>` : ''}
+          <button class="btn btn-outline btn-sm" title="Apri CRM cliente" aria-label="Apri CRM cliente" onclick="openCrmCliente(${c.id})">CRM</button>
+          <button class="btn btn-outline btn-sm" title="Modifica cliente" aria-label="Modifica cliente" onclick="openEditCliente(${c.id})">Mod</button>
+          <button class="btn btn-danger btn-sm" title="Elimina cliente" aria-label="Elimina cliente" onclick="deleteCliente(${c.id})">Del</button>
+        </div>
       </td>
     </tr>`;
   }).join('');
@@ -105,8 +162,8 @@ function openEditCliente(id) {
 function populateAgenteSelect(selectId, selectedId) {
   const sel = document.getElementById(selectId);
   const agenti = state.utenti.filter(u => u.ruolo === 'autista');
-  sel.innerHTML = '<option value="">— Nessuno —</option>' +
-    agenti.map(a => `<option value="${a.id}" ${a.id==selectedId?'selected':''}>${(a.nome+' '+(a.cognome||'')).trim()}</option>`).join('');
+  sel.innerHTML = '<option value="">- Nessuno -</option>' +
+    agenti.map(a => `<option value="${a.id}" ${a.id == selectedId ? 'selected' : ''}>${(a.nome + ' ' + (a.cognome || '')).trim()}</option>`).join('');
 }
 
 async function lookupClienteByPiva() {
@@ -116,8 +173,11 @@ async function lookupClienteByPiva() {
     showToast('Inserisci la Partita IVA', 'warning');
     return;
   }
-  const btn = document.querySelector('#modal-cliente .btn.btn-outline[onclick=\"lookupClienteByPiva()\"]');
-  if (btn) { btn.disabled = true; btn.textContent = 'Ricerca...'; }
+  const btn = document.querySelector('#modal-cliente .btn.btn-outline[onclick="lookupClienteByPiva()"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Ricerca...';
+  }
   try {
     const r = await api('POST', '/api/clienti/lookup-piva', { piva });
     if (!r?.found) {
@@ -125,11 +185,11 @@ async function lookupClienteByPiva() {
       return;
     }
     const data = r.data || {};
-    const fill = (id, v) => {
-      if (!v) return;
+    const fill = (id, value) => {
+      if (!value) return;
       const el = document.getElementById(id);
       if (!el) return;
-      if (!el.value || confirm(`Sostituire il campo ${id} con il valore trovato?`)) el.value = v;
+      if (!el.value || confirm(`Sostituire il campo ${id} con il valore trovato?`)) el.value = value;
     };
     fill('cl-nome', data.nome);
     fill('cl-localita', data.localita);
@@ -141,34 +201,40 @@ async function lookupClienteByPiva() {
   } catch (e) {
     showToast(e.message, 'warning');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Compila da P.IVA'; }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Compila da P.IVA';
+    }
   }
 }
 
 async function saveCliente() {
-  const nome  = document.getElementById('cl-nome').value.trim();
-  if (!nome) { showToast('Inserisci il nome del cliente', 'warning'); return; }
+  const nome = document.getElementById('cl-nome').value.trim();
+  if (!nome) {
+    showToast('Inserisci il nome del cliente', 'warning');
+    return;
+  }
   const body = {
     nome,
-    localita:       document.getElementById('cl-localita').value.trim(),
-    giro:           document.getElementById('cl-giro').value,
-    agente_id:      parseInt(document.getElementById('cl-agente').value)||null,
-    note:           document.getElementById('cl-note').value.trim(),
-    piva:           document.getElementById('cl-piva').value.trim(),
+    localita: document.getElementById('cl-localita').value.trim(),
+    giro: document.getElementById('cl-giro').value,
+    agente_id: parseInt(document.getElementById('cl-agente').value) || null,
+    note: document.getElementById('cl-note').value.trim(),
+    piva: document.getElementById('cl-piva').value.trim(),
     codice_fiscale: document.getElementById('cl-cf').value.trim(),
     codice_univoco: document.getElementById('cl-codice-univoco').value.trim(),
-    pec:            document.getElementById('cl-pec').value.trim(),
+    pec: document.getElementById('cl-pec').value.trim(),
     classificazione: document.getElementById('cl-classificazione').value,
     cond_pagamento: document.getElementById('cl-condpag').value.trim(),
-    e_fornitore:    document.getElementById('cl-efornitore').checked,
+    e_fornitore: document.getElementById('cl-efornitore').checked,
   };
   try {
     if (state.editingId) {
       await api('PUT', `/api/clienti/${state.editingId}`, body);
-      const i2 = state.clienti.findIndex(c => c.id === state.editingId);
-      if (i2 !== -1) {
-        state.clienti[i2] = normalizeCliente({
-          ...state.clienti[i2],
+      const idx = state.clienti.findIndex(c => c.id === state.editingId);
+      if (idx !== -1) {
+        state.clienti[idx] = normalizeCliente({
+          ...state.clienti[idx],
           ...body,
           id: state.editingId,
           agente_id: body.agente_id,
@@ -176,14 +242,16 @@ async function saveCliente() {
       }
     } else {
       const saved = await api('POST', '/api/clienti', body);
-      state.clienti.push(normalizeCliente({...body, ...saved, id: saved.id, agente_id: body.agente_id}));
-      state.clienti.sort((a,b) => a.nome.localeCompare(b.nome));
+      state.clienti.push(normalizeCliente({ ...body, ...saved, id: saved.id, agente_id: body.agente_id }));
+      state.clienti.sort((a, b) => a.nome.localeCompare(b.nome));
     }
     closeModal('modal-cliente');
-    showToast(state.editingId ? 'Cliente aggiornato ✅' : 'Cliente salvato ✅', 'success');
+    showToast(state.editingId ? 'Cliente aggiornato' : 'Cliente salvato', 'success');
     state.editingId = null;
     renderClientiTable();
-  } catch(e) { showToast(e.message, 'warning'); }
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
 }
 
 function applyOnboardingResponse(id, r) {
@@ -206,7 +274,7 @@ async function setClienteOnboardingStatus(id, stato) {
       stato,
       fido: c.fido || 0,
       checklist: c.onboardingChecklist || {},
-      note: `stato impostato a ${stato}`
+      note: `stato impostato a ${stato}`,
     });
     applyOnboardingResponse(id, r);
     showToast(`Onboarding aggiornato: ${stato}`, 'success');
@@ -237,56 +305,25 @@ async function approveClienteOnboarding(id) {
       stato: 'approvato',
       fido,
       checklist,
-      note: 'approvazione onboarding'
+      note: 'approvazione onboarding',
     });
     applyOnboardingResponse(id, r);
-    showToast('Cliente approvato e sbloccato ?', 'success');
+    showToast('Cliente approvato e sbloccato', 'success');
     renderClientiTable();
   } catch (e) {
     showToast(e.message, 'warning');
   }
 }
+
 async function deleteCliente(id) {
-  id = parseInt(id);
+  id = parseInt(id, 10);
   if (!await customConfirm('Eliminare questo cliente?')) return;
   try {
     await api('DELETE', `/api/clienti/${id}`);
     state.clienti = state.clienti.filter(x => x.id !== id);
     showToast('Cliente eliminato');
     renderClientiTable();
-  } catch(e) { showToast(e.message, 'warning'); }
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
 }
-
-// ═══════════════════════════════════════════════
-// PRODOTTI
-// ═══════════════════════════════════════════════
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

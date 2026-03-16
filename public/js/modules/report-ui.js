@@ -159,40 +159,45 @@ function ensureReportToolbar() {
   card.id = 'report-filters-card';
   card.className = 'card';
   card.style.marginBottom = '16px';
-  card.style.padding = '12px 16px';
   card.innerHTML = `
-    <div class="report-filters">
-      <div class="field" style="margin:0;">
-        <label>Dal</label>
-        <input type="date" id="report-filter-from" onchange="renderReport()">
+    <div class="card-header">
+      <div class="toolbar-shell">
+        <div class="toolbar-filters report-filters">
+          <div class="toolbar-field">
+            <label class="toolbar-label">Dal</label>
+            <input type="date" id="report-filter-from" onchange="renderReport()">
+          </div>
+          <div class="toolbar-field">
+            <label class="toolbar-label">Al</label>
+            <input type="date" id="report-filter-to" onchange="renderReport()">
+          </div>
+          <div class="toolbar-field">
+            <label class="toolbar-label">Giro</label>
+            <select id="report-filter-giro" onchange="renderReport()">
+              <option value="">Tutti</option>
+              <option value="bari nord">Bari Nord</option>
+              <option value="bari/foggia">Bari/Foggia</option>
+              <option value="murgia">Murgia</option>
+              <option value="taranto">Taranto</option>
+              <option value="lecce">Lecce</option>
+              <option value="lecce est">Lecce Est</option>
+              <option value="valle itria">Valle Itria</option>
+              <option value="calabria">Calabria</option>
+              <option value="foggia">Foggia</option>
+              <option value="diretto">Diretto</option>
+            </select>
+          </div>
+          <div class="toolbar-field">
+            <label class="toolbar-label">Agente</label>
+            <select id="report-filter-agente" onchange="renderReport()"><option value="">Tutti</option></select>
+          </div>
+        </div>
+        <div class="toolbar-actions">
+          <button class="btn btn-outline btn-sm" onclick="resetReportFilters()">Reset</button>
+          <button class="btn btn-outline btn-sm" onclick="setAllReportSections(false)">Chiudi tutte</button>
+          <button class="btn btn-outline btn-sm" onclick="setAllReportSections(true)">Apri tutte</button>
+        </div>
       </div>
-      <div class="field" style="margin:0;">
-        <label>Al</label>
-        <input type="date" id="report-filter-to" onchange="renderReport()">
-      </div>
-      <div class="field" style="margin:0;">
-        <label>Giro</label>
-        <select id="report-filter-giro" onchange="renderReport()">
-          <option value="">Tutti</option>
-          <option value="bari nord">Bari Nord</option>
-          <option value="bari/foggia">Bari/Foggia</option>
-          <option value="murgia">Murgia</option>
-          <option value="taranto">Taranto</option>
-          <option value="lecce">Lecce</option>
-          <option value="lecce est">Lecce Est</option>
-          <option value="valle itria">Valle Itria</option>
-          <option value="calabria">Calabria</option>
-          <option value="foggia">Foggia</option>
-          <option value="diretto">Diretto</option>
-        </select>
-      </div>
-      <div class="field" style="margin:0;">
-        <label>Agente</label>
-        <select id="report-filter-agente" onchange="renderReport()"><option value="">Tutti</option></select>
-      </div>
-      <button class="btn btn-outline btn-sm" onclick="resetReportFilters()">Reset</button>
-      <button class="btn btn-outline btn-sm" onclick="setAllReportSections(false)">Chiudi tutte</button>
-      <button class="btn btn-outline btn-sm" onclick="setAllReportSections(true)">Apri tutte</button>
     </div>`;
   page.insertBefore(card, firstGrid);
   populateReportAgentFilter();

@@ -92,6 +92,30 @@ function renderOrdiniSortHeaders() {
   });
 }
 
+function resetOrdiniFilters() {
+  const search = document.getElementById('search-ordini');
+  const stato = document.getElementById('filter-stato');
+  if (search) search.value = '';
+  if (stato) stato.value = '';
+  renderOrdiniTable();
+}
+
+function renderOrdiniStatusStrip(list) {
+  const strip = document.getElementById('ordini-status-strip');
+  if (!strip) return;
+  const dataNonCerta = list.filter(o => o.dataNonCerta).length;
+  const stef = list.filter(o => o.stef || o.altroVettore).length;
+  const inAttesa = list.filter(o => o.stato === 'attesa').length;
+  const inPrep = list.filter(o => o.stato === 'preparazione').length;
+  strip.innerHTML = [
+    `<span class="status-pill"><span>Visualizzati</span><strong>${list.length}</strong></span>`,
+    `<span class="status-pill warn"><span>In attesa</span><strong>${inAttesa}</strong></span>`,
+    `<span class="status-pill info"><span>In preparazione</span><strong>${inPrep}</strong></span>`,
+    dataNonCerta ? `<span class="status-pill alert"><span>Date incerte</span><strong>${dataNonCerta}</strong></span>` : '',
+    stef ? `<span class="status-pill"><span>Vettori esterni</span><strong>${stef}</strong></span>` : '',
+  ].filter(Boolean).join('');
+}
+
 function renderOrdiniTable() {
   const q = (document.getElementById('search-ordini')?.value || '').toLowerCase();
   const filterStato = document.getElementById('filter-stato')?.value || '';
@@ -100,6 +124,8 @@ function renderOrdiniTable() {
   if (filterStato) list = list.filter(o => o.stato === filterStato);
   list = applyOrdiniSort(list);
   renderOrdiniSortHeaders();
+  renderOrdiniStatusStrip(list);
+  if (typeof refreshNavBadges === 'function') refreshNavBadges();
 
   // Toolbar bulk
   const toolbar = document.getElementById('bulk-toolbar');
@@ -125,27 +151,52 @@ function renderOrdiniTable() {
 
   tbody.innerHTML = list.map(o => {
     const checked = selectedOrders.has(o.id) ? 'checked' : '';
+    const cliente = getCliente(o.clienteId);
+    const agente = getAgente(o.agenteId);
+    const inserted = (() => {
+      const u = state.utenti.find(x => x.id === o.insertedBy);
+      return u ? (u.nome + ' ' + (u.cognome || '')).trim() : '-';
+    })();
+    const rowClass = [
+      selectedOrders.has(o.id) ? 'row-selected' : '',
+      o.dataNonCerta ? 'table-row-critical' : '',
+      (o.stef || o.altroVettore) ? 'table-row-warning' : '',
+      o.stato === 'annullato' ? 'table-row-dimmed' : '',
+    ].filter(Boolean).join(' ');
     return `
-    <tr class="${selectedOrders.has(o.id) ? 'row-selected' : ''}">
+    <tr class="${rowClass}">
       <td style="width:36px;padding:8px 6px;">
         <input type="checkbox" ${checked} onchange="toggleSelectOrder(${o.id},this.checked)"
           style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
       </td>
       <td><span style="font-family:'DM Mono',monospace;font-weight:600;color:var(--accent);">#${o.id}</span></td>
-      <td><b>${getCliente(o.clienteId).nome}</b></td>
+      <td>
+        <div class="table-main-cell">
+          <div class="table-main-meta">
+            <b>${escapeHtml(cliente.nome)}</b>
+            <div class="inline-badges">
+              ${o.dataNonCerta ? '<span class="badge badge-red">Data incerta</span>' : ''}
+              ${o.stef ? '<span class="badge badge-blue">STEF</span>' : ''}
+              ${o.altroVettore ? '<span class="badge badge-orange">Altro vettore</span>' : ''}
+            </div>
+          </div>
+        </div>
+      </td>
       <td>${formatDate(o.data)}</td>
       <td>
-        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? (u.nome + ' ' + (u.cognome||'')).trim() : '-'; })()}</div>
-        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">Agente: ${getAgente(o.agenteId).nome}</div>` : ''}
+        <div style="font-size:13px;">${escapeHtml(inserted)}</div>
+        ${o.agenteId ? `<div class="table-subline">Agente: ${escapeHtml(agente.nomeCompleto)}</div>` : ''}
       </td>
       <td class="col-lines" style="font-size:12px;color:var(--text2);max-width:200px;">${lineeResume(o.linee)}</td>
       <td>${statoBadge(o.stato)}</td>
       <td class="col-note" style="font-size:13px;color:var(--text2);">${o.note || '-'}</td>
-      <td style="white-space:nowrap;">
+      <td>
+        <div class="table-actions">
         <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">Mod</button>
         <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">Dett</button>
         <button class="btn btn-outline btn-sm" title="Vai alla preparazione" aria-label="Vai alla preparazione" onclick="openPreparazioneOrdine(${o.id})">Prep</button>
         <button class="btn btn-danger btn-sm" title="Elimina ordine" aria-label="Elimina ordine" onclick="deleteOrder(${o.id})">Del</button>
+        </div>
       </td>
     </tr>`;
   }).join('');

@@ -238,16 +238,64 @@
   .nav-item:hover { background: var(--surface2); color: var(--text1); }
   .nav-item.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
   .nav-item .nav-icon { font-size: 18px; flex-shrink: 0; }
-  .nav-section { margin-bottom: 16px; }
-  .nav-section-label {
+  .nav-item-label,
+  .drawer-nav-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+  .nav-item-badge,
+  .drawer-nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: rgba(127,168,196,0.16);
+    color: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: 'DM Mono', monospace;
+    flex-shrink: 0;
+  }
+  .nav-item.active .nav-item-badge,
+  .drawer-nav-item.active .drawer-nav-badge {
+    background: rgba(30,139,195,0.16);
+  }
+  .nav-section { margin-bottom: 12px; }
+  .nav-section-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
     padding: 6px 14px 8px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+  }
+  .nav-section-label {
     font-size: 11px;
     font-weight: 700;
     color: #88a8bf;
     letter-spacing: 0.9px;
     text-transform: uppercase;
   }
-  .nav-section-items { display: flex; flex-direction: column; gap: 2px; }
+  .nav-section-chevron {
+    color: #88a8bf;
+    font-size: 12px;
+    transition: transform 0.15s ease;
+  }
+  .nav-section-items { display: none; flex-direction: column; gap: 2px; }
+  .nav-section.open .nav-section-items { display: flex; }
+  .nav-section.open .nav-section-chevron { transform: rotate(0deg); }
+  .nav-section:not(.open) .nav-section-chevron { transform: rotate(-90deg); }
 
   /* ── MAIN CONTENT ── */
   .main { flex: 1; padding: 28px; overflow-y: auto; }
@@ -341,6 +389,107 @@
   }
   .search-input:focus { border-color: var(--accent); }
 
+  .toolbar-shell {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .toolbar-filters {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+    flex: 1;
+    min-width: 0;
+  }
+  .toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .toolbar-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 140px;
+  }
+  .toolbar-field.grow {
+    flex: 1;
+    min-width: 220px;
+  }
+  .toolbar-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text3);
+  }
+  .toolbar-select,
+  .toolbar-field input[type="date"],
+  .toolbar-field input[type="text"] {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 13px;
+    background: var(--surface);
+    color: var(--text1);
+    outline: none;
+  }
+  .toolbar-select:focus,
+  .toolbar-field input[type="date"]:focus,
+  .toolbar-field input[type="text"]:focus {
+    border-color: var(--accent);
+  }
+  .status-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 0 20px 14px;
+  }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: var(--surface2);
+    color: var(--text2);
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+  }
+  .status-pill strong {
+    font-family: 'DM Mono', monospace;
+    color: var(--text1);
+  }
+  .status-pill.alert {
+    background: var(--danger-light);
+    color: var(--danger);
+    border-color: #f2b8b2;
+  }
+  .status-pill.warn {
+    background: var(--accent2-light);
+    color: var(--accent2);
+    border-color: #ffd599;
+  }
+  .status-pill.info {
+    background: var(--accent-light);
+    color: var(--accent);
+    border-color: rgba(30,139,195,0.25);
+  }
+  .status-pill.success {
+    background: var(--success-light);
+    color: var(--success);
+    border-color: rgba(47,158,68,0.2);
+  }
+
   .table-scroll-wrap {
     width: 100%;
     overflow-x: auto;
@@ -361,12 +510,48 @@
     letter-spacing: 0.5px;
     background: var(--surface2);
     border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 2;
   }
 
   tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
   tbody tr:last-child { border-bottom: none; }
   tbody tr:hover { background: var(--surface2); }
   tbody td { padding: 12px 16px; font-size: 14px; vertical-align: middle; }
+  .table-row-warning { background: rgba(253, 236, 200, 0.45); }
+  .table-row-critical { background: rgba(250, 218, 221, 0.45); }
+  .table-row-dimmed { opacity: 0.78; }
+  .table-main-cell {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .table-main-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .table-subline {
+    font-size: 11px;
+    color: var(--text3);
+    line-height: 1.35;
+  }
+  .table-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+  .inline-badges {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
 
   .badge {
     display: inline-block;
@@ -382,6 +567,10 @@
   .badge-blue { background: var(--accent-light); color: var(--accent); }
   .badge-red { background: var(--danger-light); color: var(--danger); }
   .badge-gray { background: var(--surface2); color: var(--text3); }
+  .badge-soft {
+    background: rgba(30,139,195,0.1);
+    color: var(--accent-dark);
+  }
 
   /* ── MODAL ── */
   .modal-overlay {
@@ -985,15 +1174,36 @@
     font-weight: 700;
   }
   .drawer-nav-icon { font-size: 20px; width: 26px; text-align: center; flex-shrink: 0; }
-  .drawer-nav-section { margin-bottom: 16px; }
-  .drawer-nav-section-label {
+  .drawer-nav-section { margin-bottom: 12px; }
+  .drawer-nav-section-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
     padding: 0 14px 8px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+  }
+  .drawer-nav-section-label {
     font-size: 11px;
     font-weight: 700;
     color: var(--text3);
     letter-spacing: 0.8px;
     text-transform: uppercase;
   }
+  .drawer-nav-section-chevron {
+    color: var(--text3);
+    font-size: 12px;
+    transition: transform 0.15s ease;
+  }
+  .drawer-nav-section-items { display: none; }
+  .drawer-nav-section.open .drawer-nav-section-items { display: block; }
+  .drawer-nav-section.open .drawer-nav-section-chevron { transform: rotate(0deg); }
+  .drawer-nav-section:not(.open) .drawer-nav-section-chevron { transform: rotate(-90deg); }
   .drawer-footer {
     padding: 14px 16px;
     border-top: 1px solid var(--border);
@@ -1125,6 +1335,21 @@
     .search-input {
       width: 100%;
       min-width: 0;
+    }
+    .toolbar-shell,
+    .toolbar-filters,
+    .toolbar-actions {
+      width: 100%;
+    }
+    .toolbar-field,
+    .toolbar-field.grow {
+      min-width: 0;
+      width: 100%;
+      flex: 1 1 100%;
+    }
+    .status-strip {
+      padding-left: 14px;
+      padding-right: 14px;
     }
     .btn { min-height: 40px; justify-content: center; }
     .btn-sm { min-height: 36px; }
@@ -1265,6 +1490,13 @@
     .pedane-grid,
     .report-filters {
       grid-template-columns: 1fr !important;
+    }
+    .table-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .table-actions .btn {
+      justify-content: center;
     }
     .pedana-input { min-height: 52px; }
     .table-scroll-wrap table { min-width: 520px; }
@@ -1501,18 +1733,30 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <input type="text" class="search-input" id="search-ordini" placeholder="🔍 Cerca cliente, agente…" oninput="renderOrdiniTable()">
-            <div style="display:flex;gap:8px;">
-              <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-stato" onchange="renderOrdiniTable()">
-                <option value="">Tutti gli stati</option>
-                <option value="attesa">In attesa</option>
-                <option value="preparazione">In preparazione</option>
-                <option value="consegnato">Consegnato</option>
-                <option value="annullato">Annullato</option>
-              </select>
-              <button class="btn btn-green" onclick="openNewOrder()">+ Nuovo</button>
+            <div class="toolbar-shell">
+              <div class="toolbar-filters">
+                <div class="toolbar-field grow">
+                  <label class="toolbar-label">Ricerca</label>
+                  <input type="text" class="search-input" id="search-ordini" placeholder="Cerca cliente, agente..." oninput="renderOrdiniTable()">
+                </div>
+                <div class="toolbar-field">
+                  <label class="toolbar-label">Stato</label>
+                  <select class="toolbar-select" id="filter-stato" onchange="renderOrdiniTable()">
+                    <option value="">Tutti gli stati</option>
+                    <option value="attesa">In attesa</option>
+                    <option value="preparazione">In preparazione</option>
+                    <option value="consegnato">Consegnato</option>
+                    <option value="annullato">Annullato</option>
+                  </select>
+                </div>
+              </div>
+              <div class="toolbar-actions">
+                <button class="btn btn-outline" onclick="resetOrdiniFilters()">Reset</button>
+                <button class="btn btn-green" onclick="openNewOrder()">+ Nuovo</button>
+              </div>
             </div>
           </div>
+          <div class="status-strip" id="ordini-status-strip"></div>
           <div id="bulk-toolbar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--accent-light);border:1.5px solid var(--accent);border-radius:8px;margin-bottom:10px;">
             <span id="bulk-count" style="font-weight:600;color:var(--accent);font-size:13px;"></span>
             <button class="btn btn-danger btn-sm" onclick="deleteSelectedOrders()">🗑️ Elimina selezionati</button>
@@ -1545,24 +1789,36 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <input type="text" class="search-input" id="search-clienti" placeholder="🔍 Cerca…" oninput="renderClientiTable()">
-            <div style="display:flex;gap:8px;">
-              <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-giro" onchange="renderClientiTable()">
-                <option value="">Tutti i giri</option>
-                <option value="bari nord">Bari Nord</option>
-                <option value="murgia">Murgia</option>
-                <option value="taranto">Taranto</option>
-                <option value="lecce">Lecce</option>
-                <option value="valle itria">Valle Itria</option>
-                <option value="calabria">Calabria</option>
-                <option value="foggia">Foggia</option>
-                <option value="diretto">Diretto</option>
-              </select>
-              <button class="btn btn-green" onclick="openNewCliente()">+ Nuovo Cliente</button>
-              <button class="btn btn-outline" onclick="document.getElementById('import-clienti-file').click()" title="Importa/aggiorna clienti da Excel">📥 Excel</button>
-              <input type="file" id="import-clienti-file" accept=".xlsx,.xls" style="display:none" onchange="importClientiExcel(this)">
+            <div class="toolbar-shell">
+              <div class="toolbar-filters">
+                <div class="toolbar-field grow">
+                  <label class="toolbar-label">Ricerca</label>
+                  <input type="text" class="search-input" id="search-clienti" placeholder="Cerca cliente o localita..." oninput="renderClientiTable()">
+                </div>
+                <div class="toolbar-field">
+                  <label class="toolbar-label">Giro</label>
+                  <select class="toolbar-select" id="filter-giro" onchange="renderClientiTable()">
+                    <option value="">Tutti i giri</option>
+                    <option value="bari nord">Bari Nord</option>
+                    <option value="murgia">Murgia</option>
+                    <option value="taranto">Taranto</option>
+                    <option value="lecce">Lecce</option>
+                    <option value="valle itria">Valle Itria</option>
+                    <option value="calabria">Calabria</option>
+                    <option value="foggia">Foggia</option>
+                    <option value="diretto">Diretto</option>
+                  </select>
+                </div>
+              </div>
+              <div class="toolbar-actions">
+                <button class="btn btn-outline" onclick="resetClientiFilters()">Reset</button>
+                <button class="btn btn-outline" onclick="document.getElementById('import-clienti-file').click()" title="Importa o aggiorna clienti da Excel">Excel</button>
+                <button class="btn btn-green" onclick="openNewCliente()">+ Nuovo Cliente</button>
+                <input type="file" id="import-clienti-file" accept=".xlsx,.xls" style="display:none" onchange="importClientiExcel(this)">
+              </div>
             </div>
           </div>
+          <div class="status-strip" id="clienti-status-strip"></div>
           <div class="table-scroll-wrap"><table>
             <thead>
               <tr>
@@ -1599,6 +1855,7 @@
                   <div id="doc-current-folder-roles" style="font-size:12px;color:var(--text2);margin-top:2px;"></div>
                 </div>
               </div>
+              <div class="status-strip" id="doc-status-strip" style="padding-left:0;padding-right:0;margin-top:12px;"></div>
               <div id="doc-manager-panel" style="display:none;margin-top:12px;padding:12px;border:1px dashed var(--border);border-radius:10px;">
                 <div style="font-weight:700;margin-bottom:8px;">Gestione cartelle e file</div>
                 <div style="display:grid;grid-template-columns:1fr 180px;gap:8px;align-items:center;">
@@ -1617,7 +1874,17 @@
                 </div>
               </div>
               <div style="margin-top:12px;">
-                <div style="font-weight:700;margin-bottom:8px;">File</div>
+                <div class="toolbar-shell" style="margin-bottom:8px;">
+                  <div class="toolbar-filters">
+                    <div class="toolbar-field grow">
+                      <label class="toolbar-label">Ricerca file</label>
+                      <input type="text" class="search-input" id="doc-search-input" placeholder="Cerca file..." oninput="filterDocumentiFiles()">
+                    </div>
+                  </div>
+                  <div class="toolbar-actions">
+                    <button class="btn btn-outline btn-sm" onclick="resetDocumentiFilters()">Reset</button>
+                  </div>
+                </div>
                 <div class="table-scroll-wrap"><table>
                   <thead>
                     <tr>
@@ -1853,44 +2120,60 @@
       <!-- ─── PAGE: Magazzino ─── -->
       <div class="page" id="page-magazzino">
         <div class="page-header">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-            <div>
-              <div class="page-title">Magazzino</div>
-              <div class="page-sub" id="magazzino-sub">Ordini da preparare</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-              <div style="display:flex;align-items:center;gap:6px;">
-                <label style="font-size:13px;font-weight:600;color:var(--text2);">📅</label>
-                <input type="date" id="filter-magazzino-data" onchange="renderMagazzino()"
-                  style="padding:8px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text1);font-family:inherit;cursor:pointer;">
+          <div>
+            <div class="page-title">Magazzino</div>
+            <div class="page-sub" id="magazzino-sub">Ordini da preparare</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div class="toolbar-shell">
+              <div class="toolbar-filters">
+                <div class="toolbar-field">
+                  <label class="toolbar-label">Data</label>
+                  <input type="date" id="filter-magazzino-data" onchange="renderMagazzino()">
+                </div>
+                <div class="toolbar-field">
+                  <label class="toolbar-label">Stato</label>
+                  <select class="toolbar-select" id="filter-magazzino-stato" onchange="renderMagazzino()">
+                    <option value="">Tutti gli stati</option>
+                    <option value="attesa">In attesa</option>
+                    <option value="preparazione">In preparazione</option>
+                    <option value="consegnato">Consegnati</option>
+                  </select>
+                </div>
+                <div class="toolbar-field">
+                  <label class="toolbar-label">Giro</label>
+                  <select class="toolbar-select" id="filter-magazzino-giro" onchange="renderMagazzino()">
+                    <option value="">Tutti i giri</option>
+                    <option value="bari nord">Bari Nord</option>
+                    <option value="murgia">Murgia</option>
+                    <option value="taranto">Taranto</option>
+                    <option value="lecce">Lecce</option>
+                    <option value="valle itria">Valle Itria</option>
+                    <option value="calabria">Calabria</option>
+                    <option value="foggia">Foggia</option>
+                    <option value="diretto">Diretto</option>
+                  </select>
+                </div>
+                <div class="toolbar-field">
+                  <label class="toolbar-label">Ordina per</label>
+                  <select class="toolbar-select" id="filter-magazzino-order" onchange="setMagazzinoSortPreference(this.value)">
+                    <option value="giro">Giro</option>
+                    <option value="cliente">Cliente</option>
+                    <option value="id">Numero ordine</option>
+                  </select>
+                </div>
               </div>
-              <select id="filter-magazzino-stato" onchange="renderMagazzino()" style="width:auto;padding:8px 14px;font-size:13px;">
-                <option value="">Tutti gli stati</option>
-                <option value="attesa">In attesa</option>
-                <option value="preparazione">In preparazione</option>
-                <option value="consegnato">Consegnati</option>
-              </select>
-              <select id="filter-magazzino-giro" onchange="renderMagazzino()" style="width:auto;padding:8px 14px;font-size:13px;">
-                <option value="">Tutti i giri</option>
-                <option value="bari nord">Bari Nord</option>
-                <option value="murgia">Murgia</option>
-                <option value="taranto">Taranto</option>
-                <option value="lecce">Lecce</option>
-                <option value="valle itria">Valle Itria</option>
-                <option value="calabria">Calabria</option>
-                <option value="foggia">Foggia</option>
-                <option value="diretto">Diretto</option>
-              </select>
-              <select id="filter-magazzino-order" onchange="setMagazzinoSortPreference(this.value)" style="width:auto;padding:8px 14px;font-size:13px;">
-                <option value="giro">Ordina: Giro (default)</option>
-                <option value="cliente">Ordina: Cliente</option>
-                <option value="id">Ordina: Numero ordine</option>
-              </select>
-              <button class="btn btn-outline btn-sm" onclick="openPDFGiornaliero()">PDF</button>
-              <button id="magazzino-undo-btn" class="btn btn-outline btn-sm" onclick="undoMagazzinoLastAction()" disabled style="opacity:0.5;">UNDO</button>
-              <button class="btn btn-green btn-sm" onclick="chiudiGiornataMagazzino()">Conferma giornata</button>
+              <div class="toolbar-actions">
+                <button class="btn btn-outline btn-sm" onclick="resetMagazzinoFilters()">Reset</button>
+                <button class="btn btn-outline btn-sm" onclick="openPDFGiornaliero()">PDF</button>
+                <button id="magazzino-undo-btn" class="btn btn-outline btn-sm" onclick="undoMagazzinoLastAction()" disabled style="opacity:0.5;">UNDO</button>
+                <button class="btn btn-green btn-sm" onclick="chiudiGiornataMagazzino()">Conferma giornata</button>
+              </div>
             </div>
           </div>
+          <div class="status-strip" id="magazzino-status-strip"></div>
         </div>
         <div id="magazzino-list"></div>
         <!-- Piano di carico (view per magazzino) -->
@@ -3283,6 +3566,7 @@ async function loadAllData() {
       showToast(`Attenzione: ${activeScorte.length} scorta/e in esaurimento`, 'warning');
     }
     if (typeof loadCrmSummary === 'function') await loadCrmSummary();
+    if (typeof refreshNavBadges === 'function') refreshNavBadges();
   } catch(e) {
     console.error('loadAllData error:', e);
     showToast('Errore caricamento dati', 'warning');
@@ -3944,6 +4228,34 @@ function highlightMagazzinoOrder(orderId) {
   renderMagazzino();
 }
 
+function resetMagazzinoFilters() {
+  const dateEl = document.getElementById('filter-magazzino-data');
+  const statoEl = document.getElementById('filter-magazzino-stato');
+  const giroEl = document.getElementById('filter-magazzino-giro');
+  const orderEl = document.getElementById('filter-magazzino-order');
+  if (dateEl) dateEl.value = today();
+  if (statoEl) statoEl.value = '';
+  if (giroEl) giroEl.value = '';
+  if (orderEl) orderEl.value = getMagazzinoSortPreference();
+  renderMagazzino();
+}
+
+function renderMagazzinoStatusStrip(ordini) {
+  const strip = document.getElementById('magazzino-status-strip');
+  if (!strip) return;
+  const attesa = ordini.filter(o => o.stato === 'attesa').length;
+  const preparazione = ordini.filter(o => o.stato === 'preparazione').length;
+  const dateIncerte = ordini.filter(o => o.dataNonCerta).length;
+  const vettori = ordini.filter(o => o.stef || o.altroVettore).length;
+  strip.innerHTML = [
+    `<span class="status-pill"><span>Ordini</span><strong>${ordini.length}</strong></span>`,
+    `<span class="status-pill warn"><span>In attesa</span><strong>${attesa}</strong></span>`,
+    `<span class="status-pill info"><span>In preparazione</span><strong>${preparazione}</strong></span>`,
+    dateIncerte ? `<span class="status-pill alert"><span>Date incerte</span><strong>${dateIncerte}</strong></span>` : '',
+    vettori ? `<span class="status-pill"><span>Vettori esterni</span><strong>${vettori}</strong></span>` : '',
+  ].filter(Boolean).join('');
+}
+
 function renderMagazzino() {
   const filterData = document.getElementById('filter-magazzino-data')?.value || today();
   const filterGiro = document.getElementById('filter-magazzino-giro')?.value || '';
@@ -3962,6 +4274,8 @@ function renderMagazzino() {
   if (!filterStato) ordini = ordini.filter(o => o.stato !== 'consegnato');
   else ordini = ordini.filter(o => o.stato === filterStato);
   if (filterGiro) ordini = ordini.filter(o => getOrdineGiroEffettivo(o) === filterGiro);
+  renderMagazzinoStatusStrip(ordini);
+  if (typeof refreshNavBadges === 'function') refreshNavBadges();
 
   const stOrd = { preparazione: 0, attesa: 1, consegnato: 2 };
   ordini.sort((a, b) => {
