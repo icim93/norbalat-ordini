@@ -2856,12 +2856,67 @@ async function createResidualOrderFromMissingLines({ ordine, missingLinee, reqUs
   return { newOrdineId, nextDate };
 }
 
+app.post('/api/magazzino/giornata/annulla', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const { data, giro, password } = req.body || {};
+  if (!data || !password) return res.status(400).json({ error: 'data e password obbligatori' });
+  const { rows: userRows } = await q('SELECT password FROM utenti WHERE id=$1', [req.user.id]);
+  if (!userRows.length) return res.status(401).json({ error: 'Utente non trovato' });
+  const ok = await bcrypt.compare(String(password), userRows[0].password);
+  if (!ok) return res.status(401).json({ error: 'Password errata' });
+  const giroVal = String(giro || '').trim();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const del = await client.query(
+      `DELETE FROM magazzino_chiusure_giornata WHERE data=$1 AND giro=$2 RETURNING id`,
+      [data, giroVal]
+    );
+    if (!del.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Nessuna chiusura trovata per questa data/giro' });
+    }
+    // Ripristina ordini consegnato → preparazione
+    const params = [data];
+    let pi = 2;
+    let giroWhere = '';
+    if (giroVal) { params.push(giroVal); giroWhere = `AND COALESCE(NULLIF(o.giro_override,''), c.giro, '') = $${pi++}`; }
+    await client.query(
+      `UPDATE ordini o SET stato='preparazione', updated_at=NOW()
+       FROM clienti c WHERE o.cliente_id = c.id AND o.data = $1 AND o.stato = 'consegnato' ${giroWhere}`,
+      params
+    );
+    await client.query('COMMIT');
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Annullamento chiusura giornata', `${data}${giroVal ? ` (${giroVal})` : ''}`);
+    res.json({ ok: true });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch {}
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+});
+
 app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
   const client = await pool.connect();
   try {
     const parsed = zChiudiGiornataPayload.safeParse(req.body || {});
     if (!parsed.success) return validationError(res, parsed);
     const { data, giro, action_if_incomplete, action_if_residual } = parsed.data;
+
+    // Blocca se la giornata è già stata confermata
+    const giroVal = String(giro || '').trim();
+    const { rows: esistente } = await client.query(
+      `SELECT confermata_nome, confermata_at FROM magazzino_chiusure_giornata
+       WHERE data=$1 AND giro=$2 ORDER BY id DESC LIMIT 1`,
+      [data, giroVal]
+    );
+    if (esistente.length) {
+      return res.status(409).json({
+        code: 'GIORNATA_GIA_CONFERMATA',
+        message: `Giornata già confermata da ${esistente[0].confermata_nome}`,
+        confermata_nome: esistente[0].confermata_nome,
+        confermata_at: esistente[0].confermata_at,
+      });
+    }
+
     const ordini = await listOrdiniApertiByDateGiro({ data, giro, client });
     if (!ordini.length) {
       return res.status(400).json({ error: 'Nessun ordine trovato per la selezione' });

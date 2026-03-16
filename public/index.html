@@ -4726,6 +4726,7 @@ function renderMagazzino() {
         const barratoStyle = l.preparato ? 'text-decoration:line-through;color:var(--text3);' : '';
         const lottoMancante = !l.lotto || !String(l.lotto).trim();
         const lottoBorderStyle = lottoMancante ? 'border-color:#e74c3c;' : 'border-color:var(--border);';
+        const umLabel = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty);
 
         // Indici per navigazione Enter
         const navPeso = !p.pesoFisso ? _navIdx++ : -1;
@@ -4738,7 +4739,7 @@ function renderMagazzino() {
                oninput="onLinePesoInput(${o.id},${li},this)"
                onchange="setLinePesoEffettivo(${o.id},${li},this.value)"
                onkeydown="if(event.key==='Enter'){event.preventDefault();magazzinoNavNext(${navPeso})}">`
-          : `<span style="font-size:12px;color:var(--text3);">(fisso)</span>`;
+          : `<span style="font-size:12px;color:var(--text3);">${l.qty} ${umLabel}</span>`;
 
         // Bottone split: solo per righe non-pedana con qty > 1
         const splitBtn = (!l.isPedana && Number(l.qty) > 1)
@@ -4749,7 +4750,7 @@ function renderMagazzino() {
           <input type="checkbox" data-line-cb="${o.id}-${li}" ${checked}
             onchange="toggleLineaPreparata(${o.id},${li},this.checked)"
             style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
-          <span data-line-nome="${o.id}-${li}" style="flex:1;font-size:13px;${barratoStyle}">${l.qty}x [${p.codice}] ${p.nome}</span>
+          <span data-line-nome="${o.id}-${li}" style="flex:1;font-size:13px;${barratoStyle}">${l.qty} ${umLabel} — [${p.codice}] ${p.nome}</span>
           ${pesoInput}
           <input type="text" value="${escapeHtml(l.lotto || '')}" placeholder="Lotto *"
             data-mgnav="${navLotto}"
@@ -4984,8 +4985,18 @@ async function splitLineaOrdine(ordineId, lineIdx) {
     return;
   }
   try {
-    await api('POST', `/api/ordini/${ordineId}/linee/${line.id}/split`, { qty_split: qtySplit });
+    const result = await api('POST', `/api/ordini/${ordineId}/linee/${line.id}/split`, { qty_split: qtySplit });
     await reloadOrdineState(ordineId);
+    // Riposiziona la nuova riga subito dopo quella originale (non in coda)
+    const oFresh = state.ordini.find(x => x.id === ordineId);
+    if (oFresh && result.new_linea_id) {
+      const newIdx  = oFresh.linee.findIndex(l => l.id === result.new_linea_id);
+      const origIdx = oFresh.linee.findIndex(l => l.id === line.id);
+      if (newIdx !== -1 && origIdx !== -1 && newIdx !== origIdx + 1) {
+        const [newLine] = oFresh.linee.splice(newIdx, 1);
+        oFresh.linee.splice(origIdx + 1, 0, newLine);
+      }
+    }
     renderMagazzino();
     showToast(`Riga divisa: ${origQty - qtySplit} + ${qtySplit}`, 'success');
   } catch (e) {
@@ -5234,13 +5245,40 @@ function summarizeMissingForAlert(missing = []) {
 async function chiudiGiornataMagazzino() {
   const data = document.getElementById('filter-magazzino-data')?.value || today();
   const giro = document.getElementById('filter-magazzino-giro')?.value || '';
+  await _eseguiChiudiGiornata(data, giro);
+}
+
+async function _eseguiChiudiGiornata(data, giro, opts = {}) {
   try {
-    const r = await api('POST', '/api/magazzino/giornata/chiudi', { data, giro });
+    const r = await api('POST', '/api/magazzino/giornata/chiudi', { data, giro, ...opts });
     await loadAllData();
     renderMagazzino();
     showToast(`Giornata confermata${r?.reloaded?.length ? ` (${r.reloaded.length} riporti creati)` : ''}`, 'success');
   } catch (e) {
     const payload = e?.payload || {};
+
+    // Giornata già confermata: chiedi password per annullare
+    if (e?.status === 409 && payload.code === 'GIORNATA_GIA_CONFERMATA') {
+      const nome = payload.confermata_nome || 'un altro utente';
+      const giroLabel = giro ? ` (giro: ${giro})` : '';
+      showToast(`Giornata del ${data}${giroLabel} già confermata da ${nome}`, 'warning');
+      const password = prompt(
+        `Giornata del ${data}${giroLabel} già confermata da: ${nome}\n\nInserisci la tua password per annullare la conferma e riapire la giornata:`,
+        ''
+      );
+      if (!password) return;
+      try {
+        await api('POST', '/api/magazzino/giornata/annulla', { data, giro, password });
+        showToast('Conferma giornata annullata. Puoi ora rifare la chiusura.', 'success');
+        await loadAllData();
+        renderMagazzino();
+      } catch (eAnn) {
+        showToast(eAnn.message || 'Errore annullamento giornata', 'warning');
+      }
+      return;
+    }
+
+    // Ordini non preparati
     if (e?.status === 409 && (payload.code === 'GIORNATA_INCOMPLETA' || payload.code === 'RESIDUAL_ACTION_REQUIRED')) {
       const summary = summarizeMissingForAlert(payload.missing || []);
       const proceed = await customConfirm(
@@ -5248,34 +5286,17 @@ async function chiudiGiornataMagazzino() {
         'Si, continua',
         'Chiusura giornata'
       );
-      if (!proceed) {
-        showToast('Ritorno alla preparazione ordini', 'warning');
-        return;
-      }
+      if (!proceed) { showToast('Ritorno alla preparazione ordini', 'warning'); return; }
       const reload = await customConfirm(
         'Ricaricare i prodotti non preparati nel prossimo giro utile? (No = cancella ordini incompleti)',
         'Si, ricarica',
         'Gestione residui'
       );
       const action = reload ? 'reload' : 'delete';
-      try {
-        const r2 = await api('POST', '/api/magazzino/giornata/chiudi', {
-          data, giro,
-          action_if_incomplete: 'continue',
-          action_if_residual: action,
-        });
-        await loadAllData();
-        renderMagazzino();
-        if (action === 'reload') {
-          showToast(`Giornata chiusa: creati ${r2?.reloaded?.length || 0} riporti`, 'success');
-        } else {
-          showToast(`Giornata chiusa: annullati ${r2?.deleted?.length || 0} ordini incompleti`, 'success');
-        }
-      } catch (e2) {
-        showToast(e2.message || 'Errore chiusura giornata', 'warning');
-      }
+      await _eseguiChiudiGiornata(data, giro, { action_if_incomplete: 'continue', action_if_residual: action });
       return;
     }
+
     showToast(e.message || 'Errore chiusura giornata', 'warning');
   }
 }
