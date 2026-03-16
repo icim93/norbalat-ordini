@@ -3000,7 +3000,6 @@ app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 
       }
     }
 
-    const giroVal = String(giro || '').trim();
     await client.query(
       `INSERT INTO magazzino_chiusure_giornata (data,giro,confermata_da,confermata_nome,esito,dettagli)
        VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
