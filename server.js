@@ -895,6 +895,44 @@ async function createSchema() {
     WHERE ruolo = 'direzione'
       AND LOWER(REPLACE(COALESCE(tipo_utente, ''), 'à', 'a')) IN ('amministrazione', 'contabilita');
   `);
+
+  // ─── GIACENZE ────────────────────────────────────────────────────
+  await q(`
+    CREATE TABLE IF NOT EXISTS giacenze (
+      id            SERIAL PRIMARY KEY,
+      prodotto_id   INTEGER NOT NULL REFERENCES prodotti(id) ON DELETE CASCADE,
+      lotto         TEXT NOT NULL DEFAULT '',
+      scadenza      DATE,
+      quantita      NUMERIC NOT NULL DEFAULT 0,
+      note          TEXT DEFAULT '',
+      created_at    TIMESTAMPTZ DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS movimenti_giacenza (
+      id              SERIAL PRIMARY KEY,
+      giacenza_id     INTEGER REFERENCES giacenze(id) ON DELETE SET NULL,
+      prodotto_id     INTEGER REFERENCES prodotti(id) ON DELETE SET NULL,
+      lotto           TEXT NOT NULL DEFAULT '',
+      tipo            TEXT NOT NULL CHECK(tipo IN ('carico','scarico_ordine','scarico_manuale','reso','rettifica','tentata_vendita')),
+      quantita        NUMERIC NOT NULL,
+      quantita_prima  NUMERIC,
+      quantita_dopo   NUMERIC,
+      ordine_id       INTEGER REFERENCES ordini(id) ON DELETE SET NULL,
+      ordine_linea_id INTEGER REFERENCES ordine_linee(id) ON DELETE SET NULL,
+      utente_id       INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      utente_nome     TEXT DEFAULT '',
+      note            TEXT DEFAULT '',
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS soglia_minima NUMERIC;
+
+    CREATE INDEX IF NOT EXISTS idx_giacenze_prodotto ON giacenze(prodotto_id);
+    CREATE INDEX IF NOT EXISTS idx_movimenti_giacenza_prodotto ON movimenti_giacenza(prodotto_id);
+    CREATE INDEX IF NOT EXISTS idx_movimenti_giacenza_created ON movimenti_giacenza(created_at DESC);
+  `);
+
   console.log('✅ Schema OK');
 }
 
@@ -2699,14 +2737,15 @@ app.patch('/api/ordini/:id/stato', authMiddleware, requirePermission('ordini:sta
 });
 
 app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const client = await pool.connect();
   try {
     const ordineId = parseInt(req.params.ordineId, 10);
     const lineaId = parseInt(req.params.lineaId, 10);
     const parsed = zPreparazioneLineaPayload.safeParse(req.body || {});
-    if (!parsed.success) return validationError(res, parsed);
+    if (!parsed.success) { client.release(); return validationError(res, parsed); }
     const payload = parsed.data;
-    const { rows: lineRows } = await q('SELECT id, ordine_id FROM ordine_linee WHERE id=$1 AND ordine_id=$2 LIMIT 1', [lineaId, ordineId]);
-    if (!lineRows.length) return res.status(404).json({ error: 'Riga ordine non trovata' });
+    const { rows: lineRows } = await client.query('SELECT id, ordine_id FROM ordine_linee WHERE id=$1 AND ordine_id=$2 LIMIT 1', [lineaId, ordineId]);
+    if (!lineRows.length) { client.release(); return res.status(404).json({ error: 'Riga ordine non trovata' }); }
 
     const sets = ['id=id'];
     const params = [];
@@ -2724,9 +2763,9 @@ app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, r
       params.push(String(payload.lotto || '').trim());
     }
     params.push(lineaId);
-    await q(`UPDATE ordine_linee SET ${sets.join(', ')} WHERE id=$${p}`, params);
+    await client.query(`UPDATE ordine_linee SET ${sets.join(', ')} WHERE id=$${p}`, params);
 
-    const { rows: prepRows } = await q(
+    const { rows: prepRows } = await client.query(
       `SELECT COUNT(*)::int AS n_tot, SUM(CASE WHEN preparato THEN 1 ELSE 0 END)::int AS n_prep
        FROM ordine_linee WHERE ordine_id=$1`,
       [ordineId]
@@ -2734,10 +2773,87 @@ app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, r
     const nTot = Number(prepRows[0]?.n_tot || 0);
     const nPrep = Number(prepRows[0]?.n_prep || 0);
     if (nTot > 0 && nPrep === nTot) {
-      await q(`UPDATE ordini SET stato='preparazione', updated_at=NOW() WHERE id=$1 AND stato='attesa'`, [ordineId]);
+      await client.query(`UPDATE ordini SET stato='preparazione', updated_at=NOW() WHERE id=$1 AND stato='attesa'`, [ordineId]);
     }
+
+    // ─── Giacenza auto-scarico ──────────────────────────────────────
+    let warning = null;
+    const utenteName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
+
+    if (payload.preparato === true) {
+      // Fetch updated line
+      const { rows: updLine } = await client.query(
+        'SELECT prodotto_id, lotto, peso_effettivo FROM ordine_linee WHERE id=$1',
+        [lineaId]
+      );
+      if (updLine.length && updLine[0].prodotto_id) {
+        const { prodotto_id, lotto, peso_effettivo } = updLine[0];
+        const lottoVal = String(lotto || '').trim();
+        if (lottoVal) {
+          const { rows: gRows } = await client.query(
+            'SELECT id, quantita FROM giacenze WHERE prodotto_id=$1 AND lotto=$2 LIMIT 1',
+            [prodotto_id, lottoVal]
+          );
+          if (!gRows.length) {
+            warning = 'LOTTO_NON_IN_GIACENZA';
+          } else {
+            const giac = gRows[0];
+            const peso = Number(peso_effettivo);
+            if (Number.isFinite(peso) && peso > 0) {
+              await client.query('BEGIN');
+              const nuovaQty = Number(giac.quantita) - peso;
+              await client.query(
+                'UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2',
+                [nuovaQty, giac.id]
+              );
+              await client.query(
+                `INSERT INTO movimenti_giacenza
+                  (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,ordine_id,ordine_linea_id,utente_id,utente_nome)
+                 VALUES ($1,$2,$3,'scarico_ordine',$4,$5,$6,$7,$8,$9,$10)`,
+                [giac.id, prodotto_id, lottoVal, -peso, Number(giac.quantita), nuovaQty, ordineId, lineaId, req.user.id || null, utenteName]
+              );
+              await client.query('COMMIT');
+            }
+          }
+        }
+      }
+    } else if (payload.preparato === false) {
+      // Undo: check if a scarico_ordine movimento exists for this line
+      const { rows: movRows } = await client.query(
+        `SELECT m.id, m.giacenza_id, m.prodotto_id, m.lotto, m.quantita, g.quantita as giac_qty
+         FROM movimenti_giacenza m
+         LEFT JOIN giacenze g ON g.id = m.giacenza_id
+         WHERE m.ordine_linea_id=$1 AND m.tipo='scarico_ordine'
+         ORDER BY m.id DESC LIMIT 1`,
+        [lineaId]
+      );
+      if (movRows.length) {
+        const mov = movRows[0];
+        const pesoToRestore = Math.abs(Number(mov.quantita));
+        if (mov.giacenza_id && Number.isFinite(pesoToRestore)) {
+          await client.query('BEGIN');
+          const nuovaQty = Number(mov.giac_qty || 0) + pesoToRestore;
+          await client.query(
+            'UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2',
+            [nuovaQty, mov.giacenza_id]
+          );
+          await client.query(
+            `INSERT INTO movimenti_giacenza
+              (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,ordine_id,ordine_linea_id,utente_id,utente_nome,note)
+             VALUES ($1,$2,$3,'rettifica',$4,$5,$6,$7,$8,$9,$10,'Undo preparazione')`,
+            [mov.giacenza_id, mov.prodotto_id, mov.lotto, pesoToRestore, Number(mov.giac_qty || 0), nuovaQty, ordineId, lineaId, req.user.id || null, utenteName]
+          );
+          await client.query('COMMIT');
+        }
+      }
+    }
+
+    client.release();
+    if (warning) return res.json({ ok: true, warning });
     res.json({ ok: true });
   } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    client.release();
     res.status(500).json({ error: e.message });
   }
 });
@@ -3876,6 +3992,327 @@ app.get('/api/experimental/clal/status', authMiddleware, requireRole('admin','di
     res.status(500).json({ error: e.message });
   }
 });
+
+// ─── GIACENZE API ─────────────────────────────────────────────────
+
+// GET /api/giacenze — lista giacenze con info prodotto
+app.get('/api/giacenze', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await q(
+      `SELECT g.*, p.codice, p.nome, p.um, p.categoria, p.soglia_minima
+       FROM giacenze g JOIN prodotti p ON p.id = g.prodotto_id
+       ORDER BY p.nome, g.lotto`
+    );
+    // Calcola totale per prodotto
+    const totali = {};
+    for (const r of rows) {
+      const pid = r.prodotto_id;
+      totali[pid] = (totali[pid] || 0) + Number(r.quantita || 0);
+    }
+    const result = rows.map(r => ({ ...r, totale_per_prodotto: totali[r.prodotto_id] || 0 }));
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/giacenze/lotti?prodotto_id=X — lotti disponibili per un prodotto
+app.get('/api/giacenze/lotti', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  try {
+    const prodottoId = parseInt(req.query.prodotto_id, 10);
+    if (!prodottoId) return res.status(400).json({ error: 'prodotto_id mancante' });
+    const { rows } = await q(
+      `SELECT id, lotto, quantita, scadenza FROM giacenze
+       WHERE prodotto_id=$1 AND quantita > 0 ORDER BY scadenza ASC NULLS LAST`,
+      [prodottoId]
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/giacenze/alerts — prodotti sotto soglia e lotti in scadenza
+app.get('/api/giacenze/alerts', authMiddleware, async (req, res) => {
+  try {
+    const { rows: sottoSoglia } = await q(
+      `SELECT p.id, p.codice, p.nome, p.um, p.soglia_minima,
+              COALESCE(SUM(g.quantita),0) as totale_quantita
+       FROM prodotti p
+       LEFT JOIN giacenze g ON g.prodotto_id = p.id
+       WHERE p.soglia_minima IS NOT NULL
+       GROUP BY p.id, p.codice, p.nome, p.um, p.soglia_minima
+       HAVING COALESCE(SUM(g.quantita),0) < p.soglia_minima`
+    );
+    const { rows: inScadenza } = await q(
+      `SELECT g.id, g.lotto, g.scadenza, g.quantita, g.prodotto_id,
+              p.codice, p.nome, p.um
+       FROM giacenze g JOIN prodotti p ON p.id = g.prodotto_id
+       WHERE g.scadenza IS NOT NULL
+         AND g.scadenza <= NOW() + INTERVAL '30 days'
+         AND g.quantita > 0
+       ORDER BY g.scadenza ASC`
+    );
+    res.json({ sotto_soglia: sottoSoglia, in_scadenza: inScadenza });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/giacenze/carico — carico/reso/tentata_vendita
+app.post('/api/giacenze/carico', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { prodotto_id, lotto, quantita, scadenza, tipo, note } = req.body || {};
+    if (!prodotto_id) return res.status(400).json({ error: 'prodotto_id obbligatorio' });
+    if (!lotto && lotto !== 0) return res.status(400).json({ error: 'lotto obbligatorio' });
+    const qty = Number(quantita);
+    if (!Number.isFinite(qty) || qty <= 0) return res.status(400).json({ error: 'quantita deve essere > 0' });
+    const tipoVal = ['carico', 'reso', 'tentata_vendita'].includes(tipo) ? tipo : 'carico';
+    const lottoVal = String(lotto || '').trim();
+    const scadenzaVal = scadenza || null;
+    const utenteName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
+
+    await client.query('BEGIN');
+    // Find existing giacenza
+    const { rows: existing } = await client.query(
+      'SELECT id, quantita FROM giacenze WHERE prodotto_id=$1 AND lotto=$2 LIMIT 1',
+      [prodotto_id, lottoVal]
+    );
+    let giacenzaId, oldQty, newQty;
+    if (existing.length) {
+      giacenzaId = existing[0].id;
+      oldQty = Number(existing[0].quantita);
+      newQty = oldQty + qty;
+      await client.query(
+        'UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2',
+        [newQty, giacenzaId]
+      );
+    } else {
+      oldQty = 0;
+      newQty = qty;
+      const ins = await client.query(
+        `INSERT INTO giacenze (prodotto_id, lotto, scadenza, quantita, note)
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+        [prodotto_id, lottoVal, scadenzaVal, newQty, note || '']
+      );
+      giacenzaId = ins.rows[0].id;
+    }
+    await client.query(
+      `INSERT INTO movimenti_giacenza
+        (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [giacenzaId, prodotto_id, lottoVal, tipoVal, qty, oldQty, newQty, req.user.id || null, utenteName, note || '']
+    );
+    await client.query('COMMIT');
+    client.release();
+    res.json({ ok: true, giacenza_id: giacenzaId });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    client.release();
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/giacenze/:id — modifica giacenza
+app.patch('/api/giacenze/:id', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { rows: existing } = await client.query('SELECT * FROM giacenze WHERE id=$1 LIMIT 1', [id]);
+    if (!existing.length) { client.release(); return res.status(404).json({ error: 'Giacenza non trovata' }); }
+    const giac = existing[0];
+    const { lotto, scadenza, quantita, note } = req.body || {};
+    const utenteName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
+
+    const sets = ['updated_at=NOW()'];
+    const params = [];
+    let p = 1;
+    if (lotto !== undefined) { sets.push(`lotto=$${p++}`); params.push(String(lotto || '').trim()); }
+    if (scadenza !== undefined) { sets.push(`scadenza=$${p++}`); params.push(scadenza || null); }
+    if (quantita !== undefined) { sets.push(`quantita=$${p++}`); params.push(Number(quantita)); }
+    if (note !== undefined) { sets.push(`note=$${p++}`); params.push(note || ''); }
+    params.push(id);
+    await client.query(`UPDATE giacenze SET ${sets.join(', ')} WHERE id=$${p}`, params);
+
+    if (quantita !== undefined && Number(quantita) !== Number(giac.quantita)) {
+      const nuovaQty = Number(quantita);
+      const diff = nuovaQty - Number(giac.quantita);
+      await client.query(
+        `INSERT INTO movimenti_giacenza
+          (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
+         VALUES ($1,$2,$3,'rettifica',$4,$5,$6,$7,$8,'Modifica manuale giacenza')`,
+        [id, giac.prodotto_id, giac.lotto, diff, Number(giac.quantita), nuovaQty, req.user.id || null, utenteName]
+      );
+    }
+    await client.query('COMMIT');
+    client.release();
+    res.json({ ok: true });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    client.release();
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/giacenze/:id
+app.delete('/api/giacenze/:id', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    await q('DELETE FROM giacenze WHERE id=$1', [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/giacenze/:id/rettifica — inventario fisico
+app.post('/api/giacenze/:id/rettifica', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { rows: existing } = await client.query('SELECT * FROM giacenze WHERE id=$1 LIMIT 1', [id]);
+    if (!existing.length) { client.release(); return res.status(404).json({ error: 'Giacenza non trovata' }); }
+    const giac = existing[0];
+    const nuovaQty = Number(req.body?.nuova_quantita);
+    if (!Number.isFinite(nuovaQty)) { client.release(); return res.status(400).json({ error: 'nuova_quantita non valida' }); }
+    const noteVal = req.body?.note || '';
+    const utenteName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
+    const diff = nuovaQty - Number(giac.quantita);
+
+    await client.query('BEGIN');
+    await client.query('UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2', [nuovaQty, id]);
+    await client.query(
+      `INSERT INTO movimenti_giacenza
+        (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
+       VALUES ($1,$2,$3,'rettifica',$4,$5,$6,$7,$8,$9)`,
+      [id, giac.prodotto_id, giac.lotto, diff, Number(giac.quantita), nuovaQty, req.user.id || null, utenteName, noteVal]
+    );
+    await client.query('COMMIT');
+    client.release();
+    res.json({ ok: true });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    client.release();
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/giacenze/movimenti
+app.get('/api/giacenze/movimenti', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '100', 10), 500);
+    const offset = parseInt(req.query.offset || '0', 10);
+    const prodottoId = req.query.prodotto_id ? parseInt(req.query.prodotto_id, 10) : null;
+    const lotto = req.query.lotto ? String(req.query.lotto).trim() : null;
+
+    const conditions = [];
+    const params = [];
+    let pi = 1;
+    if (prodottoId) { conditions.push(`m.prodotto_id=$${pi++}`); params.push(prodottoId); }
+    if (lotto) { conditions.push(`m.lotto=$${pi++}`); params.push(lotto); }
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    params.push(limit, offset);
+
+    const { rows } = await q(
+      `SELECT m.*, p.nome as prodotto_nome, p.codice
+       FROM movimenti_giacenza m LEFT JOIN prodotti p ON p.id = m.prodotto_id
+       ${where}
+       ORDER BY m.created_at DESC
+       LIMIT $${pi++} OFFSET $${pi++}`,
+      params
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/prodotti/:id/soglia — imposta soglia minima
+app.patch('/api/prodotti/:id/soglia', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const soglia = req.body?.soglia_minima !== undefined ? (req.body.soglia_minima === null || req.body.soglia_minima === '' ? null : Number(req.body.soglia_minima)) : null;
+    await q('UPDATE prodotti SET soglia_minima=$1 WHERE id=$2', [soglia, id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/giacenze/rientro-tv — prodotti preparati per una data/giro
+app.get('/api/giacenze/rientro-tv', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  try {
+    const data = req.query.data || '';
+    const giro = String(req.query.giro || '').trim();
+    if (!data) return res.status(400).json({ error: 'data obbligatoria' });
+    const { rows } = await q(
+      `SELECT ol.prodotto_id, p.nome, p.codice, p.um, ol.lotto,
+              SUM(ol.qty) as qty_totale, SUM(ol.peso_effettivo) as peso_totale
+       FROM ordine_linee ol
+       JOIN ordini o ON o.id = ol.ordine_id
+       JOIN prodotti p ON p.id = ol.prodotto_id
+       WHERE o.data = $1 AND ol.preparato = true AND ol.lotto != ''
+         AND ($2 = '' OR COALESCE(NULLIF(o.giro_override,''), (SELECT giro FROM clienti WHERE id=o.cliente_id), '') = $2)
+       GROUP BY ol.prodotto_id, p.nome, p.codice, p.um, ol.lotto
+       ORDER BY p.nome, ol.lotto`,
+      [data, giro]
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/giacenze/rientro-tv — conferma rientro merce tentata vendita
+app.post('/api/giacenze/rientro-tv', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { righe } = req.body || {};
+    if (!Array.isArray(righe) || !righe.length) { client.release(); return res.status(400).json({ error: 'righe obbligatorie' }); }
+    const utenteName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
+    await client.query('BEGIN');
+    for (const r of righe) {
+      const qty = Number(r.quantita_rientro || 0);
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+      const lottoVal = String(r.lotto || '').trim();
+      const { rows: existing } = await client.query(
+        'SELECT id, quantita FROM giacenze WHERE prodotto_id=$1 AND lotto=$2 LIMIT 1',
+        [r.prodotto_id, lottoVal]
+      );
+      let giacenzaId, oldQty, newQty;
+      if (existing.length) {
+        giacenzaId = existing[0].id;
+        oldQty = Number(existing[0].quantita);
+        newQty = oldQty + qty;
+        await client.query('UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2', [newQty, giacenzaId]);
+      } else {
+        oldQty = 0;
+        newQty = qty;
+        const ins = await client.query(
+          `INSERT INTO giacenze (prodotto_id,lotto,quantita,note) VALUES ($1,$2,$3,$4) RETURNING id`,
+          [r.prodotto_id, lottoVal, newQty, r.note || '']
+        );
+        giacenzaId = ins.rows[0].id;
+      }
+      await client.query(
+        `INSERT INTO movimenti_giacenza
+          (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
+         VALUES ($1,$2,$3,'tentata_vendita',$4,$5,$6,$7,$8,$9)`,
+        [giacenzaId, r.prodotto_id, lottoVal, qty, oldQty, newQty, req.user.id || null, utenteName, r.note || '']
+      );
+    }
+    await client.query('COMMIT');
+    client.release();
+    res.json({ ok: true });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    client.release();
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── END GIACENZE API ──────────────────────────────────────────────
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '2.0.0' }));
 

@@ -1759,6 +1759,34 @@
   .ac-freq { font-size: 10px; color: var(--accent); margin-left: 5px; font-weight: 700; background: var(--accent-light); padding: 1px 5px; border-radius: 10px; }
 
   .ac-empty { padding: 14px; text-align: center; color: var(--text3); font-size: 13px; }
+
+  /* ── TAB BAR (Magazzino) ── */
+  .tab-bar {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .tab-btn {
+    padding: 8px 16px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text2);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .tab-btn:hover { background: var(--surface2); color: var(--text1); border-color: var(--accent); }
+  .tab-btn.active {
+    background: var(--accent-light);
+    color: var(--accent);
+    border-color: var(--accent);
+    font-weight: 700;
+  }
 </style>
 </head>
 <body>
@@ -1870,6 +1898,13 @@
             <div class="card-title">Scorte in esaurimento</div>
           </div>
           <div id="dashboard-scorte-list" style="padding:10px 14px;font-size:13px;color:var(--text2);">Nessuna scorta segnalata.</div>
+        </div>
+        <div class="card" style="margin-top:14px;" id="dashboard-giacenze-alerts-card">
+          <div class="card-header">
+            <div class="card-title">📦 Allerte giacenze</div>
+            <button class="btn btn-outline btn-sm" onclick="showMagazzinoTab('giacenze');goTo('magazzino')">Vai a Giacenze</button>
+          </div>
+          <div id="dashboard-giacenze-alerts" style="padding:10px 14px;font-size:13px;color:var(--text2);">Nessuna allerta.</div>
         </div>
       </div>
 
@@ -2274,6 +2309,8 @@
             <div class="page-sub" id="magazzino-sub">Ordini da preparare</div>
           </div>
         </div>
+
+        <!-- Toolbar (sempre visibile) -->
         <div class="card" style="margin-bottom:16px;">
           <div class="card-header">
             <div class="toolbar-shell">
@@ -2325,18 +2362,42 @@
           </div>
           <div class="status-strip" id="magazzino-status-strip"></div>
         </div>
-        <div id="magazzino-list"></div>
 
-        <!-- Ordini già preparati con pesi e lotti -->
-        <div class="card" style="margin-top:20px;" id="magazzino-preparati-card">
-          <div class="card-header">
-            <div class="card-title">✅ Ordini preparati — riepilogo pesi e lotti</div>
-            <div style="font-size:13px;color:var(--text2);">Verifica finale prima della spedizione</div>
-          </div>
-          <div id="magazzino-preparati-list" style="padding:0 16px 8px;"></div>
+        <!-- Tab bar -->
+        <div class="tab-bar" id="magazzino-tab-bar">
+          <button class="tab-btn active" id="tab-btn-preparazione" onclick="showMagazzinoTab('preparazione')">Preparazione</button>
+          <button class="tab-btn" id="tab-btn-preparati" onclick="showMagazzinoTab('preparati')">✅ Preparati</button>
+          <button class="tab-btn" id="tab-btn-giacenze" onclick="showMagazzinoTab('giacenze')">📦 Giacenze</button>
+          <button class="tab-btn" id="tab-btn-rientro-tv" onclick="showMagazzinoTab('rientro-tv')">🚛 Rientro TV</button>
         </div>
 
-        <!-- Piano di carico (view per magazzino) -->
+        <!-- Tab: Preparazione -->
+        <div id="magazzino-tab-preparazione">
+          <div id="magazzino-list"></div>
+        </div>
+
+        <!-- Tab: Preparati -->
+        <div id="magazzino-tab-preparati" style="display:none;">
+          <div class="card" id="magazzino-preparati-card">
+            <div class="card-header">
+              <div class="card-title">✅ Ordini preparati — riepilogo pesi e lotti</div>
+              <div style="font-size:13px;color:var(--text2);">Verifica finale prima della spedizione</div>
+            </div>
+            <div id="magazzino-preparati-list" style="padding:0 16px 8px;"></div>
+          </div>
+        </div>
+
+        <!-- Tab: Giacenze -->
+        <div id="magazzino-tab-giacenze" style="display:none;">
+          <!-- content rendered by renderGiacenze() -->
+        </div>
+
+        <!-- Tab: Rientro TV -->
+        <div id="magazzino-tab-rientro-tv" style="display:none;">
+          <!-- content rendered by renderRientroTV() -->
+        </div>
+
+        <!-- Piano di carico (view per magazzino) — sempre visibile -->
         <div class="card" style="margin-top:20px;" id="piano-carico-magaz-card">
           <div class="card-header">
             <div class="card-title">🚚 Piano di Carico Camion</div>
@@ -3595,6 +3656,130 @@
   </div>
 </div>
 
+<!-- Modal: Giacenza Carico -->
+<div class="modal-overlay" id="modal-giacenza-carico">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-giacenza-carico-title">Carico Giacenza</div>
+      <button class="modal-close" onclick="closeModal('modal-giacenza-carico')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="field form-full">
+          <label>Prodotto *</label>
+          <select id="giacenza-carico-prodotto"></select>
+        </div>
+        <div class="field">
+          <label>Lotto *</label>
+          <input type="text" id="giacenza-carico-lotto" placeholder="Es. LOT240301">
+        </div>
+        <div class="field">
+          <label>Quantità *</label>
+          <input type="number" step="0.01" min="0.01" id="giacenza-carico-qty" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label>Scadenza</label>
+          <input type="date" id="giacenza-carico-scadenza">
+        </div>
+        <div class="field">
+          <label>Tipo movimento</label>
+          <select id="giacenza-carico-tipo">
+            <option value="carico">Carico</option>
+            <option value="reso">Reso</option>
+            <option value="tentata_vendita">Tentata Vendita</option>
+          </select>
+        </div>
+        <div class="field form-full">
+          <label>Note</label>
+          <input type="text" id="giacenza-carico-note" placeholder="Opzionale">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-giacenza-carico')">Annulla</button>
+      <button class="btn btn-green" onclick="saveGiacenzaCarico()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Giacenza Rettifica -->
+<div class="modal-overlay" id="modal-giacenza-rettifica">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div class="modal-title">Rettifica inventario</div>
+      <button class="modal-close" onclick="closeModal('modal-giacenza-rettifica')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="giacenza-rettifica-id">
+      <div class="field">
+        <label>Quantità attuale</label>
+        <input type="number" id="giacenza-rettifica-attuale" readonly style="background:var(--surface2);">
+      </div>
+      <div class="field">
+        <label>Nuova quantità *</label>
+        <input type="number" step="0.01" id="giacenza-rettifica-nuova" placeholder="Quantità reale contata">
+      </div>
+      <div class="field">
+        <label>Note</label>
+        <input type="text" id="giacenza-rettifica-note" placeholder="Es. Inventario fisico 15/03/2026">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-giacenza-rettifica')">Annulla</button>
+      <button class="btn btn-green" onclick="saveGiacenzaRettifica()">✅ Conferma rettifica</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Giacenza Modifica -->
+<div class="modal-overlay" id="modal-giacenza-modifica">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div class="modal-title">Modifica giacenza</div>
+      <button class="modal-close" onclick="closeModal('modal-giacenza-modifica')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="giacenza-modifica-id">
+      <div class="field">
+        <label>Lotto</label>
+        <input type="text" id="giacenza-modifica-lotto">
+      </div>
+      <div class="field">
+        <label>Scadenza</label>
+        <input type="date" id="giacenza-modifica-scadenza">
+      </div>
+      <div class="field">
+        <label>Quantità</label>
+        <input type="number" step="0.01" id="giacenza-modifica-qty">
+      </div>
+      <div class="field">
+        <label>Note</label>
+        <input type="text" id="giacenza-modifica-note">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-giacenza-modifica')">Annulla</button>
+      <button class="btn btn-green" onclick="saveGiacenzaModifica()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Movimenti giacenza -->
+<div class="modal-overlay" id="modal-giacenza-movimenti">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-header">
+      <div class="modal-title">Storico movimenti</div>
+      <button class="modal-close" onclick="closeModal('modal-giacenza-movimenti')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div id="giacenza-movimenti-list" style="max-height:60vh;overflow-y:auto;padding:16px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-giacenza-movimenti')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -3645,6 +3830,10 @@ let state = {
   docCurrentFiles: [],
   docCanManage: false,
   scorte: [],
+  giacenze: [],
+  giacenzeLotti: {},
+  giacenzeAlerts: { sotto_soglia: [], in_scadenza: [] },
+  magazzinoActiveTab: 'preparazione',
   magazzinoHighlightOrderId: null,
   scorteAlertSignature: '',
   magazzinoUndoStack: [],
@@ -3735,6 +3924,16 @@ async function loadAllData() {
     state.camions  = (camions  ||[]).map(normalizeCamion);
     state.giriCalendario = (giri||[]).map(g => ({...g, giorni: g.giorni||[]}));
     state.scorte = (scorte || []);
+    // Giacenze — caricate separatamente per non bloccare il caricamento principale
+    state.giacenze = await api('GET', '/api/giacenze').catch(() => []);
+    // Computa mappa lotti per prodotto
+    state.giacenzeLotti = {};
+    for (const g of state.giacenze) {
+      if (!state.giacenzeLotti[g.prodotto_id]) state.giacenzeLotti[g.prodotto_id] = [];
+      state.giacenzeLotti[g.prodotto_id].push(g);
+    }
+    // Alerts giacenze
+    state.giacenzeAlerts = await api('GET', '/api/giacenze/alerts').catch(() => ({ sotto_soglia: [], in_scadenza: [] }));
     const activeScorte = state.scorte.filter(s => s.stato === 'attiva');
     const sig = activeScorte.map(s => s.id).sort((a,b) => a-b).join(',');
     if (['admin', 'direzione'].includes(state.currentUser?.ruolo) && activeScorte.length && sig !== state.scorteAlertSignature) {
@@ -4746,18 +4945,43 @@ function renderMagazzino() {
           ? `<button class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 6px;" title="Dividi in due lotti distinti" onclick="splitLineaOrdine(${o.id},${li})">✂</button>`
           : '';
 
+        // Lotto: dropdown se ci sono giacenze per questo prodotto, altrimenti text input
+        const giacenzeLotto = l.prodId ? (state.giacenzeLotti[l.prodId] || []) : [];
+        const prodLottiOptions = giacenzeLotto.map(g => {
+          const scadStr = g.scadenza ? ` (sc. ${g.scadenza.substring(0,10)})` : '';
+          const selected = l.lotto === g.lotto ? 'selected' : '';
+          return `<option value="${escapeHtml(g.lotto)}" ${selected}>${escapeHtml(g.lotto)}${escapeHtml(scadStr)} — ${Number(g.quantita)} ${escapeHtml(g.um||p.um||'')}</option>`;
+        }).join('');
+        const hasAltroSelected = l.lotto && !giacenzeLotto.find(g => g.lotto === l.lotto);
+
+        const lottoEl = giacenzeLotto.length > 0
+          ? `<select id="lotto-sel-${o.id}-${li}"
+              data-mgnav="${navLotto}"
+              style="width:170px;font-size:12px;padding:3px 6px;border:1px solid;border-radius:5px;${lottoBorderStyle}"
+              onchange="onLottoSelectChange(${o.id},${li},this)"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();magazzinoNavNext(${navLotto})}">
+              <option value="">-- nessun lotto --</option>
+              ${prodLottiOptions}
+              <option value="__altro__" ${hasAltroSelected ? 'selected' : ''}>✏ Altro lotto...</option>
+            </select>
+            ${hasAltroSelected ? `<input type="text" id="lotto-txt-${o.id}-${li}" value="${escapeHtml(l.lotto || '')}" placeholder="Lotto *"
+              style="width:110px;font-size:12px;padding:3px 6px;border:1px solid;border-radius:5px;${lottoBorderStyle}"
+              oninput="onLineLottoInput(${o.id},${li},this)"
+              onchange="setLineLotto(${o.id},${li},this.value)">` : ''}`
+          : `<input type="text" id="lotto-txt-${o.id}-${li}" value="${escapeHtml(l.lotto || '')}" placeholder="Lotto *"
+              data-mgnav="${navLotto}"
+              style="width:110px;font-size:12px;padding:3px 6px;border:1px solid;border-radius:5px;${lottoBorderStyle}"
+              oninput="onLineLottoInput(${o.id},${li},this)"
+              onchange="setLineLotto(${o.id},${li},this.value)"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();magazzinoNavNext(${navLotto})}">`;
+
         return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);">
           <input type="checkbox" data-line-cb="${o.id}-${li}" ${checked}
             onchange="toggleLineaPreparata(${o.id},${li},this.checked)"
             style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
           <span data-line-nome="${o.id}-${li}" style="flex:1;font-size:13px;${barratoStyle}">${l.qty} ${umLabel} — [${p.codice}] ${p.nome}</span>
           ${pesoInput}
-          <input type="text" value="${escapeHtml(l.lotto || '')}" placeholder="Lotto *"
-            data-mgnav="${navLotto}"
-            style="width:110px;font-size:12px;padding:3px 6px;border:1px solid;border-radius:5px;${lottoBorderStyle}"
-            oninput="onLineLottoInput(${o.id},${li},this)"
-            onchange="setLineLotto(${o.id},${li},this.value)"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();magazzinoNavNext(${navLotto})}">
+          ${lottoEl}
           ${splitBtn}
         </div>`;
       }).join('');
@@ -4905,14 +5129,46 @@ function onLinePesoInput(ordineId, lineIdx, el) {
   }
 }
 
+// Handler per cambio del select lotto (con opzione "Altro lotto...")
+function onLottoSelectChange(ordineId, lineIdx, selectEl) {
+  const val = selectEl.value;
+  if (val === '__altro__') {
+    // Mostra un input testo accanto al select
+    const existing = document.getElementById(`lotto-txt-${ordineId}-${lineIdx}`);
+    if (!existing) {
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.id = `lotto-txt-${ordineId}-${lineIdx}`;
+      inp.placeholder = 'Lotto *';
+      inp.style.cssText = 'width:110px;font-size:12px;padding:3px 6px;border:1px solid #e74c3c;border-radius:5px;';
+      inp.oninput = () => onLineLottoInput(ordineId, lineIdx, inp);
+      inp.onchange = () => setLineLotto(ordineId, lineIdx, inp.value);
+      selectEl.parentNode.insertBefore(inp, selectEl.nextSibling);
+      inp.focus();
+    }
+    return;
+  }
+  // Rimuovi eventuale text input se esisteva
+  const existing = document.getElementById(`lotto-txt-${ordineId}-${lineIdx}`);
+  if (existing) existing.remove();
+  setLineLotto(ordineId, lineIdx, val);
+  // Aggiorna bordo select
+  selectEl.style.borderColor = val ? 'var(--border)' : '#e74c3c';
+}
+
 // Aggiorna il pulsante Pronto leggendo i valori DOM (non lo state, che non è ancora aggiornato)
 function updateMagazzinoProntoBtn(ordineId) {
   const card = document.querySelector(`[data-ordine-id="${ordineId}"]`);
   const btn  = document.querySelector(`[data-pronto-ordine="${ordineId}"]`);
   if (!btn) return;
   // Legge i campi lotto direttamente dal DOM per evitare il problema prev===next
+  // Controlla sia input text che select (dropdown giacenze)
   const lottoInputs = card ? [...card.querySelectorAll('input[placeholder="Lotto *"]')] : [];
-  const allOk = lottoInputs.length > 0 && lottoInputs.every(inp => inp.value.trim());
+  const lottoSelects = card ? [...card.querySelectorAll('select[id^="lotto-sel-"]')] : [];
+  // Un select con valore __altro__ o vuoto conta come mancante
+  const selectsOk = lottoSelects.every(sel => sel.value && sel.value !== '__altro__');
+  const inputsOk = lottoInputs.every(inp => inp.value.trim());
+  const allOk = (lottoInputs.length > 0 || lottoSelects.length > 0) && selectsOk && inputsOk;
   btn.disabled = !allOk;
   btn.style.background  = allOk ? '' : '#ccc';
   btn.style.color       = allOk ? '' : '#888';
@@ -5019,10 +5275,9 @@ function renderOrdiniPreparati(filterData, filterGiro) {
   ordiniPrep = ordiniPrep.filter(o => o.linee.length > 0 && o.linee.every(l => l.preparato));
 
   if (!ordiniPrep.length) {
-    card.style.display = 'none';
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>Nessun ordine completamente preparato per questa data.</p></div>';
     return;
   }
-  card.style.display = '';
 
   list.innerHTML = ordiniPrep.map(o => {
     const cl = getCliente(o.clienteId);
@@ -5116,6 +5371,9 @@ async function undoMagazzinoLastAction() {
 }
 
 function renderScortePanels() {
+  // Render giacenze alerts sul dashboard
+  if (typeof renderGiacenzeAlerts === 'function') renderGiacenzeAlerts();
+
   const active = (state.scorte || []).filter(s => s.stato === 'attiva');
   const dash = document.getElementById('dashboard-scorte-list');
   if (dash) {
@@ -6271,6 +6529,465 @@ async function importClientiExcel(input) {
 
   showToast(`✅ Import completato: ${ok} nuovi, ${skip} aggiornati${err ? ', '+err+' errori' : ''}`, 'success');
   renderClientiTable();
+}
+
+// ═══════════════════════════════════════════════
+// GIACENZE — TAB SYSTEM
+// ═══════════════════════════════════════════════
+
+function showMagazzinoTab(tabName) {
+  state.magazzinoActiveTab = tabName;
+  const tabs = ['preparazione', 'preparati', 'giacenze', 'rientro-tv'];
+  tabs.forEach(t => {
+    const btn = document.getElementById(`tab-btn-${t}`);
+    const pane = document.getElementById(`magazzino-tab-${t}`);
+    if (btn) btn.classList.toggle('active', t === tabName);
+    if (pane) pane.style.display = t === tabName ? '' : 'none';
+  });
+  if (tabName === 'preparati') {
+    const filterData = document.getElementById('filter-magazzino-data')?.value || today();
+    const filterGiro = document.getElementById('filter-magazzino-giro')?.value || '';
+    renderOrdiniPreparati(filterData, filterGiro);
+  } else if (tabName === 'giacenze') {
+    renderGiacenze();
+  } else if (tabName === 'rientro-tv') {
+    renderRientroTV();
+  }
+}
+
+// ═══════════════════════════════════════════════
+// GIACENZE — RELOAD HELPER
+// ═══════════════════════════════════════════════
+
+async function reloadGiacenze() {
+  try {
+    state.giacenze = await api('GET', '/api/giacenze').catch(() => []);
+    state.giacenzeLotti = {};
+    for (const g of state.giacenze) {
+      if (!state.giacenzeLotti[g.prodotto_id]) state.giacenzeLotti[g.prodotto_id] = [];
+      state.giacenzeLotti[g.prodotto_id].push(g);
+    }
+    state.giacenzeAlerts = await api('GET', '/api/giacenze/alerts').catch(() => ({ sotto_soglia: [], in_scadenza: [] }));
+  } catch (e) {
+    console.error('reloadGiacenze error:', e);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// GIACENZE — RENDER TAB
+// ═══════════════════════════════════════════════
+
+function renderGiacenze() {
+  const container = document.getElementById('magazzino-tab-giacenze');
+  if (!container) return;
+
+  const isAdmin = ['admin', 'magazzino'].includes(state.currentUser?.ruolo);
+
+  // Group by prodotto_id
+  const byProd = {};
+  for (const g of state.giacenze) {
+    if (!byProd[g.prodotto_id]) byProd[g.prodotto_id] = { prodotto: g, lotti: [] };
+    byProd[g.prodotto_id].lotti.push(g);
+  }
+
+  const today30 = new Date(); today30.setDate(today30.getDate() + 30);
+
+  function badgeForTotale(totale, soglia) {
+    if (!soglia) return `<span style="background:var(--accent-light);color:var(--accent);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">${totale}</span>`;
+    if (totale < soglia) return `<span style="background:var(--danger-light);color:var(--danger);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">⚠ ${totale}</span>`;
+    if (totale < soglia * 1.2) return `<span style="background:var(--orange-light);color:var(--orange);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">⚠ ${totale}</span>`;
+    return `<span style="background:var(--success-light);color:var(--success);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">${totale}</span>`;
+  }
+
+  const topBar = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
+      <button class="btn btn-green btn-sm" onclick="openGiacenzaCarico(null)">+ Carico generico</button>
+      <button class="btn btn-outline btn-sm" onclick="openMovimentiModal(null)">📋 Storico movimenti</button>
+    </div>`;
+
+  if (!Object.keys(byProd).length) {
+    container.innerHTML = topBar + `<div class="empty-state"><div class="empty-icon">📦</div><p>Nessuna giacenza registrata.<br>Usa "+ Carico generico" per aggiungere.</p></div>`;
+    return;
+  }
+
+  const cards = Object.values(byProd).sort((a,b) => (a.prodotto.nome||'').localeCompare(b.prodotto.nome||'')).map(({ prodotto: g, lotti }) => {
+    const totale = lotti.reduce((s, l) => s + Number(l.quantita || 0), 0);
+    const soglia = g.soglia_minima !== null && g.soglia_minima !== undefined ? Number(g.soglia_minima) : null;
+    const sogliaHtml = soglia !== null
+      ? `<span style="font-size:12px;color:var(--text2);">Soglia: ${soglia} ${g.um}</span>`
+      : '';
+
+    const lottiHtml = lotti.map(l => {
+      const scad = l.scadenza ? l.scadenza.substring(0, 10) : null;
+      const isExpiring = scad && new Date(scad) <= today30;
+      const scadHtml = scad
+        ? `<span style="font-size:11px;${isExpiring ? 'color:var(--danger);font-weight:700;' : 'color:var(--text3);'}">Sc: ${scad}</span>`
+        : '';
+      return `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+          <span style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace;">${escapeHtml(l.lotto || '—')}</span>
+          <span style="font-size:13px;color:var(--text1);">${Number(l.quantita)} ${g.um}</span>
+          ${scadHtml}
+          ${l.note ? `<span style="font-size:11px;color:var(--text3);">${escapeHtml(l.note)}</span>` : ''}
+          <div style="margin-left:auto;display:flex;gap:6px;">
+            ${isAdmin ? `
+              <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openGiacenzaRettifica(${l.id})">📊 Rettifica</button>
+              <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openGiacenzaModifica(${l.id})">✏️</button>
+              ${state.currentUser?.ruolo === 'admin' ? `<button class="btn btn-sm" style="font-size:11px;background:var(--danger-light);color:var(--danger);" onclick="deleteGiacenza(${l.id})">🗑</button>` : ''}
+            ` : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="card-header" style="cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);">[${escapeHtml(g.codice)}]</span>
+            <span style="font-weight:700;">${escapeHtml(g.nome)}</span>
+            <span style="color:var(--text3);font-size:12px;">${g.categoria}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            ${badgeForTotale(Number(totale).toFixed(2), soglia)} ${g.um}
+            ${sogliaHtml}
+            ${isAdmin ? `
+              <button class="btn btn-sm" style="font-size:11px;background:var(--success-light);color:var(--success);" onclick="event.stopPropagation();openGiacenzaCarico(${g.prodotto_id})">+ Carico</button>
+              <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="event.stopPropagation();openMovimentiModal(${g.prodotto_id})">📋</button>
+              <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="event.stopPropagation();openSogliaModal(${g.prodotto_id}, ${soglia !== null ? soglia : 'null'})">⚙️ Soglia</button>
+            ` : ''}
+          </div>
+        </div>
+        <div style="padding:0 16px 8px;">
+          ${lottiHtml || '<div style="padding:8px 0;color:var(--text3);font-size:13px;">Nessun lotto</div>'}
+        </div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = topBar + cards;
+}
+
+// ═══════════════════════════════════════════════
+// GIACENZE — MODAL FUNCTIONS
+// ═══════════════════════════════════════════════
+
+function openGiacenzaCarico(prodottoId) {
+  const sel = document.getElementById('giacenza-carico-prodotto');
+  sel.innerHTML = state.prodotti.map(p => `<option value="${p.id}" ${p.id === prodottoId ? 'selected' : ''}>[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</option>`).join('');
+  document.getElementById('giacenza-carico-lotto').value = '';
+  document.getElementById('giacenza-carico-qty').value = '';
+  document.getElementById('giacenza-carico-scadenza').value = '';
+  document.getElementById('giacenza-carico-tipo').value = 'carico';
+  document.getElementById('giacenza-carico-note').value = '';
+  document.getElementById('modal-giacenza-carico-title').textContent = prodottoId ? `Carico — ${getProdotto(prodottoId)?.nome || ''}` : 'Carico Giacenza';
+  openModal('modal-giacenza-carico');
+}
+
+async function saveGiacenzaCarico() {
+  const prodotto_id = parseInt(document.getElementById('giacenza-carico-prodotto').value);
+  const lotto = document.getElementById('giacenza-carico-lotto').value.trim();
+  const quantita = parseFloat(document.getElementById('giacenza-carico-qty').value);
+  const scadenza = document.getElementById('giacenza-carico-scadenza').value || null;
+  const tipo = document.getElementById('giacenza-carico-tipo').value;
+  const note = document.getElementById('giacenza-carico-note').value.trim();
+
+  if (!prodotto_id) { showToast('Seleziona un prodotto', 'warning'); return; }
+  if (!lotto) { showToast('Lotto obbligatorio', 'warning'); return; }
+  if (!quantita || quantita <= 0) { showToast('Quantità deve essere > 0', 'warning'); return; }
+
+  try {
+    await api('POST', '/api/giacenze/carico', { prodotto_id, lotto, quantita, scadenza, tipo, note });
+    closeModal('modal-giacenza-carico');
+    await reloadGiacenze();
+    renderGiacenze();
+    showToast('Carico registrato ✅', 'success');
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
+}
+
+function openGiacenzaRettifica(giacenzaId) {
+  const g = state.giacenze.find(x => x.id === giacenzaId);
+  if (!g) return;
+  document.getElementById('giacenza-rettifica-id').value = giacenzaId;
+  document.getElementById('giacenza-rettifica-attuale').value = Number(g.quantita);
+  document.getElementById('giacenza-rettifica-nuova').value = '';
+  document.getElementById('giacenza-rettifica-note').value = '';
+  openModal('modal-giacenza-rettifica');
+}
+
+async function saveGiacenzaRettifica() {
+  const id = parseInt(document.getElementById('giacenza-rettifica-id').value);
+  const nuova_quantita = parseFloat(document.getElementById('giacenza-rettifica-nuova').value);
+  const note = document.getElementById('giacenza-rettifica-note').value.trim();
+  if (!Number.isFinite(nuova_quantita)) { showToast('Inserisci la nuova quantità', 'warning'); return; }
+  try {
+    await api('POST', `/api/giacenze/${id}/rettifica`, { nuova_quantita, note });
+    closeModal('modal-giacenza-rettifica');
+    await reloadGiacenze();
+    renderGiacenze();
+    showToast('Rettifica salvata ✅', 'success');
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
+}
+
+function openGiacenzaModifica(giacenzaId) {
+  const g = state.giacenze.find(x => x.id === giacenzaId);
+  if (!g) return;
+  document.getElementById('giacenza-modifica-id').value = giacenzaId;
+  document.getElementById('giacenza-modifica-lotto').value = g.lotto || '';
+  document.getElementById('giacenza-modifica-scadenza').value = g.scadenza ? g.scadenza.substring(0, 10) : '';
+  document.getElementById('giacenza-modifica-qty').value = Number(g.quantita);
+  document.getElementById('giacenza-modifica-note').value = g.note || '';
+  openModal('modal-giacenza-modifica');
+}
+
+async function saveGiacenzaModifica() {
+  const id = parseInt(document.getElementById('giacenza-modifica-id').value);
+  const lotto = document.getElementById('giacenza-modifica-lotto').value.trim();
+  const scadenza = document.getElementById('giacenza-modifica-scadenza').value || null;
+  const quantita = parseFloat(document.getElementById('giacenza-modifica-qty').value);
+  const note = document.getElementById('giacenza-modifica-note').value.trim();
+  try {
+    await api('PATCH', `/api/giacenze/${id}`, { lotto, scadenza, quantita, note });
+    closeModal('modal-giacenza-modifica');
+    await reloadGiacenze();
+    renderGiacenze();
+    showToast('Giacenza aggiornata ✅', 'success');
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
+}
+
+async function deleteGiacenza(giacenzaId) {
+  const ok = await customConfirm('Eliminare questa giacenza?', 'Elimina', 'Conferma eliminazione');
+  if (!ok) return;
+  try {
+    await api('DELETE', `/api/giacenze/${giacenzaId}`);
+    await reloadGiacenze();
+    renderGiacenze();
+    showToast('Giacenza eliminata', 'success');
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
+}
+
+async function openMovimentiModal(prodottoId) {
+  const list = document.getElementById('giacenza-movimenti-list');
+  list.innerHTML = '<div style="color:var(--text3);text-align:center;padding:20px;">Caricamento...</div>';
+  openModal('modal-giacenza-movimenti');
+  try {
+    const url = prodottoId ? `/api/giacenze/movimenti?prodotto_id=${prodottoId}` : '/api/giacenze/movimenti';
+    const rows = await api('GET', url);
+    if (!rows.length) {
+      list.innerHTML = '<div style="color:var(--text3);text-align:center;padding:20px;">Nessun movimento</div>';
+      return;
+    }
+    const tipoColors = {
+      carico: 'var(--success)', reso: 'var(--accent)', tentata_vendita: 'var(--gold)',
+      scarico_ordine: 'var(--danger)', scarico_manuale: 'var(--danger)', rettifica: 'var(--orange)'
+    };
+    list.innerHTML = rows.map(m => {
+      const color = tipoColors[m.tipo] || 'var(--text2)';
+      const qty = Number(m.quantita);
+      const sign = qty >= 0 ? '+' : '';
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:11px;color:var(--text3);white-space:nowrap;">${m.created_at ? new Date(m.created_at).toLocaleString('it-IT') : ''}</span>
+        <span style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase;">${m.tipo.replace('_',' ')}</span>
+        <span style="flex:1;font-size:13px;">${escapeHtml(m.prodotto_nome||'')} <span style="color:var(--text3);">Lotto: ${escapeHtml(m.lotto||'')}</span></span>
+        <span style="font-size:13px;font-weight:700;color:${qty >= 0 ? 'var(--success)' : 'var(--danger)'};">${sign}${qty}</span>
+        ${m.utente_nome ? `<span style="font-size:11px;color:var(--text3);">${escapeHtml(m.utente_nome)}</span>` : ''}
+        ${m.note ? `<span style="font-size:11px;color:var(--text3);font-style:italic;">${escapeHtml(m.note)}</span>` : ''}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = `<div style="color:var(--danger);padding:16px;">${e.message}</div>`;
+  }
+}
+
+function openSogliaModal(prodottoId, sogliaAttuale) {
+  const p = getProdotto(prodottoId);
+  const nuova = prompt(`Soglia minima per ${p?.nome || 'prodotto'} (lascia vuoto per rimuovere):`, sogliaAttuale !== null && sogliaAttuale !== undefined ? sogliaAttuale : '');
+  if (nuova === null) return; // cancelled
+  const val = nuova.trim() === '' ? null : parseFloat(nuova);
+  api('PATCH', `/api/prodotti/${prodottoId}/soglia`, { soglia_minima: val })
+    .then(async () => {
+      await reloadGiacenze();
+      renderGiacenze();
+      showToast('Soglia aggiornata ✅', 'success');
+    })
+    .catch(e => showToast(e.message, 'warning'));
+}
+
+// ═══════════════════════════════════════════════
+// GIACENZE — RIENTRO TV TAB
+// ═══════════════════════════════════════════════
+
+function renderRientroTV() {
+  const container = document.getElementById('magazzino-tab-rientro-tv');
+  if (!container) return;
+
+  const ieri = new Date(); ieri.setDate(ieri.getDate() - 1);
+  const ieriStr = ieri.toISOString().substring(0, 10);
+
+  container.innerHTML = `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <div class="card-title">🚛 Rientro Tentata Vendita</div>
+      </div>
+      <div style="padding:16px 20px;">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;">
+          <div class="field" style="margin:0;">
+            <label class="toolbar-label">Data consegna</label>
+            <input type="date" id="rientro-tv-data" value="${ieriStr}" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;">
+          </div>
+          <div class="field" style="margin:0;">
+            <label class="toolbar-label">Giro</label>
+            <select id="rientro-tv-giro" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;">
+              <option value="">Tutti i giri</option>
+              <option value="bari nord">Bari Nord</option>
+              <option value="murgia">Murgia</option>
+              <option value="taranto">Taranto</option>
+              <option value="lecce">Lecce</option>
+              <option value="valle itria">Valle Itria</option>
+              <option value="calabria">Calabria</option>
+              <option value="foggia">Foggia</option>
+              <option value="diretto">Diretto</option>
+            </select>
+          </div>
+          <button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="caricaRientroTV()">📥 Carica lista</button>
+        </div>
+        <div id="rientro-tv-lista"></div>
+        <div id="rientro-tv-footer" style="display:none;margin-top:16px;">
+          <button class="btn btn-green" onclick="confermaRientroTV()">✅ Conferma rientro</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+let _rientroTVRighe = [];
+
+async function caricaRientroTV() {
+  const data = document.getElementById('rientro-tv-data')?.value;
+  const giro = document.getElementById('rientro-tv-giro')?.value || '';
+  if (!data) { showToast('Seleziona una data', 'warning'); return; }
+  const lista = document.getElementById('rientro-tv-lista');
+  const footer = document.getElementById('rientro-tv-footer');
+  if (!lista) return;
+  lista.innerHTML = '<div style="color:var(--text3);padding:16px;">Caricamento...</div>';
+  try {
+    const rows = await api('GET', `/api/giacenze/rientro-tv?data=${data}&giro=${encodeURIComponent(giro)}`);
+    _rientroTVRighe = rows;
+    if (!rows.length) {
+      lista.innerHTML = '<div class="empty-state"><div class="empty-icon">📦</div><p>Nessun prodotto preparato per questa data/giro</p></div>';
+      if (footer) footer.style.display = 'none';
+      return;
+    }
+    lista.innerHTML = `
+      <div class="table-scroll-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Prodotto</th>
+              <th>Lotto</th>
+              <th style="text-align:right;">Qty preparata</th>
+              <th style="text-align:right;">Peso eff. (kg)</th>
+              <th style="text-align:right;">Qty rientro</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((r, i) => `
+              <tr>
+                <td>${escapeHtml(r.nome)}<br><span style="font-size:11px;color:var(--text3);">${escapeHtml(r.codice)}</span></td>
+                <td style="font-family:'DM Mono',monospace;font-size:12px;">${escapeHtml(r.lotto)}</td>
+                <td style="text-align:right;">${Number(r.qty_totale)} ${escapeHtml(r.um)}</td>
+                <td style="text-align:right;">${r.peso_totale !== null ? Number(r.peso_totale).toFixed(2) : '—'}</td>
+                <td style="text-align:right;">
+                  <input type="number" step="0.01" min="0" value="${r.peso_totale !== null ? Number(r.peso_totale).toFixed(2) : 0}"
+                    id="rientro-qty-${i}" style="width:80px;padding:3px 6px;font-size:12px;border:1.5px solid var(--border);border-radius:5px;text-align:right;">
+                </td>
+                <td>
+                  <input type="text" id="rientro-note-${i}" placeholder="Note" style="width:100px;padding:3px 6px;font-size:12px;border:1.5px solid var(--border);border-radius:5px;">
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    if (footer) footer.style.display = '';
+  } catch (e) {
+    lista.innerHTML = `<div style="color:var(--danger);padding:16px;">${e.message}</div>`;
+  }
+}
+
+async function confermaRientroTV() {
+  const righe = _rientroTVRighe.map((r, i) => ({
+    prodotto_id: r.prodotto_id,
+    lotto: r.lotto,
+    quantita_rientro: parseFloat(document.getElementById(`rientro-qty-${i}`)?.value || 0) || 0,
+    note: document.getElementById(`rientro-note-${i}`)?.value?.trim() || '',
+  })).filter(r => r.quantita_rientro > 0);
+
+  if (!righe.length) { showToast('Nessun rientro da registrare', 'warning'); return; }
+
+  try {
+    await api('POST', '/api/giacenze/rientro-tv', { righe });
+    await reloadGiacenze();
+    showToast(`Rientro registrato per ${righe.length} prodotti ✅`, 'success');
+    _rientroTVRighe = [];
+    const lista = document.getElementById('rientro-tv-lista');
+    if (lista) lista.innerHTML = '<div style="color:var(--success);padding:16px;font-weight:600;">✅ Rientro confermato con successo!</div>';
+    const footer = document.getElementById('rientro-tv-footer');
+    if (footer) footer.style.display = 'none';
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// GIACENZE — ALERTS DASHBOARD
+// ═══════════════════════════════════════════════
+
+function renderGiacenzeAlerts() {
+  const container = document.getElementById('dashboard-giacenze-alerts');
+  if (!container) return;
+  const { sotto_soglia, in_scadenza } = state.giacenzeAlerts || {};
+  const roles = ['admin', 'direzione', 'magazzino'];
+  if (!roles.includes(state.currentUser?.ruolo)) { container.style.display = 'none'; return; }
+
+  if ((!sotto_soglia?.length) && (!in_scadenza?.length)) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = '';
+
+  let html = '';
+  if (sotto_soglia?.length) {
+    html += `<div style="margin-bottom:10px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--danger);">⚠️ Prodotti sotto soglia minima</div>
+      ${sotto_soglia.map(p => `
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;border-bottom:1px solid var(--border);">
+          <span style="flex:1;">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</span>
+          <span style="color:var(--danger);font-weight:700;">${Number(p.totale_quantita).toFixed(2)} ${p.um}</span>
+          <span style="color:var(--text3);font-size:11px;">Soglia: ${p.soglia_minima} ${p.um}</span>
+        </div>`).join('')}
+    </div>`;
+  }
+  if (in_scadenza?.length) {
+    html += `<div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--orange);">📅 Lotti in scadenza (30 giorni)</div>
+      ${in_scadenza.map(g => `
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;border-bottom:1px solid var(--border);">
+          <span style="flex:1;">[${escapeHtml(g.codice)}] ${escapeHtml(g.nome)}</span>
+          <span style="font-family:'DM Mono',monospace;font-size:11px;">${escapeHtml(g.lotto)}</span>
+          <span style="color:var(--orange);font-weight:700;">${Number(g.quantita).toFixed(2)} ${g.um}</span>
+          <span style="color:var(--danger);font-size:11px;">Sc: ${g.scadenza?.substring(0,10)}</span>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  container.innerHTML = html;
 }
 </script>
 <script src="/js/modules/normalizers.js"></script>
