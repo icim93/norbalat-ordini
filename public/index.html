@@ -95,35 +95,6 @@
     margin-top: 4px;
   }
 
-  .login-roles {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 24px;
-  }
-
-  .role-btn {
-    padding: 14px 10px;
-    border: 2px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface);
-    cursor: pointer;
-    text-align: center;
-    transition: all 0.2s;
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text2);
-  }
-
-  .role-btn .role-icon { font-size: 22px; display: block; margin-bottom: 6px; }
-
-  .role-btn:hover, .role-btn.active {
-    border-color: var(--accent);
-    background: var(--accent-light);
-    color: var(--accent);
-  }
-
   .field { margin-bottom: 16px; }
   .field label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; letter-spacing: 0.5px; text-transform: uppercase; }
 
@@ -1446,7 +1417,6 @@
     }
     body { font-size: 14px; }
     .login-card { margin: 16px; padding: 32px 22px; }
-    .login-roles,
     .form-row,
     .report-grid,
     .report-filters,
@@ -1801,35 +1771,18 @@
       <div class="sub">Gestione Ordini</div>
     </div>
 
-    <div style="margin-bottom:20px;">
-      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Accedi come</div>
-      <div class="login-roles">
-        <button class="role-btn active" onclick="selectRole('admin',this)">
-          <span class="role-icon">🖥️</span>Admin / Ufficio
-        </button>
-        <button class="role-btn" onclick="selectRole('amministrazione',this)">
-          <span class="role-icon">🧾</span>Amministrazione
-        </button>
-        <button class="role-btn" onclick="selectRole('autista',this)">
-          <span class="role-icon">🚚</span>Autista / Agente
-        </button>
-        <button class="role-btn" onclick="selectRole('magazzino',this)">
-          <span class="role-icon">📦</span>Magazzino
-        </button>
-        <button class="role-btn" onclick="selectRole('direzione',this)">
-          <span class="role-icon">📊</span>Direzione
-        </button>
-      </div>
-    </div>
-
     <div class="field">
       <label>Username</label>
-      <input type="text" id="login-user" placeholder="es. mario.rossi">
+      <input type="text" id="login-user" placeholder="es. mario.rossi" onkeydown="if(event.key==='Enter') doLogin()">
     </div>
     <div class="field">
       <label>Password</label>
-      <input type="password" id="login-pass" placeholder="••••••••">
+      <input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()">
     </div>
+    <label style="display:flex;align-items:center;gap:8px;margin:8px 0 18px;font-size:13px;color:var(--text2);cursor:pointer;">
+      <input type="checkbox" id="login-remember" style="width:16px;height:16px;">
+      Resta connesso
+    </label>
     <button class="btn-primary" onclick="doLogin()">Accedi →</button>
   </div>
 </div>

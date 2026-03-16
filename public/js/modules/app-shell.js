@@ -1,6 +1,6 @@
 ﻿(function () {
-  let selectedRole = 'admin';
   const navOpenSections = new Set();
+  const AUTH_STORAGE_KEY = 'norbalat_auth_session';
 
   const navConfigs = {
     admin: [
@@ -237,15 +237,53 @@
     syncCollapsibleNav();
   }
 
-  function selectRole(role, el) {
-    selectedRole = role;
-    document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
-    el.classList.add('active');
+  function getStoredAuth() {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY) || sessionStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch (_) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      sessionStorage.removeItem(AUTH_STORAGE_KEY);
+      return null;
+    }
+  }
+
+  function storeAuthSession(token, user, remember) {
+    const payload = JSON.stringify({ token, user });
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    (remember ? localStorage : sessionStorage).setItem(AUTH_STORAGE_KEY, payload);
+  }
+
+  function clearStoredAuth() {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  }
+
+  async function applyAuthenticatedSession(token, user) {
+    window.state.token = token;
+    window.state.currentUser = window.normalizeUtente(user);
+    window.loadDevErrors();
+    window.state.devThresholds = window.loadDevThresholds();
+    await window.loadAllData();
+
+    document.getElementById('screen-login').style.display = 'none';
+    document.getElementById('screen-app').style.display = 'block';
+    document.getElementById('topbar-username').textContent =
+      (window.state.currentUser.nome + ' ' + (window.state.currentUser.cognome || '')).trim();
+    const roleLabels = { admin: 'Admin', amministrazione: 'Amministrazione', autista: 'Autista', magazzino: 'Magazzino', direzione: 'Direzione' };
+    document.getElementById('topbar-role').textContent = roleLabels[window.state.currentUser.ruolo];
+    setupNav();
+    const defaultPages = { admin: 'dashboard', amministrazione: 'clienti', autista: 'autista', magazzino: 'magazzino', direzione: 'report' };
+    goTo(defaultPages[window.state.currentUser.ruolo] || 'dashboard');
+    window.startDevMonitor();
   }
 
   async function doLogin() {
     const username = document.getElementById('login-user').value.trim();
     const password = document.getElementById('login-pass').value;
+    const remember = !!document.getElementById('login-remember')?.checked;
     if (!username || !password) {
       window.showToast('Inserisci username e password', 'warning');
       return;
@@ -268,22 +306,8 @@
         return d;
       });
 
-      window.state.token = data.token;
-      window.state.currentUser = window.normalizeUtente(data.user);
-      window.loadDevErrors();
-      window.state.devThresholds = window.loadDevThresholds();
-      await window.loadAllData();
-
-      document.getElementById('screen-login').style.display = 'none';
-      document.getElementById('screen-app').style.display = 'block';
-      document.getElementById('topbar-username').textContent =
-        (window.state.currentUser.nome + ' ' + (window.state.currentUser.cognome || '')).trim();
-      const roleLabels = { admin: 'Admin', amministrazione: 'Amministrazione', autista: 'Autista', magazzino: 'Magazzino', direzione: 'Direzione' };
-      document.getElementById('topbar-role').textContent = roleLabels[window.state.currentUser.ruolo];
-      setupNav();
-      const defaultPages = { admin: 'dashboard', amministrazione: 'clienti', autista: 'autista', magazzino: 'magazzino', direzione: 'report' };
-      goTo(defaultPages[window.state.currentUser.ruolo] || 'dashboard');
-      window.startDevMonitor();
+      storeAuthSession(data.token, data.user, remember);
+      await applyAuthenticatedSession(data.token, data.user);
     } catch (e) {
       const raw = String(e?.message || '');
       const credErr = raw.toLowerCase().includes('username o password') || raw.toLowerCase().includes('credenziali');
@@ -298,6 +322,7 @@
 
   function doLogout() {
     window.stopDevMonitor();
+    clearStoredAuth();
     window.state.token = null;
     window.state.currentUser = null;
     window.state.utenti = [];
@@ -327,6 +352,17 @@
     window.state.magazzinoUndoStack = [];
     document.getElementById('screen-app').style.display = 'none';
     document.getElementById('screen-login').style.display = 'flex';
+  }
+
+  async function tryRestoreSession() {
+    const stored = getStoredAuth();
+    if (!stored?.token || !stored?.user) return;
+    try {
+      await applyAuthenticatedSession(stored.token, stored.user);
+    } catch (_) {
+      clearStoredAuth();
+      doLogout();
+    }
   }
 
   function setupNav() {
@@ -417,7 +453,6 @@
     if (page === 'profilo') window.renderProfilo();
   }
 
-  window.selectRole = selectRole;
   window.doLogin = doLogin;
   window.doLogout = doLogout;
   window.setupNav = setupNav;
@@ -427,6 +462,12 @@
   window.refreshNavBadges = refreshNavBadges;
   window.toggleNavSection = toggleNavSection;
   window.renderPage = renderPage;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const rememberEl = document.getElementById('login-remember');
+    if (rememberEl) rememberEl.checked = !!localStorage.getItem(AUTH_STORAGE_KEY);
+    tryRestoreSession();
+  });
 })();
 
 
