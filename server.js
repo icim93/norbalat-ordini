@@ -2553,7 +2553,7 @@ app.get('/api/ordini', authMiddleware, async (req, res) => {
     if (rows.length) {
       const ids = rows.map(r => r.id);
       const { rows: linee } = await q(
-        `SELECT ol.ordine_id, ol.prodotto_id, ol.prodotto_nome_libero, ol.qty, ol.peso_effettivo,
+        `SELECT ol.id, ol.ordine_id, ol.prodotto_id, ol.prodotto_nome_libero, ol.qty, ol.peso_effettivo,
                 ol.prezzo_unitario, ol.is_pedana, ol.nota_riga, ol.unita_misura, ol.preparato, ol.lotto,
                 p.codice, p.nome as prodotto_nome, p.um, p.packaging
          FROM ordine_linee ol LEFT JOIN prodotti p ON ol.prodotto_id = p.id
