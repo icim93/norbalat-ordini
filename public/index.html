@@ -4871,10 +4871,10 @@ function onLineLottoInput(ordineId, lineIdx, el) {
   if (!o) return;
   const line = o.linee[lineIdx];
   if (!line) return;
-  // Aggiorna stato ottimistico per il calcolo del pulsante Pronto
-  line.lotto = String(el.value || '').trim();
-  // Aggiorna bordo campo (rosso se vuoto, normale se compilato)
-  el.style.borderColor = line.lotto ? 'var(--border)' : '#e74c3c';
+  // NON aggiornare line.lotto qui: setLineLotto (onchange) ha il controllo prev===next
+  // e se aggiorni lo state prima, il salvataggio verrebbe saltato.
+  // Aggiorna solo il bordo campo (feedback visivo immediato)
+  el.style.borderColor = el.value.trim() ? 'var(--border)' : '#e74c3c';
   // Auto-tick se c'è qualcosa scritto
   if (el.value.trim() && !line.preparato) {
     line.preparato = true;
@@ -4884,16 +4884,16 @@ function onLineLottoInput(ordineId, lineIdx, el) {
     const nm = document.querySelector(`[data-line-nome="${ordineId}-${lineIdx}"]`);
     if (nm) { nm.style.textDecoration = 'line-through'; nm.style.color = 'var(--text3)'; }
   }
-  // Salva al blur per non spammare richieste — qui aggiorniamo solo il pulsante
   updateMagazzinoProntoBtn(ordineId);
 }
 
-// Handler oninput per campo peso: auto-tick
+// Handler oninput per campo peso: solo auto-tick visivo
 function onLinePesoInput(ordineId, lineIdx, el) {
   const o = state.ordini.find(x => x.id === ordineId);
   if (!o) return;
   const line = o.linee[lineIdx];
   if (!line) return;
+  // NON aggiornare line.pesoEffettivo qui: setLinePesoEffettivo (onchange) salva su DB
   if (el.value.trim() && !line.preparato) {
     line.preparato = true;
     saveLineaPreparazione(ordineId, lineIdx, { preparato: true });
@@ -4902,24 +4902,22 @@ function onLinePesoInput(ordineId, lineIdx, el) {
     const nm = document.querySelector(`[data-line-nome="${ordineId}-${lineIdx}"]`);
     if (nm) { nm.style.textDecoration = 'line-through'; nm.style.color = 'var(--text3)'; }
   }
-  // Il peso si salva già all'onchange via setLinePesoEffettivo; qui solo sync visivo
-  const n = parseFloat(String(el.value).replace(',', '.'));
-  line.pesoEffettivo = Number.isFinite(n) ? n : null;
 }
 
-// Aggiorna il pulsante Pronto senza re-render completo
+// Aggiorna il pulsante Pronto leggendo i valori DOM (non lo state, che non è ancora aggiornato)
 function updateMagazzinoProntoBtn(ordineId) {
-  const o = state.ordini.find(x => x.id === ordineId);
-  if (!o) return;
-  const allOk = o.linee.length > 0 && o.linee.every(l => l.lotto && String(l.lotto).trim());
-  const btn = document.querySelector(`[data-pronto-ordine="${ordineId}"]`);
+  const card = document.querySelector(`[data-ordine-id="${ordineId}"]`);
+  const btn  = document.querySelector(`[data-pronto-ordine="${ordineId}"]`);
   if (!btn) return;
+  // Legge i campi lotto direttamente dal DOM per evitare il problema prev===next
+  const lottoInputs = card ? [...card.querySelectorAll('input[placeholder="Lotto *"]')] : [];
+  const allOk = lottoInputs.length > 0 && lottoInputs.every(inp => inp.value.trim());
   btn.disabled = !allOk;
-  btn.style.background    = allOk ? '' : '#ccc';
-  btn.style.color         = allOk ? '' : '#888';
-  btn.style.cursor        = allOk ? '' : 'not-allowed';
-  btn.style.borderColor   = allOk ? '' : '#bbb';
-  btn.title               = allOk ? '' : 'Inserire il lotto per tutte le righe';
+  btn.style.background  = allOk ? '' : '#ccc';
+  btn.style.color       = allOk ? '' : '#888';
+  btn.style.cursor      = allOk ? '' : 'not-allowed';
+  btn.style.borderColor = allOk ? '' : '#bbb';
+  btn.title             = allOk ? '' : 'Inserire il lotto per tutte le righe';
 }
 
 // Navigazione Enter tra campi peso/lotto
