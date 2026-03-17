@@ -4081,6 +4081,157 @@ app.post('/api/giacenze/carico', authMiddleware, requireRole('admin', 'magazzino
   }
 });
 
+// POST /api/giacenze/import — import iniziale da Excel
+app.post('/api/giacenze/import', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rows.length) {
+      client.release();
+      return res.status(400).json({ error: 'Nessuna riga da importare' });
+    }
+
+    const normalized = rows.map((row, idx) => ({
+      idx: idx + 1,
+      codice: String(row?.codice || '').trim().toUpperCase(),
+      descrizione: String(row?.descrizione || '').trim(),
+      lotto: String(row?.lotto || '').trim(),
+      um: String(row?.um || '').trim(),
+      quantita: Number(row?.quantita),
+      scadenza: row?.scadenza ? String(row.scadenza).trim() : null,
+    }));
+
+    const invalid = normalized.filter(r => !r.codice || !r.lotto || !Number.isFinite(r.quantita) || r.quantita <= 0);
+    if (invalid.length) {
+      client.release();
+      return res.status(400).json({
+        error: 'Il file contiene righe non valide',
+        invalid_rows: invalid.slice(0, 20).map(r => ({
+          riga: r.idx,
+          codice: r.codice,
+          lotto: r.lotto,
+          quantita: r.quantita,
+        })),
+      });
+    }
+
+    const codici = [...new Set(normalized.map(r => r.codice))];
+    const { rows: prodotti } = await client.query(
+      `SELECT id, codice, nome, um, gestione_giacenza
+       FROM prodotti
+       WHERE UPPER(codice) = ANY($1::text[])`,
+      [codici]
+    );
+    const prodottiMap = new Map(prodotti.map(p => [String(p.codice || '').trim().toUpperCase(), p]));
+
+    const missing = normalized.filter(r => !prodottiMap.has(r.codice));
+    if (missing.length) {
+      client.release();
+      return res.status(400).json({
+        error: 'Alcuni codici articolo non esistono',
+        missing_codes: [...new Set(missing.map(r => r.codice))],
+      });
+    }
+
+    const excluded = normalized.filter(r => !prodottiMap.get(r.codice)?.gestione_giacenza);
+    if (excluded.length) {
+      client.release();
+      return res.status(400).json({
+        error: 'Alcuni prodotti non sono gestiti a giacenza',
+        excluded_codes: [...new Set(excluded.map(r => r.codice))],
+      });
+    }
+
+    const warnings = [];
+    const aggregated = new Map();
+    for (const row of normalized) {
+      const prodotto = prodottiMap.get(row.codice);
+      if (!prodotto) continue;
+      if (row.descrizione && prodotto.nome && row.descrizione.localeCompare(prodotto.nome, 'it', { sensitivity: 'base' }) !== 0) {
+        warnings.push({
+          riga: row.idx,
+          codice: row.codice,
+          excel: row.descrizione,
+          sistema: prodotto.nome,
+        });
+      }
+      if (row.um && prodotto.um && row.um.localeCompare(prodotto.um, 'it', { sensitivity: 'base' }) !== 0) {
+        warnings.push({
+          riga: row.idx,
+          codice: row.codice,
+          excel: row.um,
+          sistema: prodotto.um,
+          tipo: 'um',
+        });
+      }
+
+      const key = `${prodotto.id}__${row.lotto.toUpperCase()}`;
+      const current = aggregated.get(key) || {
+        prodotto_id: prodotto.id,
+        codice: prodotto.codice,
+        nome: prodotto.nome,
+        lotto: row.lotto,
+        quantita: 0,
+        scadenza: row.scadenza || null,
+      };
+      current.quantita += row.quantita;
+      if (!current.scadenza && row.scadenza) current.scadenza = row.scadenza;
+      aggregated.set(key, current);
+    }
+
+    const utenteName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
+    let imported = 0;
+
+    await client.query('BEGIN');
+    for (const row of aggregated.values()) {
+      const { rows: existing } = await client.query(
+        'SELECT id, quantita FROM giacenze WHERE prodotto_id=$1 AND lotto=$2 LIMIT 1',
+        [row.prodotto_id, row.lotto]
+      );
+      let giacenzaId;
+      let oldQty = 0;
+      let newQty = row.quantita;
+      if (existing.length) {
+        giacenzaId = existing[0].id;
+        oldQty = Number(existing[0].quantita || 0);
+        newQty = oldQty + row.quantita;
+        await client.query(
+          `UPDATE giacenze
+           SET quantita=$1, scadenza=COALESCE($2, scadenza), updated_at=NOW()
+           WHERE id=$3`,
+          [newQty, row.scadenza, giacenzaId]
+        );
+      } else {
+        const ins = await client.query(
+          `INSERT INTO giacenze (prodotto_id, lotto, scadenza, quantita, note)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id`,
+          [row.prodotto_id, row.lotto, row.scadenza, row.quantita, 'Import giacenza iniziale da Excel']
+        );
+        giacenzaId = ins.rows[0].id;
+      }
+      await client.query(
+        `INSERT INTO movimenti_giacenza
+          (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
+         VALUES ($1,$2,$3,'carico',$4,$5,$6,$7,$8,$9)`,
+        [giacenzaId, row.prodotto_id, row.lotto, row.quantita, oldQty, newQty, req.user.id || null, utenteName, 'Import giacenza iniziale da Excel']
+      );
+      imported++;
+    }
+    await client.query('COMMIT');
+    client.release();
+    res.json({
+      ok: true,
+      imported_rows: imported,
+      warnings: warnings.slice(0, 50),
+    });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    client.release();
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/giacenze/:id/scarico-manuale
 app.post('/api/giacenze/:id/scarico-manuale', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
   const client = await pool.connect();

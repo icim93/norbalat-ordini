@@ -2407,6 +2407,7 @@
         <div id="magazzino-tab-giacenze">
           <!-- content rendered by renderGiacenze() -->
         </div>
+        <input type="file" id="import-giacenze-file" accept=".xlsx,.xls" style="display:none" onchange="importGiacenzeExcel(this)">
       </div>
 
       <!-- ─── PAGE: Tentata Vendita ─── -->
@@ -6340,15 +6341,7 @@ async function importClientiExcel(input) {
   if (!file) return;
   input.value = '';
 
-  // Carica SheetJS dinamicamente se non presente
-  if (!window.XLSX) {
-    await new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      s.onload = res; s.onerror = rej;
-      document.head.appendChild(s);
-    });
-  }
+  await ensureSheetJsLoaded();
 
   const data = await file.arrayBuffer();
   const wb = XLSX.read(data);
@@ -6410,6 +6403,156 @@ async function importClientiExcel(input) {
 
   showToast(`✅ Import completato: ${ok} nuovi, ${skip} aggiornati${err ? ', '+err+' errori' : ''}`, 'success');
   renderClientiTable();
+}
+
+async function ensureSheetJsLoaded() {
+  if (window.XLSX) return;
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = res;
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+function normalizeExcelHeader(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\./g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function parseExcelDateValue(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number' && window.XLSX?.SSF?.parse_date_code) {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed?.y && parsed?.m && parsed?.d) {
+      const mm = String(parsed.m).padStart(2, '0');
+      const dd = String(parsed.d).padStart(2, '0');
+      return `${parsed.y}-${mm}-${dd}`;
+    }
+  }
+  const raw = String(value).trim();
+  const slash = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slash) {
+    const dd = slash[1].padStart(2, '0');
+    const mm = slash[2].padStart(2, '0');
+    const yy = slash[3].length === 2 ? `20${slash[3]}` : slash[3];
+    return `${yy}-${mm}-${dd}`;
+  }
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return raw;
+  const dt = new Date(raw);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString().slice(0, 10);
+}
+
+function parseExcelNumber(value) {
+  if (typeof value === 'number') return value;
+  const raw = String(value || '').trim().replace(/\./g, '').replace(',', '.');
+  const num = Number(raw);
+  return Number.isFinite(num) ? num : NaN;
+}
+
+async function importGiacenzeExcel(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  input.value = '';
+
+  try {
+    await ensureSheetJsLoaded();
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data, { cellDates: false });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    if (rows.length < 2) {
+      showToast('File vuoto o non valido', 'warning');
+      return;
+    }
+
+    const headers = rows[0].map(normalizeExcelHeader);
+    const idx = {
+      articolo: headers.indexOf('articolo'),
+      descrizione: headers.indexOf('descrizione'),
+      lotto: headers.indexOf('lotto'),
+      um: headers.indexOf('um'),
+      giacenza: headers.indexOf('giacenza'),
+      dataScad: headers.indexOf('data scad'),
+    };
+    const missingHeaders = Object.entries({
+      Articolo: idx.articolo,
+      Descrizione: idx.descrizione,
+      Lotto: idx.lotto,
+      um: idx.um,
+      giacenza: idx.giacenza,
+      'Data scad.': idx.dataScad,
+    }).filter(([, value]) => value < 0).map(([key]) => key);
+    if (missingHeaders.length) {
+      showToast(`Intestazioni mancanti: ${missingHeaders.join(', ')}`, 'warning');
+      return;
+    }
+
+    const aggregated = new Map();
+    let sourceRows = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const codice = String(row[idx.articolo] || '').trim().toUpperCase();
+      const descrizione = String(row[idx.descrizione] || '').trim();
+      const lotto = String(row[idx.lotto] || '').trim();
+      const um = String(row[idx.um] || '').trim();
+      const quantita = parseExcelNumber(row[idx.giacenza]);
+      const scadenza = parseExcelDateValue(row[idx.dataScad]);
+      if (!codice && !lotto && !String(row[idx.giacenza] || '').trim()) continue;
+      sourceRows++;
+      if (!codice || !lotto || !Number.isFinite(quantita) || quantita <= 0) {
+        showToast(`Riga ${i + 1} non valida: servono Articolo, Lotto e giacenza > 0`, 'warning');
+        return;
+      }
+      const key = `${codice}__${lotto.toUpperCase()}`;
+      const current = aggregated.get(key) || { codice, descrizione, lotto, um, quantita: 0, scadenza: scadenza || null };
+      current.quantita += quantita;
+      if (!current.scadenza && scadenza) current.scadenza = scadenza;
+      aggregated.set(key, current);
+    }
+
+    if (!aggregated.size) {
+      showToast('Nessuna riga valida trovata nel file', 'warning');
+      return;
+    }
+
+    showToast(`📥 Importazione giacenze in corso: ${sourceRows} righe, ${aggregated.size} lotti...`);
+    const payload = { rows: [...aggregated.values()] };
+    const result = await api('POST', '/api/giacenze/import', payload);
+    await reloadGiacenze();
+    renderGiacenze();
+    renderGiacenzeAlerts();
+
+    const warnings = Array.isArray(result?.warnings) ? result.warnings : [];
+    if (warnings.length) {
+      showToast(`Import completato: ${result.imported_rows} lotti. ${warnings.length} avvisi descrizione/U.M.`, 'success');
+    } else {
+      showToast(`Import completato: ${result.imported_rows} lotti caricati`, 'success');
+    }
+  } catch (e) {
+    const missingCodes = Array.isArray(e?.payload?.missing_codes) ? e.payload.missing_codes : [];
+    if (missingCodes.length) {
+      showToast(`Codici non trovati: ${missingCodes.slice(0, 6).join(', ')}${missingCodes.length > 6 ? '…' : ''}`, 'warning');
+      return;
+    }
+    const excludedCodes = Array.isArray(e?.payload?.excluded_codes) ? e.payload.excluded_codes : [];
+    if (excludedCodes.length) {
+      showToast(`Prodotti esclusi dalla giacenza: ${excludedCodes.slice(0, 6).join(', ')}`, 'warning');
+      return;
+    }
+    const invalidRows = Array.isArray(e?.payload?.invalid_rows) ? e.payload.invalid_rows : [];
+    if (invalidRows.length) {
+      showToast(`File non valido: controlla le righe ${invalidRows.slice(0, 5).map(r => r.riga).join(', ')}`, 'warning');
+      return;
+    }
+    showToast(e.message || 'Errore import giacenze', 'warning');
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -6495,6 +6638,7 @@ function renderGiacenze() {
   const topBar = `
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
       <button class="btn btn-green btn-sm" onclick="openGiacenzaCarico(null)">+ Carico generico</button>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-giacenze-file')?.click()">📥 Importa Excel</button>
       <button class="btn btn-outline btn-sm" onclick="openMovimentiModal(null)">📋 Storico movimenti</button>
     </div>`;
 
