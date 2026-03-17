@@ -4348,6 +4348,13 @@ function getCamionOrderAssignmentStats(camion) {
   return counts;
 }
 
+function rerenderPianoLocal() {
+  const role = state.currentUser?.ruolo;
+  const isEditor = role === 'autista' || role === 'admin';
+  const isConferma = role === 'magazzino' || role === 'admin';
+  renderPianoBody(isEditor, isConferma);
+}
+
 function setPedanaTestoLibero(camionId, pedanaIdx, value) {
   const camion = state.camions.find(c => c.id === camionId);
   const pedana = camion?.pedane?.[pedanaIdx];
@@ -4373,7 +4380,7 @@ function removeOrdineFromPedana(camionId, pedanaIdx, orderId) {
   if (!pedana || !Number.isFinite(ordineId)) return;
   pedana.assegnazioni = (pedana.assegnazioni || []).filter(id => id !== ordineId);
   pedana.nota = serializePedanaNota(pedana);
-  renderPianoPage();
+  rerenderPianoLocal();
 }
 
 function onPianoOrderDragStart(event, orderId) {
@@ -4410,7 +4417,7 @@ function onPedanaDrop(event, camionId, pedanaIdx) {
   if (!Number.isFinite(orderId)) return;
   assignOrdineToPedana(camionId, pedanaIdx, orderId);
   pianoDraggingOrderId = null;
-  renderPianoPage();
+  rerenderPianoLocal();
 }
 
 function escapePianoHtml(value) {
