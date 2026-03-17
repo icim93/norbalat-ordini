@@ -3533,7 +3533,7 @@
     </div>
     <div class="modal-body">
       <div style="background:var(--accent2-light);border:1px solid #f5d7a0;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--accent2);">
-        <b>Carico predefinito per il tuo mezzo.</b> Modifica le quantità prima di confermare. L'ordine sarà registrato come "tentata vendita".
+        <b>Carico predefinito per il tuo mezzo.</b> Modifica le quantità prima di confermare. L'ordine sarà registrato come tentata vendita per il giorno successivo.
       </div>
       <div class="field">
         <label>Profilo TV</label>
@@ -3553,7 +3553,8 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
           <div style="flex:1;min-width:220px;">
             <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:4px;">Ricerca prodotto</label>
-            <input type="text" id="tentata-add-search" placeholder="Cerca codice o nome..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;" oninput="renderTentataProductPicker()">
+            <input type="text" id="tentata-add-search" placeholder="Cerca codice o nome..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;" oninput="setTentataModalSearch(this.value)">
+            <div id="tentata-add-results" style="margin-top:6px;max-height:140px;overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface);"></div>
           </div>
           <div style="flex:1;min-width:220px;">
             <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:4px;">Menu a tendina</label>
@@ -3824,6 +3825,8 @@ let state = {
   giriCalendario: [],
   activityLog: [],
   carichiTentataVendita: [],
+  tentataConfigSearch: {},
+  tentataModalSearch: '',
   devMetrics: null,
   devErrors: [],
   devMonitorTimer: null,
@@ -5596,6 +5599,9 @@ function renderTentataConfigList() {
     const templates = config.templates || [];
     const templateOptions = templates.map(tpl => `<option value="${tpl.id}" ${tpl.id === assignedTemplateId ? 'selected' : ''}>${escapeHtml(tpl.nome)}</option>`).join('');
     const templatesHtml = templates.map(tpl => {
+      const searchKey = `${a.id}:${tpl.id}`;
+      const searchValue = state.tentataConfigSearch?.[searchKey] || '';
+      const filteredProducts = getTentataFilteredProducts(a.id, tpl.id);
       const lineeHtml = (tpl.linee || []).map((l, li) => {
         const p = getProdotto(l.prodId);
         if (!p) return '';
@@ -5628,13 +5634,16 @@ function renderTentataConfigList() {
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
               <div style="flex:1;min-width:220px;">
                 <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:4px;">Ricerca prodotto</label>
-                <input type="text" id="tentata-search-${a.id}-${tpl.id}" placeholder="Cerca codice o nome..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;" oninput="renderTentataConfigList()">
+                <input type="text" id="tentata-search-${a.id}-${tpl.id}" value="${escapeHtml(searchValue)}" placeholder="Cerca codice o nome..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;" oninput="setTentataConfigSearch(${a.id},'${tpl.id}',this.value)">
+                <div style="margin-top:6px;max-height:140px;overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface);">
+                  ${filteredProducts.length ? filteredProducts.slice(0, 8).map(p => `<button type="button" style="display:block;width:100%;text-align:left;padding:8px 10px;border:none;background:transparent;border-bottom:1px solid var(--border);cursor:pointer;" onclick="addCaricoTentataLine(${a.id},'${tpl.id}',${p.id})">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</button>`).join('') : '<div style="padding:8px 10px;font-size:12px;color:var(--text3);">Nessun prodotto trovato</div>'}
+                </div>
               </div>
               <div style="flex:1;min-width:220px;">
                 <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:4px;">Menu a tendina</label>
                 <select onchange="addCaricoTentataLine(${a.id},'${tpl.id}',parseInt(this.value));this.value=''" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;">
                   <option value="">+ Aggiungi prodotto...</option>
-                  ${getTentataFilteredProducts(a.id, tpl.id).map(p => `<option value="${p.id}">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</option>`).join('')}
+                  ${filteredProducts.map(p => `<option value="${p.id}">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</option>`).join('')}
                 </select>
               </div>
               <button class="btn btn-outline btn-sm" onclick="addTentataProductFromSearch(${a.id},'${tpl.id}')">Aggiungi da ricerca</button>
@@ -5746,7 +5755,7 @@ function getTentataActiveTemplate(userId, dateStr) {
 
 function getTentataFilteredProducts(userId, templateId) {
   const template = getTentataTemplate(userId, templateId);
-  const q = (document.getElementById(`tentata-search-${userId}-${templateId}`)?.value || '').trim().toLowerCase();
+  const q = String(state.tentataConfigSearch?.[`${userId}:${templateId}`] || '').trim().toLowerCase();
   return state.prodotti
     .filter(p => {
       if (template.linee.some(line => line.prodId === p.id)) return false;
@@ -5755,6 +5764,12 @@ function getTentataFilteredProducts(userId, templateId) {
     })
     .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'it', { sensitivity: 'base' }))
     .slice(0, q ? 50 : 200);
+}
+
+function setTentataConfigSearch(userId, templateId, value) {
+  if (!state.tentataConfigSearch) state.tentataConfigSearch = {};
+  state.tentataConfigSearch[`${userId}:${templateId}`] = String(value || '');
+  renderTentataConfigList();
 }
 
 function addCaricoTentataLine(userId, templateId, prodId) {
@@ -5883,6 +5898,7 @@ function openTentataVendita() {
   document.getElementById('ac-tentata-input').value = '';
   document.getElementById('tentata-cliente').value = '';
   document.getElementById('tentata-note').value = '';
+  state.tentataModalSearch = '';
   document.getElementById('tentata-add-search').value = '';
   const sel = document.getElementById('tentata-template-select');
   if (sel) {
@@ -5910,7 +5926,7 @@ function renderTentataLines() {
 }
 
 function getTentataModalFilteredProducts() {
-  const q = (document.getElementById('tentata-add-search')?.value || '').trim().toLowerCase();
+  const q = String(state.tentataModalSearch || '').trim().toLowerCase();
   return state.prodotti
     .filter(p => !tentataLines.some(line => line.prodId === p.id))
     .filter(p => !q || p.codice.toLowerCase().includes(q) || p.nome.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q))
@@ -5918,11 +5934,22 @@ function getTentataModalFilteredProducts() {
     .slice(0, q ? 50 : 200);
 }
 
+function setTentataModalSearch(value) {
+  state.tentataModalSearch = String(value || '');
+  renderTentataProductPicker();
+}
+
 function renderTentataProductPicker() {
   const sel = document.getElementById('tentata-add-select');
+  const list = document.getElementById('tentata-add-results');
   if (!sel) return;
   const products = getTentataModalFilteredProducts();
   sel.innerHTML = `<option value="">+ Aggiungi prodotto...</option>${products.map(p => `<option value="${p.id}">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</option>`).join('')}`;
+  if (list) {
+    list.innerHTML = products.length
+      ? products.slice(0, 8).map(p => `<button type="button" style="display:block;width:100%;text-align:left;padding:8px 10px;border:none;background:transparent;border-bottom:1px solid var(--border);cursor:pointer;" onclick="addTentataLine(${p.id})">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</button>`).join('')
+      : '<div style="padding:8px 10px;font-size:12px;color:var(--text3);">Nessun prodotto trovato</div>';
+  }
 }
 
 function addTentataLine(prodId = null) {
@@ -5942,6 +5969,7 @@ function changeTentataTemplate(templateId) {
   const activeTemplate = getTentataTemplate(state.currentUser.id, templateId);
   tentataTemplateId = activeTemplate?.id || null;
   tentataLines = activeTemplate ? activeTemplate.linee.map(line => ({ ...line })) : [];
+  state.tentataModalSearch = '';
   document.getElementById('tentata-add-search').value = '';
   renderTentataLines();
   renderTentataProductPicker();
@@ -5955,12 +5983,16 @@ async function saveTentataVendita() {
   const cliente = getCliente(clienteId);
   if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
   if (!validLines.length) { showToast('Aggiungi almeno un prodotto', 'warning'); return; }
+  const dataOrdine = new Date();
+  dataOrdine.setDate(dataOrdine.getDate() + 1);
+  const dataTentata = dataOrdine.toISOString().substring(0, 10);
 
   const body = {
     cliente_id: clienteId,
     agente_id: state.currentUser.id,
-    data: today(),
-    stato: 'consegnato',
+    autista_di_giro: state.currentUser.id,
+    data: dataTentata,
+    stato: 'attesa',
     note: note ? `[TENTATA VENDITA] ${note}` : '[TENTATA VENDITA]',
     linee: validLines.map(l => ({ prodotto_id: l.prodId, qty: l.qty })),
   };
@@ -5968,7 +6000,7 @@ async function saveTentataVendita() {
     const saved = await api('POST', '/api/ordini', body);
     state.ordini.unshift(normalizeOrdine(saved));
     closeModal('modal-tentata');
-    showToast('Tentata vendita registrata!', 'success');
+    showToast(`Tentata vendita registrata per il ${formatDate(dataTentata)}!`, 'success');
     renderAutistaView();
   } catch(e) { showToast(e.message, 'warning'); }
 }

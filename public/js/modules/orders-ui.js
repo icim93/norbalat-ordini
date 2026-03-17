@@ -116,7 +116,10 @@ function renderDashboard() {
           <div class="card-header"><div class="card-title">Tentata vendita</div></div>
           <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
             <div style="margin-bottom:8px;">Prodotti nel carico predefinito: <b>${(caricoTentata?.linee || []).length}</b></div>
-            <button class="btn btn-outline btn-sm" onclick="goTo('tentata')">Apri tentata vendita</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-green btn-sm" onclick="openNewOrder()">+ Nuovo ordine</button>
+              <button class="btn btn-outline btn-sm" onclick="goTo('tentata')">Apri tentata vendita</button>
+            </div>
           </div>
         </div>`);
     }
@@ -132,8 +135,8 @@ function renderDashboard() {
   if (recentTitle) recentTitle.textContent = ruolo === 'autista' ? 'Le mie consegne di oggi' : (ruolo === 'magazzino' ? 'Ordini operativi di oggi' : 'Ultimi ordini');
   if (recentAction) {
     if (ruolo === 'autista') {
-      recentAction.textContent = 'Apri mio giro';
-      recentAction.onclick = () => goTo('autista');
+      recentAction.textContent = '+ Nuovo Ordine';
+      recentAction.onclick = () => openNewOrder();
     } else if (ruolo === 'magazzino') {
       recentAction.textContent = 'Apri preparazione';
       recentAction.onclick = () => goTo('magazzino');
