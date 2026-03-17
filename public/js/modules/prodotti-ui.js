@@ -12,6 +12,34 @@ function renderProdottiSchedaStatus(prodotto) {
   if (delBtn) delBtn.style.display = (hasScheda && state.editingId) ? '' : 'none';
 }
 
+function getProdottoBaseUnitLabel(um) {
+  const map = { kg: 'kg', lt: 'lt', pz: 'pz' };
+  return map[String(um || '').trim().toLowerCase()] || (um || 'unità');
+}
+
+function renderProdottoConversionSummary() {
+  const box = document.getElementById('pr-conversion-summary');
+  if (!box) return;
+  const um = document.getElementById('pr-um')?.value || 'kg';
+  const baseLabel = getProdottoBaseUnitLabel(um);
+  const cartoniAttivi = document.getElementById('pr-cartoni-attivi')?.value === '1';
+  const pedaneAttive = document.getElementById('pr-pedane-attive')?.value === '1';
+  const unitaPerCartone = Number(document.getElementById('pr-unita-per-cartone')?.value || 0);
+  const cartoniPerPedana = Number(document.getElementById('pr-cartoni-per-pedana')?.value || 0);
+  const pesoCartoneKg = Number(document.getElementById('pr-peso-cartone-kg')?.value || 0);
+  const parts = [];
+  if (cartoniAttivi && Number.isFinite(unitaPerCartone) && unitaPerCartone > 0) {
+    parts.push(`1 cartone = ${unitaPerCartone} ${baseLabel}`);
+  }
+  if (cartoniAttivi && pedaneAttive && Number.isFinite(unitaPerCartone) && unitaPerCartone > 0 && Number.isFinite(cartoniPerPedana) && cartoniPerPedana > 0) {
+    parts.push(`1 pedana = ${cartoniPerPedana} cartoni = ${(cartoniPerPedana * unitaPerCartone).toFixed(2).replace(/\.00$/, '')} ${baseLabel}`);
+  }
+  if (cartoniAttivi && Number.isFinite(pesoCartoneKg) && pesoCartoneKg > 0) {
+    parts.push(`peso logistico cartone = ${pesoCartoneKg} kg`);
+  }
+  box.textContent = parts.length ? parts.join(' · ') : 'Nessuna conversione impostata.';
+}
+
 function getProdottoDefaultsByCategoria(categoria) {
   if (categoria === 'CAGLIATA') {
     return { gestioneGiacenza: false, puntoRiordino: null };
@@ -70,7 +98,11 @@ function renderProdottiTable() {
       </td>
       <td><span class="badge badge-gray">${escapeHtml(p.categoria)}</span></td>
       <td style="font-family:'DM Mono',monospace;">${escapeHtml(p.um)}</td>
-      <td style="font-size:12px;color:var(--text2);">${escapeHtml(p.packaging || '')}</td>
+      <td style="font-size:12px;color:var(--text2);">
+        ${escapeHtml(p.packaging || '')}
+        ${(p.cartoniAttivi && p.unitaPerCartone) ? `<div style="margin-top:4px;">1 ct = ${escapeHtml(String(p.unitaPerCartone))} ${escapeHtml(p.um)}</div>` : ''}
+        ${(p.pedaneAttive && p.cartoniPerPedana && p.unitaPerCartone) ? `<div>1 pd = ${escapeHtml(String(p.cartoniPerPedana))} ct</div>` : ''}
+      </td>
       <td><span class="badge ${p.pesoFisso ? 'badge-blue' : 'badge-orange'}">${p.pesoFisso ? 'Fisso' : 'Variabile'}</span></td>
       <td><span class="badge ${p.gestioneGiacenza ? 'badge-green' : 'badge-gray'}">${p.gestioneGiacenza ? 'Gestito' : 'Escluso'}</span></td>
       <td style="font-family:'DM Mono',monospace;">${p.puntoRiordino !== null ? escapeHtml(String(p.puntoRiordino)) : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
@@ -91,13 +123,15 @@ function renderProdottiTable() {
 function openNewProdotto() {
   state.editingId = null;
   document.getElementById('modal-prodotto-title').textContent = 'Nuovo Prodotto';
-  ['pr-codice', 'pr-nome', 'pr-packaging', 'pr-note', 'pr-punto-riordino'].forEach(id => { document.getElementById(id).value = ''; });
+  ['pr-codice', 'pr-nome', 'pr-packaging', 'pr-note', 'pr-punto-riordino', 'pr-unita-per-cartone', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'].forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('pr-cat').value = 'FORMAGGI';
   document.getElementById('pr-um').value = 'kg';
   document.getElementById('pr-peso').value = 'F';
   document.getElementById('pr-gestione-giacenza').value = '1';
   document.getElementById('pr-assortimento-stato').value = 'attivo';
-  ['pr-gestione-giacenza', 'pr-punto-riordino', 'pr-um', 'pr-peso'].forEach(id => {
+  document.getElementById('pr-cartoni-attivi').value = '0';
+  document.getElementById('pr-pedane-attive').value = '0';
+  ['pr-gestione-giacenza', 'pr-punto-riordino', 'pr-um', 'pr-peso', 'pr-cartoni-attivi', 'pr-unita-per-cartone', 'pr-pedane-attive', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'].forEach(id => {
     const el = document.getElementById(id);
     if (el) delete el.dataset.touched;
   });
@@ -105,6 +139,7 @@ function openNewProdotto() {
   const fileInput = document.getElementById('pr-scheda-file');
   if (fileInput) fileInput.value = '';
   renderProdottiSchedaStatus(null);
+  renderProdottoConversionSummary();
   openModal('modal-prodotto');
 }
 
@@ -122,21 +157,33 @@ function openEditProdotto(id) {
   document.getElementById('pr-punto-riordino').value = p.puntoRiordino ?? '';
   document.getElementById('pr-assortimento-stato').value = p.assortimentoStato || 'attivo';
   document.getElementById('pr-packaging').value = p.packaging;
+  document.getElementById('pr-cartoni-attivi').value = p.cartoniAttivi ? '1' : '0';
+  document.getElementById('pr-unita-per-cartone').value = p.unitaPerCartone ?? '';
+  document.getElementById('pr-pedane-attive').value = p.pedaneAttive ? '1' : '0';
+  document.getElementById('pr-cartoni-per-pedana').value = p.cartoniPerPedana ?? '';
+  document.getElementById('pr-peso-cartone-kg').value = p.pesoCartoneKg ?? '';
   document.getElementById('pr-note').value = p.note || '';
   const fileInput = document.getElementById('pr-scheda-file');
   if (fileInput) fileInput.value = '';
   renderProdottiSchedaStatus(p);
+  renderProdottoConversionSummary();
   openModal('modal-prodotto');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   const catEl = document.getElementById('pr-cat');
-  const touchedIds = ['pr-gestione-giacenza', 'pr-punto-riordino', 'pr-um', 'pr-peso'];
+  const touchedIds = ['pr-gestione-giacenza', 'pr-punto-riordino', 'pr-um', 'pr-peso', 'pr-cartoni-attivi', 'pr-unita-per-cartone', 'pr-pedane-attive', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'];
   touchedIds.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('input', () => { el.dataset.touched = '1'; });
     el.addEventListener('change', () => { el.dataset.touched = '1'; });
+  });
+  ['pr-um', 'pr-cartoni-attivi', 'pr-unita-per-cartone', 'pr-pedane-attive', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', renderProdottoConversionSummary);
+    el.addEventListener('change', renderProdottoConversionSummary);
   });
   if (catEl) {
     catEl.addEventListener('change', () => applyProdottoCategoriaDefaults(false));
@@ -160,6 +207,20 @@ async function saveProdotto() {
     packaging: document.getElementById('pr-packaging').value.trim(),
     peso_fisso: (document.getElementById('pr-peso').value === 'F'),
     gestione_giacenza: document.getElementById('pr-gestione-giacenza').value === '1',
+    cartoni_attivi: document.getElementById('pr-cartoni-attivi').value === '1',
+    unita_per_cartone: (() => {
+      const raw = document.getElementById('pr-unita-per-cartone').value;
+      return raw === '' ? null : Number(raw);
+    })(),
+    pedane_attive: document.getElementById('pr-pedane-attive').value === '1',
+    cartoni_per_pedana: (() => {
+      const raw = document.getElementById('pr-cartoni-per-pedana').value;
+      return raw === '' ? null : Number(raw);
+    })(),
+    peso_cartone_kg: (() => {
+      const raw = document.getElementById('pr-peso-cartone-kg').value;
+      return raw === '' ? null : Number(raw);
+    })(),
     punto_riordino: (() => {
       const raw = document.getElementById('pr-punto-riordino').value;
       return raw === '' ? null : Number(raw);
@@ -169,6 +230,23 @@ async function saveProdotto() {
   };
   if (body.punto_riordino !== null && (!Number.isFinite(body.punto_riordino) || body.punto_riordino < 0)) {
     showToast('Punto di riordino non valido', 'warning');
+    return;
+  }
+  if (body.cartoni_attivi && (!Number.isFinite(body.unita_per_cartone) || body.unita_per_cartone <= 0)) {
+    showToast('Unità per cartone non valide', 'warning');
+    return;
+  }
+  if (!body.cartoni_attivi) {
+    body.unita_per_cartone = null;
+    body.pedane_attive = false;
+    body.cartoni_per_pedana = null;
+  }
+  if (body.pedane_attive && (!Number.isFinite(body.cartoni_per_pedana) || body.cartoni_per_pedana <= 0)) {
+    showToast('Cartoni per pedana non validi', 'warning');
+    return;
+  }
+  if (body.peso_cartone_kg !== null && (!Number.isFinite(body.peso_cartone_kg) || body.peso_cartone_kg <= 0)) {
+    showToast('Peso cartone logistico non valido', 'warning');
     return;
   }
   try {
@@ -182,6 +260,11 @@ async function saveProdotto() {
           id: state.editingId,
           peso_fisso: body.peso_fisso ? 1 : 0,
           gestione_giacenza: body.gestione_giacenza ? 1 : 0,
+          cartoni_attivi: body.cartoni_attivi ? 1 : 0,
+          unita_per_cartone: body.unita_per_cartone,
+          pedane_attive: body.pedane_attive ? 1 : 0,
+          cartoni_per_pedana: body.cartoni_per_pedana,
+          peso_cartone_kg: body.peso_cartone_kg,
           punto_riordino: body.punto_riordino,
           assortimento_stato: body.assortimento_stato,
           auto_anagrafato: 0,
@@ -199,6 +282,11 @@ async function saveProdotto() {
         id: saved.id,
         peso_fisso: body.peso_fisso ? 1 : 0,
         gestione_giacenza: body.gestione_giacenza ? 1 : 0,
+        cartoni_attivi: body.cartoni_attivi ? 1 : 0,
+        unita_per_cartone: body.unita_per_cartone,
+        pedane_attive: body.pedane_attive ? 1 : 0,
+        cartoni_per_pedana: body.cartoni_per_pedana,
+        peso_cartone_kg: body.peso_cartone_kg,
         punto_riordino: body.punto_riordino,
         assortimento_stato: body.assortimento_stato,
       }));

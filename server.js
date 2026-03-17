@@ -88,6 +88,70 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Helper query
 const q = (text, params) => pool.query(text, params);
 
+function normalizeOrdineUm(raw) {
+  const src = String(raw || '').trim().toLowerCase();
+  if (!src) return 'base';
+  if (['pedana', 'pedane'].includes(src)) return 'pedana';
+  if (['cartone', 'cartoni'].includes(src)) return 'cartoni';
+  if (['kg', 'chilogrammi', 'chilogrammo'].includes(src)) return 'kg';
+  if (['lt', 'litri', 'litro'].includes(src)) return 'lt';
+  if (['pz', 'pezzi', 'pezzo'].includes(src)) return 'pz';
+  return src;
+}
+
+function normalizeProdottoConversioni(raw = {}) {
+  const cartoniAttivi = !!raw.cartoni_attivi;
+  const pedaneAttive = !!raw.pedane_attive;
+  const unitaPerCartoneRaw = raw.unita_per_cartone;
+  const cartoniPerPedanaRaw = raw.cartoni_per_pedana;
+  const pesoCartoneKgRaw = raw.peso_cartone_kg;
+  const unitaPerCartone = cartoniAttivi && unitaPerCartoneRaw !== '' && unitaPerCartoneRaw !== null && unitaPerCartoneRaw !== undefined
+    ? Number(unitaPerCartoneRaw)
+    : null;
+  const cartoniPerPedana = pedaneAttive && cartoniPerPedanaRaw !== '' && cartoniPerPedanaRaw !== null && cartoniPerPedanaRaw !== undefined
+    ? Number(cartoniPerPedanaRaw)
+    : null;
+  const pesoCartoneKg = pesoCartoneKgRaw !== '' && pesoCartoneKgRaw !== null && pesoCartoneKgRaw !== undefined
+    ? Number(pesoCartoneKgRaw)
+    : null;
+  if (cartoniAttivi && (!Number.isFinite(unitaPerCartone) || unitaPerCartone <= 0)) {
+    throw new Error('Unità per cartone non valide');
+  }
+  if (!cartoniAttivi && pedaneAttive) {
+    throw new Error('Le pedane richiedono i cartoni attivi');
+  }
+  if (pedaneAttive && (!Number.isFinite(cartoniPerPedana) || cartoniPerPedana <= 0)) {
+    throw new Error('Cartoni per pedana non validi');
+  }
+  if (pesoCartoneKg !== null && (!Number.isFinite(pesoCartoneKg) || pesoCartoneKg <= 0)) {
+    throw new Error('Peso cartone logistico non valido');
+  }
+  return {
+    cartoniAttivi,
+    unitaPerCartone: cartoniAttivi ? unitaPerCartone : null,
+    pedaneAttive: cartoniAttivi ? pedaneAttive : false,
+    cartoniPerPedana: cartoniAttivi && pedaneAttive ? cartoniPerPedana : null,
+    pesoCartoneKg,
+  };
+}
+
+function calcolaQtyBaseRiga({ qty, unitaMisura, prodotto }) {
+  const qtyNum = Number(qty || 0);
+  if (!Number.isFinite(qtyNum) || qtyNum <= 0 || !prodotto) return null;
+  const umOrdine = normalizeOrdineUm(unitaMisura);
+  const umBase = normalizeOrdineUm(prodotto.um);
+  if (umOrdine === 'pedana') {
+    if (!prodotto.pedane_attive || !Number.isFinite(Number(prodotto.cartoni_per_pedana)) || !Number.isFinite(Number(prodotto.unita_per_cartone))) return null;
+    return qtyNum * Number(prodotto.cartoni_per_pedana) * Number(prodotto.unita_per_cartone);
+  }
+  if (umOrdine === 'cartoni') {
+    if (!prodotto.cartoni_attivi || !Number.isFinite(Number(prodotto.unita_per_cartone))) return null;
+    return qtyNum * Number(prodotto.unita_per_cartone);
+  }
+  if (umOrdine === umBase || umOrdine === 'base') return qtyNum;
+  return qtyNum;
+}
+
 async function ensureTentataVenditaCliente(client = null) {
   const db = client || pool;
   const existing = await db.query(
@@ -635,6 +699,11 @@ async function createSchema() {
       peso_fisso  BOOLEAN DEFAULT FALSE,
       gestione_giacenza BOOLEAN DEFAULT TRUE,
       punto_riordino NUMERIC,
+      cartoni_attivi BOOLEAN DEFAULT FALSE,
+      unita_per_cartone NUMERIC,
+      pedane_attive BOOLEAN DEFAULT FALSE,
+      cartoni_per_pedana NUMERIC,
+      peso_cartone_kg NUMERIC,
       assortimento_stato TEXT NOT NULL DEFAULT 'attivo',
       ultimo_riordino_qta NUMERIC,
       ultimo_riordino_at TIMESTAMPTZ,
@@ -673,6 +742,7 @@ async function createSchema() {
       prodotto_id     INTEGER REFERENCES prodotti(id),
       prodotto_nome_libero TEXT DEFAULT '',
       qty             NUMERIC NOT NULL DEFAULT 1,
+      qty_base        NUMERIC,
       prezzo_unitario NUMERIC,
       peso_effettivo  NUMERIC,
       is_pedana       BOOLEAN DEFAULT FALSE,
@@ -881,6 +951,7 @@ async function createSchema() {
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS is_pedana      BOOLEAN DEFAULT FALSE;
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS nota_riga      TEXT DEFAULT '';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS unita_misura   TEXT DEFAULT 'pezzi';
+    ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS qty_base       NUMERIC;
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS prezzo_unitario NUMERIC;
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS prodotto_nome_libero TEXT DEFAULT '';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS preparato      BOOLEAN DEFAULT FALSE;
@@ -921,6 +992,11 @@ async function createSchema() {
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_uploaded_at TIMESTAMPTZ;
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS gestione_giacenza BOOLEAN DEFAULT TRUE;
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS punto_riordino NUMERIC;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS cartoni_attivi BOOLEAN DEFAULT FALSE;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS unita_per_cartone NUMERIC;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS pedane_attive BOOLEAN DEFAULT FALSE;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS cartoni_per_pedana NUMERIC;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS peso_cartone_kg NUMERIC;
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS assortimento_stato TEXT NOT NULL DEFAULT 'attivo';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS ultimo_riordino_qta NUMERIC;
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS ultimo_riordino_at TIMESTAMPTZ;
@@ -2023,6 +2099,7 @@ app.get('/api/prodotti', authMiddleware, async (req, res) => {
     const { rows } = await q(`
       SELECT
         id, codice, nome, categoria, um, packaging, peso_fisso, gestione_giacenza, punto_riordino,
+        cartoni_attivi, unita_per_cartone, pedane_attive, cartoni_per_pedana, peso_cartone_kg,
         assortimento_stato, ultimo_riordino_qta, ultimo_riordino_at, ultimo_riordino_utente_id, ultimo_riordino_utente_nome,
         auto_anagrafato, auto_anagrafato_at, note,
         scheda_tecnica_nome, scheda_tecnica_mime, scheda_tecnica_uploaded_at,
@@ -2039,6 +2116,7 @@ app.post('/api/prodotti', authMiddleware, requireRole('admin'), async (req, res)
     const {
       codice, nome, categoria, um, packaging = '', peso_fisso = false,
       gestione_giacenza = true, punto_riordino = null, assortimento_stato = 'attivo', note = '',
+      cartoni_attivi = false, unita_per_cartone = null, pedane_attive = false, cartoni_per_pedana = null, peso_cartone_kg = null,
     } = req.body;
     if (!codice||!nome||!categoria||!um) return res.status(400).json({ error: 'Campi mancanti' });
     const puntoRiordino = punto_riordino === '' || punto_riordino === null || punto_riordino === undefined
@@ -2050,12 +2128,18 @@ app.post('/api/prodotti', authMiddleware, requireRole('admin'), async (req, res)
     const assortimentoStato = ['attivo', 'fuori_assortimento', 'su_ordinazione'].includes(String(assortimento_stato || '').trim())
       ? String(assortimento_stato).trim()
       : 'attivo';
+    let conv;
+    try {
+      conv = normalizeProdottoConversioni({ cartoni_attivi, unita_per_cartone, pedane_attive, cartoni_per_pedana, peso_cartone_kg });
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
     const dup = await q('SELECT id FROM prodotti WHERE codice=$1', [codice.toUpperCase()]);
     if (dup.rows.length) return res.status(409).json({ error: 'Codice già esistente' });
     const r = await q(
-      `INSERT INTO prodotti (codice,nome,categoria,um,packaging,peso_fisso,gestione_giacenza,punto_riordino,assortimento_stato,note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, assortimentoStato, note]
+      `INSERT INTO prodotti (codice,nome,categoria,um,packaging,peso_fisso,gestione_giacenza,punto_riordino,cartoni_attivi,unita_per_cartone,pedane_attive,cartoni_per_pedana,peso_cartone_kg,assortimento_stato,note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
+      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, conv.cartoniAttivi, conv.unitaPerCartone, conv.pedaneAttive, conv.cartoniPerPedana, conv.pesoCartoneKg, assortimentoStato, note]
     );
     res.json({ id: r.rows[0].id });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -2067,6 +2151,7 @@ app.put('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req, r
     const {
       codice, nome, categoria, um, packaging = '', peso_fisso = false,
       gestione_giacenza = true, punto_riordino = null, assortimento_stato = 'attivo', note = '',
+      cartoni_attivi = false, unita_per_cartone = null, pedane_attive = false, cartoni_per_pedana = null, peso_cartone_kg = null,
     } = req.body;
     if (!codice||!nome) return res.status(400).json({ error: 'Campi mancanti' });
     const puntoRiordino = punto_riordino === '' || punto_riordino === null || punto_riordino === undefined
@@ -2078,13 +2163,19 @@ app.put('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req, r
     const assortimentoStato = ['attivo', 'fuori_assortimento', 'su_ordinazione'].includes(String(assortimento_stato || '').trim())
       ? String(assortimento_stato).trim()
       : 'attivo';
+    let conv;
+    try {
+      conv = normalizeProdottoConversioni({ cartoni_attivi, unita_per_cartone, pedane_attive, cartoni_per_pedana, peso_cartone_kg });
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
     const dup = await q('SELECT id FROM prodotti WHERE codice=$1 AND id!=$2', [codice.toUpperCase(), id]);
     if (dup.rows.length) return res.status(409).json({ error: 'Codice già in uso' });
     await q(
       `UPDATE prodotti
        SET codice=$1,nome=$2,categoria=$3,um=$4,packaging=$5,peso_fisso=$6,
-           gestione_giacenza=$7,punto_riordino=$8,assortimento_stato=$9,auto_anagrafato=FALSE,auto_anagrafato_at=NULL,note=$10 WHERE id=$11`,
-      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, assortimentoStato, note, id]
+           gestione_giacenza=$7,punto_riordino=$8,cartoni_attivi=$9,unita_per_cartone=$10,pedane_attive=$11,cartoni_per_pedana=$12,peso_cartone_kg=$13,assortimento_stato=$14,auto_anagrafato=FALSE,auto_anagrafato_at=NULL,note=$15 WHERE id=$16`,
+      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, conv.cartoniAttivi, conv.unitaPerCartone, conv.pedaneAttive, conv.cartoniPerPedana, conv.pesoCartoneKg, assortimentoStato, note, id]
     );
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -2706,7 +2797,7 @@ async function getOrdineCompleto(id) {
   if (!rows.length) return null;
   const ordine = rows[0];
   const linee = await q(`
-    SELECT ol.*, p.codice, p.nome as prodotto_nome, p.um, p.packaging
+    SELECT ol.*, p.codice, p.nome as prodotto_nome, p.um, p.packaging, p.cartoni_attivi, p.unita_per_cartone, p.pedane_attive, p.cartoni_per_pedana, p.peso_cartone_kg
     FROM ordine_linee ol LEFT JOIN prodotti p ON ol.prodotto_id = p.id
     WHERE ol.ordine_id = $1 ORDER BY ol.id`, [id]);
   ordine.linee = linee.rows;
@@ -2750,9 +2841,9 @@ app.get('/api/ordini', authMiddleware, async (req, res) => {
     if (rows.length) {
       const ids = rows.map(r => r.id);
       const { rows: linee } = await q(
-        `SELECT ol.id, ol.ordine_id, ol.prodotto_id, ol.prodotto_nome_libero, ol.qty, ol.peso_effettivo,
+        `SELECT ol.id, ol.ordine_id, ol.prodotto_id, ol.prodotto_nome_libero, ol.qty, ol.qty_base, ol.peso_effettivo,
                 ol.prezzo_unitario, ol.is_pedana, ol.nota_riga, ol.unita_misura, ol.preparato, ol.lotto,
-                p.codice, p.nome as prodotto_nome, p.um, p.packaging
+                p.codice, p.nome as prodotto_nome, p.um, p.packaging, p.cartoni_attivi, p.unita_per_cartone, p.pedane_attive, p.cartoni_per_pedana, p.peso_cartone_kg
          FROM ordine_linee ol LEFT JOIN prodotti p ON ol.prodotto_id = p.id
          WHERE ol.ordine_id = ANY($1) ORDER BY ol.ordine_id, ol.id`, [ids]);
       const lineeMap = {};
@@ -2798,6 +2889,9 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
       if (!prodottoId && !prodottoNomeLibero) {
         throw new Error('Ogni riga ordine deve avere un prodotto o un nome libero');
       }
+      const prodottoRow = prodottoId
+        ? (await client.query('SELECT id, um, cartoni_attivi, unita_per_cartone, pedane_attive, cartoni_per_pedana FROM prodotti WHERE id=$1 LIMIT 1', [prodottoId])).rows[0]
+        : null;
       const prezzoUnitario = await resolveOrderLinePrice({
         prodottoId,
         clienteId: cliente_id,
@@ -2805,10 +2899,13 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
         manualPrice: l.prezzo_unitario,
         client,
       });
+      const qtyBase = prodottoRow
+        ? calcolaQtyBaseRiga({ qty: l.qty, unitaMisura: l.unita_misura || 'pezzi', prodotto: prodottoRow })
+        : null;
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [oid, prodottoId, prodottoNomeLibero, l.qty, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi', !!l.preparato, String(l.lotto || '').trim()]
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [oid, prodottoId, prodottoNomeLibero, l.qty, qtyBase, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi', !!l.preparato, String(l.lotto || '').trim()]
       );
     }
     await client.query('COMMIT');
@@ -2844,6 +2941,9 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
       if (!prodottoId && !prodottoNomeLibero) {
         throw new Error('Ogni riga ordine deve avere un prodotto o un nome libero');
       }
+      const prodottoRow = prodottoId
+        ? (await client.query('SELECT id, um, cartoni_attivi, unita_per_cartone, pedane_attive, cartoni_per_pedana FROM prodotti WHERE id=$1 LIMIT 1', [prodottoId])).rows[0]
+        : null;
       const prezzoUnitario = await resolveOrderLinePrice({
         prodottoId,
         clienteId: cliente_id,
@@ -2851,10 +2951,13 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
         manualPrice: l.prezzo_unitario,
         client,
       });
+      const qtyBase = prodottoRow
+        ? calcolaQtyBaseRiga({ qty: l.qty, unitaMisura: l.unita_misura || 'pezzi', prodotto: prodottoRow })
+        : null;
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [id, prodottoId, prodottoNomeLibero, l.qty, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi', !!l.preparato, String(l.lotto || '').trim()]
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [id, prodottoId, prodottoNomeLibero, l.qty, qtyBase, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi', !!l.preparato, String(l.lotto || '').trim()]
       );
     }
     await client.query('COMMIT');
@@ -2924,7 +3027,7 @@ app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, r
     if (payload.preparato === true) {
       // Fetch updated line
       const { rows: updLine } = await client.query(
-        'SELECT prodotto_id, lotto, peso_effettivo FROM ordine_linee WHERE id=$1',
+        'SELECT ol.prodotto_id, ol.lotto, ol.peso_effettivo, ol.qty, ol.qty_base, ol.unita_misura, p.um, p.cartoni_attivi, p.unita_per_cartone, p.pedane_attive, p.cartoni_per_pedana FROM ordine_linee ol LEFT JOIN prodotti p ON p.id = ol.prodotto_id WHERE ol.id=$1',
         [lineaId]
       );
       if (updLine.length && updLine[0].prodotto_id) {
@@ -2940,9 +3043,13 @@ app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, r
           } else {
             const giac = gRows[0];
             const peso = Number(peso_effettivo);
-            if (Number.isFinite(peso) && peso > 0) {
+            const qtyBase = updLine[0].qty_base !== null && updLine[0].qty_base !== undefined
+              ? Number(updLine[0].qty_base)
+              : calcolaQtyBaseRiga({ qty: updLine[0].qty, unitaMisura: updLine[0].unita_misura, prodotto: updLine[0] });
+            const scaricoQta = Number.isFinite(peso) && peso > 0 ? peso : qtyBase;
+            if (Number.isFinite(scaricoQta) && scaricoQta > 0) {
               await client.query('BEGIN');
-              const nuovaQty = Number(giac.quantita) - peso;
+              const nuovaQty = Number(giac.quantita) - scaricoQta;
               await client.query(
                 'UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2',
                 [nuovaQty, giac.id]
@@ -2951,7 +3058,7 @@ app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, r
                 `INSERT INTO movimenti_giacenza
                   (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,ordine_id,ordine_linea_id,utente_id,utente_nome)
                  VALUES ($1,$2,$3,'scarico_ordine',$4,$5,$6,$7,$8,$9,$10)`,
-                [giac.id, prodotto_id, lottoVal, -peso, Number(giac.quantita), nuovaQty, ordineId, lineaId, req.user.id || null, utenteName]
+                [giac.id, prodotto_id, lottoVal, -scaricoQta, Number(giac.quantita), nuovaQty, ordineId, lineaId, req.user.id || null, utenteName]
               );
               await client.query('COMMIT');
             }
@@ -3023,13 +3130,15 @@ app.post('/api/ordini/:ordineId/linee/:lineId/split', authMiddleware, requireRol
       await client.query('ROLLBACK');
       return res.status(400).json({ error: `qty_split (${qtySplit}) deve essere < qty originale (${origQty})` });
     }
-    await client.query('UPDATE ordine_linee SET qty=$1 WHERE id=$2', [origQty - qtySplit, lineId]);
+    const origQtyBase = line.qty_base !== null && line.qty_base !== undefined ? Number(line.qty_base) : null;
+    const qtyBasePerUnit = Number.isFinite(origQtyBase) && origQty > 0 ? origQtyBase / origQty : null;
+    await client.query('UPDATE ordine_linee SET qty=$1, qty_base=$2 WHERE id=$3', [origQty - qtySplit, Number.isFinite(qtyBasePerUnit) ? (origQty - qtySplit) * qtyBasePerUnit : null, lineId]);
     const ins = await client.query(
       `INSERT INTO ordine_linee
-         (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE,'') RETURNING id`,
+         (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,'') RETURNING id`,
       [ordineId, line.prodotto_id, line.prodotto_nome_libero || '', qtySplit,
-       line.prezzo_unitario, !!line.is_pedana, line.nota_riga || '', line.unita_misura || 'pezzi']
+       Number.isFinite(qtyBasePerUnit) ? qtySplit * qtyBasePerUnit : null, line.prezzo_unitario, !!line.is_pedana, line.nota_riga || '', line.unita_misura || 'pezzi']
     );
     await client.query('COMMIT');
     res.json({ ok: true, new_linea_id: ins.rows[0].id });
@@ -3057,10 +3166,10 @@ app.post('/api/ordini/:ordineId/auto-espandi-pedane', authMiddleware, requireRol
       for (let i = 1; i < qty; i++) {
         await client.query(
           `INSERT INTO ordine_linee
-             (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
-           VALUES ($1,$2,$3,1,$4,TRUE,$5,$6,FALSE,'')`,
+             (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+           VALUES ($1,$2,$3,1,$4,$5,TRUE,$6,$7,FALSE,'')`,
           [ordineId, line.prodotto_id, line.prodotto_nome_libero || '',
-           line.prezzo_unitario, line.nota_riga || '', line.unita_misura || 'pezzi']
+           line.qty_base !== null && line.qty_base !== undefined && qty > 0 ? Number(line.qty_base) / qty : null, line.prezzo_unitario, line.nota_riga || '', line.unita_misura || 'pezzi']
         );
         nuoveLinee++;
       }
@@ -3095,13 +3204,14 @@ async function createResidualOrderFromMissingLines({ ordine, missingLinee, reqUs
   const newOrdineId = ins.rows[0].id;
   for (const l of missingLinee) {
     await client.query(
-      `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,peso_effettivo,is_pedana,nota_riga,unita_misura,preparato,lotto)
-       VALUES ($1,$2,$3,$4,$5,NULL,$6,$7,$8,FALSE,$9)`,
+      `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,peso_effettivo,is_pedana,nota_riga,unita_misura,preparato,lotto)
+       VALUES ($1,$2,$3,$4,$5,$6,NULL,$7,$8,$9,FALSE,$10)`,
       [
         newOrdineId,
         l.prodotto_id || null,
         l.prodotto_nome_libero || '',
         l.qty,
+        l.qty_base ?? null,
         l.prezzo_unitario,
         !!l.is_pedana,
         l.nota_riga || '',
@@ -3350,9 +3460,9 @@ app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission(
     const newOrdineId = ins.rows[0].id;
     for (const r of residuali) {
       await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,FALSE,$9)`,
-        [newOrdineId, r.prodotto_id, r.prodotto_nome_libero || '', r.qty, r.prezzo_unitario, r.is_pedana, r.nota_riga, r.unita_misura, r.lotto || '']
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10)`,
+        [newOrdineId, r.prodotto_id, r.prodotto_nome_libero || '', r.qty, r.qty_base ?? null, r.prezzo_unitario, r.is_pedana, r.nota_riga, r.unita_misura, r.lotto || '']
       );
     }
 

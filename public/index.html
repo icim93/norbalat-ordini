@@ -3178,6 +3178,36 @@
           <label>Packaging</label>
           <input type="text" id="pr-packaging" placeholder="es. 1pz=1,5kg circa">
         </div>
+        <div class="field">
+          <label>Cartoni attivi</label>
+          <select id="pr-cartoni-attivi">
+            <option value="0">No</option>
+            <option value="1">Sì</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>1 cartone = quantità base</label>
+          <input type="number" id="pr-unita-per-cartone" min="0" step="0.01" placeholder="es. 10">
+        </div>
+        <div class="field">
+          <label>Pedane attive</label>
+          <select id="pr-pedane-attive">
+            <option value="0">No</option>
+            <option value="1">Sì</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>1 pedana = cartoni</label>
+          <input type="number" id="pr-cartoni-per-pedana" min="0" step="1" placeholder="es. 60">
+        </div>
+        <div class="field">
+          <label>Peso cartone logistico kg</label>
+          <input type="number" id="pr-peso-cartone-kg" min="0" step="0.01" placeholder="opzionale">
+        </div>
+        <div class="field form-full">
+          <label>Riepilogo conversione</label>
+          <div id="pr-conversion-summary" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);font-size:12px;color:var(--text2);">Nessuna conversione impostata.</div>
+        </div>
         <div class="field form-full">
           <label>📌 Note fisse prodotto</label>
           <textarea id="pr-note" placeholder="Es: Conservare a 4°C, prodotto stagionale…" style="min-height:60px;"></textarea>
@@ -4963,6 +4993,15 @@ function renderMagazzino() {
         const lottoMancante = !l.lotto || !String(l.lotto).trim();
         const lottoBorderStyle = lottoMancante ? 'border-color:#e74c3c;' : 'border-color:var(--border);';
         const umLabel = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty);
+        const baseQtyInfo = (l.qtyBase !== null && l.qtyBase !== undefined && typeof getProductOrderUnits === 'function')
+          ? (() => {
+              const baseUm = String(p.um || '').toLowerCase();
+              const currentUm = String(l.unitaMisura || '').toLowerCase();
+              const sameBase = (currentUm === 'kg' && baseUm === 'kg') || (currentUm === 'litri' && baseUm === 'lt') || (currentUm === 'pezzi' && baseUm === 'pz');
+              if (sameBase) return '';
+              return `${Number(l.qtyBase).toFixed(2).replace(/\.00$/, '')} ${p.um || ''}`;
+            })()
+          : '';
 
         // Indici per navigazione Enter
         const navPeso = !p.pesoFisso ? _navIdx++ : -1;
@@ -5016,7 +5055,7 @@ function renderMagazzino() {
           <input type="checkbox" data-line-cb="${o.id}-${li}" ${checked}
             onchange="toggleLineaPreparata(${o.id},${li},this.checked)"
             style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
-          <span data-line-nome="${o.id}-${li}" style="flex:1;font-size:13px;${barratoStyle}">${l.qty} ${umLabel} — [${p.codice}] ${p.nome}</span>
+          <span data-line-nome="${o.id}-${li}" style="flex:1;font-size:13px;${barratoStyle}">${l.qty} ${umLabel} — [${p.codice}] ${p.nome}${baseQtyInfo ? `<div style="font-size:11px;color:var(--accent);text-decoration:none;">= ${baseQtyInfo}</div>` : ''}</span>
           ${pesoInput}
           ${lottoEl}
           ${splitBtn}
@@ -6580,7 +6619,7 @@ function catRenderCarrello() {
   }
   list.innerHTML = items.map(([prodId, v]) => {
     const p = getProdotto(parseInt(prodId));
-    const umOpts = ['Pezzi','Cartoni','Litri','Kg','Pedana'];
+    const umOpts = typeof getProductOrderUnits === 'function' ? getProductOrderUnits(p) : ['Pezzi'];
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
       <div style="flex:1;min-width:0;">
         <div style="font-size:13px;font-weight:600;">${p.nome}</div>
@@ -6606,8 +6645,9 @@ function catCardHtml(p) {
   const item = catalogoCart[p.id];
   const inCart = !!item;
   const qty = item ? item.qty : 1;
-  const um = item ? item.um : getDefaultUM(p);
-  const umOpts = ['Pezzi','Cartoni','Litri','Kg','Pedana'];
+  const umOpts = typeof getProductOrderUnits === 'function' ? getProductOrderUnits(p) : ['Pezzi'];
+  const umRaw = item ? item.um : getDefaultUM(p);
+  const um = umOpts.includes(umRaw) ? umRaw : (umOpts[0] || 'Pezzi');
 
   return `<div class="cat-card ${inCart ? 'in-cart' : ''}" id="cat-card-${p.id}">
     <div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);margin-bottom:2px;">[${p.codice}]</div>

@@ -351,11 +351,10 @@ document.addEventListener('click', function(e) {
 
 function getDefaultUM(prodotto) {
   if (!prodotto) return 'Pezzi';
-  const codice = String(prodotto.codice || '').toUpperCase();
-  const nome = String(prodotto.nome || '').toUpperCase();
-  const cat = (prodotto.categoria || '').toUpperCase();
-  if (codice.includes('BUR125') || codice.includes('BUR250') || nome.includes('BURRO 125') || nome.includes('BURRO 250')) return 'Cartoni';
-  if (cat.includes('PANNA')) return 'Cartoni';
+  if (prodotto.cartoniAttivi) return 'Cartoni';
+  const base = String(prodotto.um || '').toLowerCase();
+  if (base === 'kg') return 'Kg';
+  if (base === 'lt') return 'Litri';
   return 'Pezzi';
 }
 
@@ -369,6 +368,47 @@ function umPlurale(um, qty) {
     'Pedana':  q === 1 ? 'Pedana'   : 'Pedane',
   };
   return map[um] || um;
+}
+
+function getProductOrderUnits(prodotto) {
+  if (!prodotto) return ['Pezzi'];
+  const units = [];
+  const base = String(prodotto.um || '').toLowerCase();
+  if (base === 'kg') units.push('Kg');
+  else if (base === 'lt') units.push('Litri');
+  else units.push('Pezzi');
+  if (prodotto.cartoniAttivi && Number.isFinite(Number(prodotto.unitaPerCartone)) && Number(prodotto.unitaPerCartone) > 0) units.push('Cartoni');
+  if (prodotto.pedaneAttive && Number.isFinite(Number(prodotto.cartoniPerPedana)) && Number(prodotto.cartoniPerPedana) > 0 && units.includes('Cartoni')) units.push('Pedana');
+  return units;
+}
+
+function getLineBaseQty(line) {
+  if (!line?.prodId) return null;
+  const p = getProdotto(line.prodId);
+  if (!p?.id) return null;
+  const qty = Number(line.qty || 0);
+  if (!Number.isFinite(qty) || qty <= 0) return null;
+  const um = String(line.unitaMisura || getDefaultUM(p)).trim().toLowerCase();
+  if (um === 'pedana') {
+    if (!p.pedaneAttive || !Number.isFinite(Number(p.cartoniPerPedana)) || !Number.isFinite(Number(p.unitaPerCartone))) return null;
+    return qty * Number(p.cartoniPerPedana) * Number(p.unitaPerCartone);
+  }
+  if (um === 'cartoni') {
+    if (!p.cartoniAttivi || !Number.isFinite(Number(p.unitaPerCartone))) return null;
+    return qty * Number(p.unitaPerCartone);
+  }
+  return qty;
+}
+
+function getLineBaseQtyLabel(line) {
+  const baseQty = getLineBaseQty(line);
+  if (!Number.isFinite(baseQty) || !line?.prodId) return '';
+  const p = getProdotto(line.prodId);
+  const baseUm = p?.um || '';
+  const current = String(line.unitaMisura || '').trim().toLowerCase();
+  const currentIsBase = (current === 'kg' && baseUm === 'kg') || (current === 'litri' && baseUm === 'lt') || (current === 'pezzi' && baseUm === 'pz');
+  if (currentIsBase) return '';
+  return `${Number(baseQty).toFixed(2).replace(/\.00$/, '')} ${baseUm}`;
 }
 
 function getLastPriceForClienteProd(clienteId, prodId) {
@@ -476,6 +516,24 @@ function getKgPerSelectedUnita(prodotto, unitaMisura) {
   const um = String(unitaMisura || '').trim().toLowerCase();
   if (um === 'kg') return 1;
   if (um === 'litri') return 1;
+  if (um === 'cartoni' && String(prodotto?.um || '').toLowerCase() === 'kg' && Number.isFinite(Number(prodotto?.unitaPerCartone)) && Number(prodotto.unitaPerCartone) > 0) {
+    return Number(prodotto.unitaPerCartone);
+  }
+  if (um === 'pedana' && String(prodotto?.um || '').toLowerCase() === 'kg' && Number.isFinite(Number(prodotto?.unitaPerCartone)) && Number(prodotto.unitaPerCartone) > 0 && Number.isFinite(Number(prodotto?.cartoniPerPedana)) && Number(prodotto.cartoniPerPedana) > 0) {
+    return Number(prodotto.unitaPerCartone) * Number(prodotto.cartoniPerPedana);
+  }
+  if (um === 'cartoni' && String(prodotto?.um || '').toLowerCase() === 'lt' && Number.isFinite(Number(prodotto?.unitaPerCartone)) && Number(prodotto.unitaPerCartone) > 0) {
+    return Number(prodotto.unitaPerCartone);
+  }
+  if (um === 'pedana' && String(prodotto?.um || '').toLowerCase() === 'lt' && Number.isFinite(Number(prodotto?.unitaPerCartone)) && Number(prodotto.unitaPerCartone) > 0 && Number.isFinite(Number(prodotto?.cartoniPerPedana)) && Number(prodotto.cartoniPerPedana) > 0) {
+    return Number(prodotto.unitaPerCartone) * Number(prodotto.cartoniPerPedana);
+  }
+  if (um === 'cartoni' && Number.isFinite(Number(prodotto?.pesoCartoneKg)) && Number(prodotto.pesoCartoneKg) > 0) {
+    return Number(prodotto.pesoCartoneKg);
+  }
+  if (um === 'pedana' && Number.isFinite(Number(prodotto?.pesoCartoneKg)) && Number(prodotto.pesoCartoneKg) > 0 && Number.isFinite(Number(prodotto?.cartoniPerPedana)) && Number(prodotto.cartoniPerPedana) > 0) {
+    return Number(prodotto.pesoCartoneKg) * Number(prodotto.cartoniPerPedana);
+  }
 
   const kgPerPezzo = parseKgPerUnitaFromPackaging(prodotto?.packaging || '') || parseKgFromProductLabel(prodotto);
   if (um === 'pezzi') return kgPerPezzo;
@@ -531,8 +589,9 @@ function renderOrderLines() {
   let righeConPrezzo = 0;
   container.innerHTML = orderLines.map((l, i) => {
     const p = l.prodId ? getProdotto(l.prodId) : null;
-    const umOpts = ['Pezzi','Cartoni','Litri','Kg','Pedana'];
-    const curUM = l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi');
+    const umOpts = p ? getProductOrderUnits(p) : ['Pezzi'];
+    const curUMRaw = l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi');
+    const curUM = umOpts.includes(curUMRaw) ? curUMRaw : (umOpts[0] || 'Pezzi');
     const isPedana = curUM === 'Pedana';
     const showPesoApprox = !!l.showPesoApprox;
     const showAdvanced = !!l.showAdvanced;
@@ -596,6 +655,7 @@ function renderOrderLines() {
         </div>
       </div>
       ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">${p.packaging}${isPedana ? ' - PEDANA INTERA' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">PEDANA INTERA</div>` : '')}
+      ${getLineBaseQtyLabel(l) ? `<div style="font-size:11px;color:var(--accent);padding-left:2px;">Conversione: <b>${Number(l.qty || 0).toFixed(2).replace(/\.00$/, '')} ${umPlurale(curUM, l.qty || 1)}</b> = <b>${getLineBaseQtyLabel(l)}</b></div>` : ''}
       ${approxKg !== null ? `<div style="font-size:11px;color:var(--accent);padding-left:2px;">Stima peso: <b>${approxKg.toFixed(2)} kg</b></div>` : ''}
       ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">${p.note}</div>` : ''}
       ${p ? `<div style="font-size:11px;color:var(--text2);padding-left:2px;">Listino: ${prezzoListino !== null ? eur(prezzoListino) : 'n.d.'}${subtot !== null ? ` - Subtotale: <b>${eur(subtot)}</b>` : ''}</div>` : ''}
@@ -624,8 +684,9 @@ function renderOrderLines() {
   let righeConPrezzo = 0;
   container.innerHTML = orderLines.map((l, i) => {
     const p = l.prodId ? getProdotto(l.prodId) : null;
-    const umOpts = ['Pezzi', 'Cartoni', 'Litri', 'Kg', 'Pedana'];
-    const curUM = l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi');
+    const umOpts = p ? getProductOrderUnits(p) : ['Pezzi'];
+    const curUMRaw = l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi');
+    const curUM = umOpts.includes(curUMRaw) ? curUMRaw : (umOpts[0] || 'Pezzi');
     const isPedana = curUM === 'Pedana';
     const showPesoApprox = !!l.showPesoApprox;
     const showAdvanced = !!l.showAdvanced;
@@ -697,6 +758,7 @@ function renderOrderLines() {
           style="font-size:12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);width:100%;box-sizing:border-box;">
       </div>` : ''}
       ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">${p.packaging}${isPedana ? ' - PEDANA INTERA' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">PEDANA INTERA</div>` : '')}
+      ${getLineBaseQtyLabel(l) ? `<div style="font-size:11px;color:var(--accent);padding-left:2px;">Conversione: <b>${Number(l.qty || 0).toFixed(2).replace(/\.00$/, '')} ${umPlurale(curUM, l.qty || 1)}</b> = <b>${getLineBaseQtyLabel(l)}</b></div>` : ''}
       ${approxKg !== null ? `<div style="font-size:11px;color:var(--accent);padding-left:2px;">Stima peso: <b>${approxKg.toFixed(2)} kg</b></div>` : ''}
       ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">${p.note}</div>` : ''}
       ${p ? `<div style="font-size:11px;color:var(--text2);padding-left:2px;">Listino: ${prezzoListino !== null ? eur(prezzoListino) : 'n.d.'}${subtot !== null ? ` - Subtotale: <b>${eur(subtot)}</b>` : ''}</div>` : ''}
@@ -1237,4 +1299,3 @@ async function consegnaParziale(id) {
 // ═══════════════════════════════════════════════
 // AUTISTA VIEW
 // ═══════════════════════════════════════════════
-
