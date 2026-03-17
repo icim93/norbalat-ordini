@@ -5619,21 +5619,13 @@ function renderTentataConfigList() {
           <div style="padding:0 16px 14px;">
             ${lineeHtml || '<div style="font-size:13px;color:var(--text3);margin-bottom:8px;">Nessun prodotto nel profilo</div>'}
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
-              <div style="flex:1;min-width:220px;">
+              <div style="flex:1;min-width:260px;">
                 <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:4px;">Ricerca prodotto</label>
                 <input type="text" id="tentata-search-${a.id}-${tpl.id}" value="${escapeHtml(searchValue)}" placeholder="Cerca codice o nome..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;" oninput="setTentataConfigSearch(${a.id},'${tpl.id}',this.value)">
                 <div style="margin-top:6px;max-height:140px;overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface);">
                   ${filteredProducts.length ? filteredProducts.slice(0, 8).map(p => `<button type="button" style="display:block;width:100%;text-align:left;padding:8px 10px;border:none;background:transparent;border-bottom:1px solid var(--border);cursor:pointer;" onclick="addCaricoTentataLine(${a.id},'${tpl.id}',${p.id})">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</button>`).join('') : '<div style="padding:8px 10px;font-size:12px;color:var(--text3);">Nessun prodotto trovato</div>'}
                 </div>
               </div>
-              <div style="flex:1;min-width:220px;">
-                <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:4px;">Menu a tendina</label>
-                <select onchange="addCaricoTentataLine(${a.id},'${tpl.id}',parseInt(this.value));this.value=''" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;">
-                  <option value="">+ Aggiungi prodotto...</option>
-                  ${filteredProducts.map(p => `<option value="${p.id}">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</option>`).join('')}
-                </select>
-              </div>
-              <button class="btn btn-outline btn-sm" onclick="addTentataProductFromSearch(${a.id},'${tpl.id}')">Aggiungi da ricerca</button>
             </div>
           </div>
         </div>`;
@@ -5766,15 +5758,6 @@ function addCaricoTentataLine(userId, templateId, prodId) {
   if (existing) existing.qty++;
   else template.linee.push({ prodId, qty: 1 });
   renderTentataConfigList();
-}
-
-function addTentataProductFromSearch(userId, templateId) {
-  const first = getTentataFilteredProducts(userId, templateId)[0];
-  if (!first) {
-    showToast('Nessun prodotto trovato con questa ricerca', 'warning');
-    return;
-  }
-  addCaricoTentataLine(userId, templateId, first.id);
 }
 
 function removeCaricoTentataLine(userId, templateId, li) {
@@ -5977,18 +5960,27 @@ function acTentataProdRender(i, q) {
       });
     }
   }
-  const cats = ['FORMAGGI', 'RICOTTA', 'CAGLIATA', 'PANNA UHT', 'ALTRO'];
-  cats.forEach(cat => {
-    let gruppo = state.prodotti.filter(p => p.categoria === cat && !giaScelti.includes(p.id));
+  const categorie = [...new Set(
+    state.prodotti
+      .filter(p => !giaScelti.includes(p.id))
+      .map(p => String(p.categoria || 'ALTRO').trim() || 'ALTRO')
+  )].sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+  categorie.forEach(cat => {
+    let gruppo = state.prodotti.filter(p => (String(p.categoria || 'ALTRO').trim() || 'ALTRO') === cat && !giaScelti.includes(p.id));
     if (q) {
-      gruppo = gruppo.filter(p => p.codice.toLowerCase().includes(q) || p.nome.toLowerCase().includes(q));
+      gruppo = gruppo.filter(p =>
+        p.codice.toLowerCase().includes(q) ||
+        p.nome.toLowerCase().includes(q) ||
+        String(p.categoria || '').toLowerCase().includes(q) ||
+        String(p.packaging || '').toLowerCase().includes(q)
+      );
     }
     if (!gruppo.length) return;
     html += `<div class="ac-group-label">${cat}</div>`;
     gruppo.forEach(p => {
       html += `<div class="ac-item" data-id="${p.id}" onmousedown="acTentataProdSelect(${i},${p.id})">
-        <span><span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">[${p.codice}]</span> ${typeof acHighlight === 'function' ? acHighlight(p.nome, q) : escapeHtml(p.nome)}</span>
-        <span class="ac-sub">${p.categoria} · ${p.um}${p.packaging ? ' · ' + p.packaging : ''}</span>
+        <span><span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">[${escapeHtml(p.codice)}]</span> ${typeof acHighlight === 'function' ? acHighlight(p.nome, q) : escapeHtml(p.nome)}</span>
+        <span class="ac-sub">${escapeHtml(p.categoria)} · ${escapeHtml(p.um)}${p.packaging ? ' · ' + escapeHtml(p.packaging) : ''}</span>
       </div>`;
       total++;
     });
