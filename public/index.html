@@ -3813,6 +3813,27 @@
   </div>
 </div>
 
+<!-- Modal: Scarico rapido giacenze -->
+<div class="modal-overlay" id="modal-giacenza-scarico-rapido">
+  <div class="modal" style="max-width:980px;">
+    <div class="modal-header">
+      <div class="modal-title">Scarico rapido giacenze</div>
+      <button class="modal-close" onclick="closeModal('modal-giacenza-scarico-rapido')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Scarica rapidamente piu prodotti e lotti senza passare dagli ordini.</div>
+      <div id="scarico-rapido-rows" style="display:flex;flex-direction:column;gap:0;"></div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-outline btn-sm" onclick="addScaricoRapidoRow()">+ Aggiungi riga</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-giacenza-scarico-rapido')">Annulla</button>
+      <button class="btn btn-green" onclick="saveScaricoRapido()">💾 Conferma scarichi</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -4972,6 +4993,51 @@ function renderMagazzino() {
   }
 
   let _navIdx = 0;
+  const getPreparazioneCategoriaRank = (categoria) => {
+    const cat = String(categoria || '').trim().toUpperCase();
+    if (cat === 'CAGLIATA') return 0;
+    if (cat === 'PANNA UHT') return 1;
+    if (cat === 'FORMAGGI') return 2;
+    if (cat === 'RICOTTA') return 3;
+    return 4;
+  };
+  const getMagazzinoBaseQtyValue = (line, prodotto) => {
+    const qtyBase = Number(line?.qtyBase);
+    if (Number.isFinite(qtyBase) && qtyBase > 0) return qtyBase;
+    const qty = Number(line?.qty);
+    if (!Number.isFinite(qty) || qty <= 0) return null;
+    const um = String(line?.unitaMisura || '').toLowerCase();
+    const baseUm = String(prodotto?.um || '').toLowerCase();
+    if ((um === 'kg' && baseUm === 'kg') || (um === 'litri' && baseUm === 'lt') || (um === 'pezzi' && baseUm === 'pz')) return qty;
+    if (um === 'cartoni' && Number(prodotto?.unitaPerCartone) > 0) return qty * Number(prodotto.unitaPerCartone);
+    if (um === 'pedana' && Number(prodotto?.unitaPerCartone) > 0 && Number(prodotto?.cartoniPerPedana) > 0) {
+      return qty * Number(prodotto.unitaPerCartone) * Number(prodotto.cartoniPerPedana);
+    }
+    return null;
+  };
+  const getMagazzinoBaseQtyLabel = (line, prodotto) => {
+    const val = getMagazzinoBaseQtyValue(line, prodotto);
+    if (!Number.isFinite(val) || val <= 0) return '';
+    const baseUm = String(prodotto?.um || '').toLowerCase();
+    const currentUm = String(line?.unitaMisura || '').toLowerCase();
+    const sameBase = (currentUm === 'kg' && baseUm === 'kg')
+      || (currentUm === 'litri' && baseUm === 'lt')
+      || (currentUm === 'pezzi' && baseUm === 'pz');
+    if (sameBase) return '';
+    return `${Number(val).toFixed(2).replace(/\.00$/, '')} ${prodotto?.um || ''}`;
+  };
+  const getMagazzinoMaxUnitsForStock = (line, prodotto, lottoValue) => {
+    if (!line?.prodId || !lottoValue) return null;
+    const giacenza = (state.giacenzeLotti[line.prodId] || []).find(g => g.lotto === lottoValue);
+    if (!giacenza) return null;
+    const availableBase = Number(giacenza.quantita);
+    const requiredBase = getMagazzinoBaseQtyValue(line, prodotto);
+    const qty = Number(line?.qty);
+    if (!Number.isFinite(availableBase) || !Number.isFinite(requiredBase) || !Number.isFinite(qty) || qty <= 0 || requiredBase <= 0) return null;
+    const perUnit = requiredBase / qty;
+    if (!Number.isFinite(perUnit) || perUnit <= 0) return null;
+    return Math.floor(availableBase / perUnit);
+  };
 
   container.innerHTML = ordini.map((o, i) => {
     const c = getCliente(o.clienteId);
@@ -4986,22 +5052,29 @@ function renderMagazzino() {
     let checkLines = '';
     if (inPrep) {
       // Controlla se tutte le righe hanno lotto compilato (per abilitare Pronto)
-      checkLines = o.linee.map((l, li) => {
+      const sortedLinee = o.linee.map((l, li) => ({ l, li })).sort((a, b) => {
+        const pa = a.l?.prodId ? getProdotto(a.l.prodId) : null;
+        const pb = b.l?.prodId ? getProdotto(b.l.prodId) : null;
+        const catDiff = getPreparazioneCategoriaRank(pa?.categoria) - getPreparazioneCategoriaRank(pb?.categoria);
+        if (catDiff !== 0) return catDiff;
+        const nameA = String(pa?.nome || a.l?.prodottoNomeLibero || '');
+        const nameB = String(pb?.nome || b.l?.prodottoNomeLibero || '');
+        return nameA.localeCompare(nameB, 'it', { sensitivity: 'base' });
+      });
+      checkLines = sortedLinee.map(({ l, li }) => {
         const p = l.prodId ? getProdotto(l.prodId) : { codice: 'LIB', nome: l.prodottoNomeLibero || 'Prodotto libero', pesoFisso: true };
         const checked = l.preparato ? 'checked' : '';
         const barratoStyle = l.preparato ? 'text-decoration:line-through;color:var(--text3);' : '';
         const lottoMancante = !l.lotto || !String(l.lotto).trim();
         const lottoBorderStyle = lottoMancante ? 'border-color:#e74c3c;' : 'border-color:var(--border);';
         const umLabel = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty);
-        const baseQtyInfo = (l.qtyBase !== null && l.qtyBase !== undefined && typeof getProductOrderUnits === 'function')
-          ? (() => {
-              const baseUm = String(p.um || '').toLowerCase();
-              const currentUm = String(l.unitaMisura || '').toLowerCase();
-              const sameBase = (currentUm === 'kg' && baseUm === 'kg') || (currentUm === 'litri' && baseUm === 'lt') || (currentUm === 'pezzi' && baseUm === 'pz');
-              if (sameBase) return '';
-              return `${Number(l.qtyBase).toFixed(2).replace(/\.00$/, '')} ${p.um || ''}`;
-            })()
+        const baseQtyInfo = getMagazzinoBaseQtyLabel(l, p);
+        const maxUnitsForSelectedLotto = getMagazzinoMaxUnitsForStock(l, p, l.lotto);
+        const hasPartialStock = Number.isFinite(maxUnitsForSelectedLotto) && maxUnitsForSelectedLotto > 0 && maxUnitsForSelectedLotto < Number(l.qty || 0);
+        const partialHint = hasPartialStock
+          ? `<div style="font-size:11px;color:var(--danger);margin-top:2px;">Disponibile sul lotto selezionato: ${maxUnitsForSelectedLotto} ${umPlurale(l.unitaMisura || 'Pezzi', maxUnitsForSelectedLotto)}. Usa ◐ per dividere la riga.</div>`
           : '';
+        const lineNote = l.notaRiga ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;">Nota riga: ${escapeHtml(l.notaRiga)}</div>` : '';
 
         // Indici per navigazione Enter
         const navPeso = !p.pesoFisso ? _navIdx++ : -1;
@@ -5018,8 +5091,9 @@ function renderMagazzino() {
 
         // Bottone split: solo per righe non-pedana con qty > 1
         const splitBtn = (!l.isPedana && Number(l.qty) > 1)
-          ? `<button class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 6px;" title="Scarico parziale lotto / dividi riga" onclick="splitLineaOrdine(${o.id},${li})">◐</button>`
+          ? `<button class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 6px;${hasPartialStock ? 'border-color:var(--danger);color:var(--danger);' : ''}" title="${hasPartialStock ? 'Lotto insufficiente: dividi automaticamente la parte residua' : 'Scarico parziale lotto / dividi riga'}" onclick="splitLineaOrdine(${o.id},${li})">◐</button>`
           : '';
+        const deleteBtn = `<button class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 6px;border-color:var(--danger);color:var(--danger);" title="Elimina riga" onclick="deleteLineaOrdinePreparazione(${o.id},${li})">✕</button>`;
 
         // Lotto: dropdown se ci sono giacenze per questo prodotto, altrimenti text input
         const giacenzeLotto = l.prodId ? (state.giacenzeLotti[l.prodId] || []) : [];
@@ -5055,10 +5129,16 @@ function renderMagazzino() {
           <input type="checkbox" data-line-cb="${o.id}-${li}" ${checked}
             onchange="toggleLineaPreparata(${o.id},${li},this.checked)"
             style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
-          <span data-line-nome="${o.id}-${li}" style="flex:1;font-size:13px;${barratoStyle}">${l.qty} ${umLabel} — [${p.codice}] ${p.nome}${baseQtyInfo ? `<div style="font-size:11px;color:var(--accent);text-decoration:none;">= ${baseQtyInfo}</div>` : ''}</span>
+          <div data-line-nome="${o.id}-${li}" style="flex:1;font-size:13px;min-width:0;${barratoStyle}">
+            <div>${l.qty} ${umLabel} — [${p.codice}] ${p.nome}</div>
+            ${baseQtyInfo ? `<div style="font-size:11px;color:var(--accent);text-decoration:none;">= ${baseQtyInfo}</div>` : ''}
+            ${lineNote}
+            ${partialHint}
+          </div>
           ${pesoInput}
           ${lottoEl}
           ${splitBtn}
+          ${deleteBtn}
         </div>`;
       }).join('');
     }
@@ -5080,7 +5160,9 @@ function renderMagazzino() {
         </div>
         ${inPrep
           ? `<div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;">${checkLines}</div>`
-          : `<div class="wh-detail" style="margin-top:4px;">${o.linee.map(l => { const p = l.prodId ? getProdotto(l.prodId) : { codice:'LIB', nome: l.prodottoNomeLibero||'Prodotto libero' }; return `${l.qty}x [${p.codice}] ${p.nome.split(' ').slice(0,2).join(' ')}`; }).join(', ')}</div>`
+          : `<div class="wh-detail" style="margin-top:4px;">${o.linee.map(l => ({ l, p: l.prodId ? getProdotto(l.prodId) : { codice:'LIB', nome: l.prodottoNomeLibero||'Prodotto libero', categoria:'ALTRO' } }))
+              .sort((a, b) => getPreparazioneCategoriaRank(a.p?.categoria) - getPreparazioneCategoriaRank(b.p?.categoria) || String(a.p?.nome || '').localeCompare(String(b.p?.nome || ''), 'it', { sensitivity:'base' }))
+              .map(({ l, p }) => `${l.qty}x [${p.codice}] ${p.nome.split(' ').slice(0,2).join(' ')}${l.notaRiga ? ` (${escapeHtml(l.notaRiga)})` : ''}`).join(', ')}</div>`
         }
         ${o.note ? `<div style="font-size:12px;color:var(--text2);margin-top:4px;">📝 ${escapeHtml(o.note)}</div>` : ''}
       </div>
@@ -5177,6 +5259,8 @@ function onLineLottoInput(ordineId, lineIdx, el) {
   // e se aggiorni lo state prima, il salvataggio verrebbe saltato.
   // Aggiorna solo il bordo campo (feedback visivo immediato)
   el.style.borderColor = el.value.trim() ? 'var(--border)' : '#e74c3c';
+  const sel = document.getElementById(`lotto-sel-${ordineId}-${lineIdx}`);
+  if (sel && sel.value === '__altro__') sel.style.borderColor = el.value.trim() ? 'var(--border)' : '#e74c3c';
   // Auto-tick se c'è qualcosa scritto
   if (el.value.trim() && !line.preparato) {
     line.preparato = true;
@@ -5213,6 +5297,7 @@ function onLottoSelectChange(ordineId, lineIdx, selectEl) {
   if (!o || !line) return;
   const val = selectEl.value;
   if (val === '__altro__') {
+    setLineLotto(ordineId, lineIdx, '');
     // Mostra un input testo accanto al select
     const existing = document.getElementById(`lotto-txt-${ordineId}-${lineIdx}`);
     if (!existing) {
@@ -5226,6 +5311,7 @@ function onLottoSelectChange(ordineId, lineIdx, selectEl) {
       selectEl.parentNode.insertBefore(inp, selectEl.nextSibling);
       inp.focus();
     }
+    selectEl.style.borderColor = '#e74c3c';
     updateMagazzinoProntoBtn(ordineId);
     return;
   }
@@ -5244,6 +5330,7 @@ function onLottoSelectChange(ordineId, lineIdx, selectEl) {
     if (nm) { nm.style.textDecoration = 'line-through'; nm.style.color = 'var(--text3)'; }
   }
   updateMagazzinoProntoBtn(ordineId);
+  maybePromptSplitForInsufficientStock(ordineId, lineIdx, val);
 }
 
 // Aggiorna il pulsante Pronto leggendo i valori DOM (non lo state, che non è ancora aggiornato)
@@ -5251,20 +5338,63 @@ function updateMagazzinoProntoBtn(ordineId) {
   const card = document.querySelector(`[data-ordine-id="${ordineId}"]`);
   const btn  = document.querySelector(`[data-pronto-ordine="${ordineId}"]`);
   if (!btn) return;
-  // Legge i campi lotto direttamente dal DOM per evitare il problema prev===next
-  // Controlla sia input text che select (dropdown giacenze)
-  const lottoInputs = card ? [...card.querySelectorAll('input[placeholder="Lotto *"]')] : [];
-  const lottoSelects = card ? [...card.querySelectorAll('select[id^="lotto-sel-"]')] : [];
-  // Un select con valore __altro__ o vuoto conta come mancante
-  const selectsOk = lottoSelects.every(sel => sel.value && sel.value !== '__altro__');
-  const inputsOk = lottoInputs.every(inp => inp.value.trim());
-  const allOk = (lottoInputs.length > 0 || lottoSelects.length > 0) && selectsOk && inputsOk;
+  const rows = card ? [...card.querySelectorAll('[data-line-cb]')].map(cb => cb.getAttribute('data-line-cb')) : [];
+  const allOk = rows.length > 0 && rows.every(key => {
+    const [ordId, lineIdx] = String(key).split('-');
+    const sel = document.getElementById(`lotto-sel-${ordId}-${lineIdx}`);
+    const inp = document.getElementById(`lotto-txt-${ordId}-${lineIdx}`);
+    if (sel) {
+      if (!sel.value) return false;
+      if (sel.value === '__altro__') return !!inp?.value?.trim();
+      return true;
+    }
+    if (inp) return !!inp.value.trim();
+    return false;
+  });
   btn.disabled = !allOk;
   btn.style.background  = allOk ? '' : '#ccc';
   btn.style.color       = allOk ? '' : '#888';
   btn.style.cursor      = allOk ? '' : 'not-allowed';
   btn.style.borderColor = allOk ? '' : '#bbb';
   btn.title             = allOk ? '' : 'Inserire il lotto per tutte le righe';
+}
+
+function maybePromptSplitForInsufficientStock(ordineId, lineIdx, lottoValue) {
+  const ordine = state.ordini.find(x => x.id === ordineId);
+  const line = ordine?.linee?.[lineIdx];
+  const prodotto = line?.prodId ? getProdotto(line.prodId) : null;
+  if (!line || !prodotto || !lottoValue || lottoValue === '__altro__') return;
+  const giacenza = (state.giacenzeLotti[line.prodId] || []).find(g => g.lotto === lottoValue);
+  const availableBase = Number(giacenza?.quantita);
+  const requiredBase = Number(line.qtyBase);
+  const origQty = Number(line.qty);
+  if (!Number.isFinite(availableBase) || !Number.isFinite(requiredBase) || !Number.isFinite(origQty) || origQty <= 1 || requiredBase <= 0) return;
+  const perUnit = requiredBase / origQty;
+  if (!Number.isFinite(perUnit) || perUnit <= 0) return;
+  const maxUnits = Math.floor(availableBase / perUnit);
+  if (maxUnits <= 0 || maxUnits >= origQty) return;
+  const splitQty = origQty - maxUnits;
+  window.setTimeout(async () => {
+    const ok = window.confirm(`Il lotto ${lottoValue} copre solo ${maxUnits} ${umPlurale(line.unitaMisura || 'Pezzi', maxUnits)} su ${line.qty}.\nVuoi dividere automaticamente la riga e lasciare il residuo su una nuova riga?`);
+    if (!ok) return;
+    try {
+      const result = await api('POST', `/api/ordini/${ordineId}/linee/${line.id}/split`, { qty_split: splitQty });
+      await reloadOrdineState(ordineId);
+      const oFresh = state.ordini.find(x => x.id === ordineId);
+      if (oFresh && result.new_linea_id) {
+        const newIdx = oFresh.linee.findIndex(l => l.id === result.new_linea_id);
+        const origIdx = oFresh.linee.findIndex(l => l.id === line.id);
+        if (newIdx !== -1 && origIdx !== -1 && newIdx !== origIdx + 1) {
+          const [newLine] = oFresh.linee.splice(newIdx, 1);
+          oFresh.linee.splice(origIdx + 1, 0, newLine);
+        }
+      }
+      renderMagazzino();
+      showToast(`Riga divisa automaticamente: ${maxUnits} + ${splitQty}`, 'success');
+    } catch (e) {
+      showToast(e.message || 'Errore nello scarico parziale', 'warning');
+    }
+  }, 0);
 }
 
 // Navigazione Enter tra campi peso/lotto
@@ -5319,10 +5449,22 @@ async function splitLineaOrdine(ordineId, lineIdx) {
   if (!line) return;
   const origQty = Number(line.qty);
   if (origQty <= 1) { showToast('Quantità già minima, impossibile dividere', 'warning'); return; }
+  const selectedLotto = String(line.lotto || '');
+  const suggestedSplit = (() => {
+    const giacenza = selectedLotto && line.prodId ? (state.giacenzeLotti[line.prodId] || []).find(g => g.lotto === selectedLotto) : null;
+    const availableBase = Number(giacenza?.quantita);
+    const requiredBase = Number(line.qtyBase);
+    if (!Number.isFinite(availableBase) || !Number.isFinite(requiredBase) || requiredBase <= 0) return 1;
+    const perUnit = requiredBase / origQty;
+    if (!Number.isFinite(perUnit) || perUnit <= 0) return 1;
+    const maxUnits = Math.floor(availableBase / perUnit);
+    const split = origQty - maxUnits;
+    return split >= 1 && split < origQty ? split : 1;
+  })();
   const input = prompt(
     `Scarico parziale lotto per "${line.prodottoNomeLibero || getProdotto(line.prodId)?.nome || '?'}" (qty totale: ${origQty})\n` +
     `Quante unità vuoi spostare sulla seconda riga/lotto? (1–${origQty - 1})`,
-    '1'
+    String(suggestedSplit)
   );
   if (input === null) return;
   const qtySplit = parseInt(input, 10);
@@ -5639,6 +5781,27 @@ function renderImpostazioni() {
   renderEmailNotificationSettings();
   if (!state.emailNotificationsLoaded) {
     loadEmailNotificationSettings().catch(() => {});
+  }
+}
+
+async function deleteLineaOrdinePreparazione(ordineId, lineIdx) {
+  const ordine = state.ordini.find(x => x.id === ordineId);
+  const line = ordine?.linee?.[lineIdx];
+  if (!ordine || !line || !line.id) return;
+  const prodotto = line.prodId ? getProdotto(line.prodId) : null;
+  const ok = await customConfirm(
+    `Eliminare la riga "${prodotto?.nome || line.prodottoNomeLibero || 'prodotto'}"?`,
+    'Elimina riga',
+    'Conferma eliminazione'
+  );
+  if (!ok) return;
+  try {
+    await api('DELETE', `/api/ordini/${ordineId}/linee/${line.id}`);
+    await reloadOrdineState(ordineId);
+    renderMagazzino();
+    showToast('Riga eliminata', 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore eliminazione riga', 'warning');
   }
 }
 
@@ -7230,6 +7393,11 @@ async function reloadGiacenze() {
 function renderGiacenze() {
   const container = document.getElementById('magazzino-tab-giacenze');
   if (!container) return;
+  const activeEl = document.activeElement;
+  const activeId = activeEl?.id || '';
+  const searchWasFocused = activeId === 'giacenze-search-input';
+  const searchSelectionStart = searchWasFocused && typeof activeEl.selectionStart === 'number' ? activeEl.selectionStart : null;
+  const searchSelectionEnd = searchWasFocused && typeof activeEl.selectionEnd === 'number' ? activeEl.selectionEnd : null;
   const isAdmin = ['admin', 'magazzino'].includes(state.currentUser?.ruolo);
   const today30 = new Date();
   today30.setDate(today30.getDate() + 30);
@@ -7305,6 +7473,7 @@ function renderGiacenze() {
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
             <button class="btn btn-green btn-sm" onclick="openGiacenzaCarico(null)">+ Carico generico</button>
+            <button class="btn btn-outline btn-sm" onclick="openScaricoRapidoModal()">⬇️ Scarico rapido</button>
             <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-giacenze-file')?.click()">📥 Importa Excel</button>
             <button class="btn btn-outline btn-sm" onclick="openMovimentiModal(null)">📋 Storico movimenti</button>
             <button class="btn btn-outline btn-sm" onclick="printGiacenzeInventario()">🖨️ Stampa inventario</button>
@@ -7340,6 +7509,15 @@ function renderGiacenze() {
 
   if (!cardsData.length) {
     container.innerHTML = topBar + `<div class="empty-state"><div class="empty-icon">📦</div><p>Nessuna giacenza trovata con i filtri attuali.</p></div>`;
+    if (searchWasFocused) {
+      const searchInput = document.getElementById('giacenze-search-input');
+      if (searchInput) {
+        searchInput.focus();
+        const start = Number.isFinite(searchSelectionStart) ? searchSelectionStart : searchInput.value.length;
+        const end = Number.isFinite(searchSelectionEnd) ? searchSelectionEnd : start;
+        try { searchInput.setSelectionRange(start, end); } catch (_) {}
+      }
+    }
     return;
   }
 
@@ -7409,6 +7587,15 @@ function renderGiacenze() {
   }).join('');
 
   container.innerHTML = topBar + cards;
+  if (searchWasFocused) {
+    const searchInput = document.getElementById('giacenze-search-input');
+    if (searchInput) {
+      searchInput.focus();
+      const start = Number.isFinite(searchSelectionStart) ? searchSelectionStart : searchInput.value.length;
+      const end = Number.isFinite(searchSelectionEnd) ? searchSelectionEnd : start;
+      try { searchInput.setSelectionRange(start, end); } catch (_) {}
+    }
+  }
 }
 
 function resetGiacenzeFilters() {
@@ -7672,6 +7859,118 @@ async function openScaricoManuale(giacenzaId) {
     showToast('Scarico manuale registrato ✅', 'success');
   } catch (e) {
     showToast(e.message, 'warning');
+  }
+}
+
+function createScaricoRapidoRow() {
+  return { prodottoId: '', lotto: '', quantita: '', note: '' };
+}
+
+function openScaricoRapidoModal() {
+  state.scaricoRapidoRows = [createScaricoRapidoRow()];
+  renderScaricoRapidoRows();
+  openModal('modal-giacenza-scarico-rapido');
+}
+
+function renderScaricoRapidoRows() {
+  const container = document.getElementById('scarico-rapido-rows');
+  if (!container) return;
+  const prodotti = [...state.prodotti]
+    .filter(p => p.gestioneGiacenza)
+    .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' }));
+  container.innerHTML = (state.scaricoRapidoRows || []).map((row, idx) => {
+    const lotti = row.prodottoId ? (state.giacenzeLotti[row.prodottoId] || []).filter(g => Number(g.quantita || 0) > 0) : [];
+    const selectedLotto = lotti.find(g => g.lotto === row.lotto);
+    return `
+      <div style="display:grid;grid-template-columns:minmax(220px,2fr) minmax(220px,2fr) minmax(110px,0.8fr) minmax(180px,1.4fr) auto;gap:10px;align-items:end;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div class="field" style="margin:0;">
+          <label>Prodotto</label>
+          <select onchange="setScaricoRapidoProdotto(${idx}, this.value)">
+            <option value="">Seleziona prodotto</option>
+            ${prodotti.map(p => `<option value="${p.id}" ${Number(row.prodottoId) === Number(p.id) ? 'selected' : ''}>[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Lotto</label>
+          <select onchange="setScaricoRapidoLotto(${idx}, this.value)">
+            <option value="">Seleziona lotto</option>
+            ${lotti.map(g => `<option value="${escapeHtml(g.lotto)}" ${row.lotto === g.lotto ? 'selected' : ''}>${escapeHtml(g.lotto)} · ${Number(g.quantita).toFixed(2)} ${escapeHtml(g.um || '')}</option>`).join('')}
+          </select>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">${selectedLotto ? `Disponibile: ${Number(selectedLotto.quantita).toFixed(2)} ${escapeHtml(selectedLotto.um || '')}` : 'Scegli prima il prodotto'}</div>
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Quantità</label>
+          <input type="number" step="0.01" min="0.01" value="${escapeHtml(String(row.quantita || ''))}" oninput="setScaricoRapidoQuantita(${idx}, this.value)">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Note</label>
+          <input type="text" value="${escapeHtml(row.note || '')}" placeholder="Causale" oninput="setScaricoRapidoNote(${idx}, this.value)">
+        </div>
+        <div style="display:flex;justify-content:flex-end;">
+          <button class="btn btn-outline btn-sm" style="border-color:var(--danger);color:var(--danger);" onclick="removeScaricoRapidoRow(${idx})">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function addScaricoRapidoRow() {
+  if (!Array.isArray(state.scaricoRapidoRows)) state.scaricoRapidoRows = [];
+  state.scaricoRapidoRows.push(createScaricoRapidoRow());
+  renderScaricoRapidoRows();
+}
+
+function removeScaricoRapidoRow(idx) {
+  state.scaricoRapidoRows.splice(idx, 1);
+  if (!state.scaricoRapidoRows.length) state.scaricoRapidoRows = [createScaricoRapidoRow()];
+  renderScaricoRapidoRows();
+}
+
+function setScaricoRapidoProdotto(idx, value) {
+  const prodottoId = value ? Number(value) : '';
+  const row = state.scaricoRapidoRows[idx];
+  if (!row) return;
+  row.prodottoId = prodottoId;
+  row.lotto = '';
+  renderScaricoRapidoRows();
+}
+
+function setScaricoRapidoLotto(idx, value) {
+  const row = state.scaricoRapidoRows[idx];
+  if (!row) return;
+  row.lotto = value || '';
+}
+
+function setScaricoRapidoQuantita(idx, value) {
+  const row = state.scaricoRapidoRows[idx];
+  if (!row) return;
+  row.quantita = value;
+}
+
+function setScaricoRapidoNote(idx, value) {
+  const row = state.scaricoRapidoRows[idx];
+  if (!row) return;
+  row.note = value;
+}
+
+async function saveScaricoRapido() {
+  const rows = (state.scaricoRapidoRows || []).map(r => ({
+    prodotto_id: r.prodottoId ? Number(r.prodottoId) : null,
+    lotto: String(r.lotto || '').trim(),
+    quantita: Number(String(r.quantita || '').replace(',', '.')),
+    note: String(r.note || '').trim(),
+  })).filter(r => r.prodotto_id || r.lotto || r.quantita || r.note);
+  if (!rows.length) { showToast('Inserisci almeno una riga', 'warning'); return; }
+  const invalid = rows.find(r => !r.prodotto_id || !r.lotto || !Number.isFinite(r.quantita) || r.quantita <= 0);
+  if (invalid) { showToast('Compila prodotto, lotto e quantità per tutte le righe', 'warning'); return; }
+  try {
+    await api('POST', '/api/giacenze/scarico-batch', { rows });
+    closeModal('modal-giacenza-scarico-rapido');
+    await reloadGiacenze();
+    renderGiacenze();
+    renderGiacenzeAlerts();
+    showToast('Scarico rapido registrato', 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore scarico rapido', 'warning');
   }
 }
 
