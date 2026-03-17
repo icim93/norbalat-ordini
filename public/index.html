@@ -4975,11 +4975,11 @@ function renderMagazzino() {
                oninput="onLinePesoInput(${o.id},${li},this)"
                onchange="setLinePesoEffettivo(${o.id},${li},this.value)"
                onkeydown="if(event.key==='Enter'){event.preventDefault();magazzinoNavNext(${navPeso})}">`
-          : `<span style="font-size:12px;color:var(--text3);">${l.qty} ${umLabel}</span>`;
+          : `<span style="font-size:12px;color:var(--text3);min-width:92px;text-align:right;">${l.qty} ${umLabel}</span>`;
 
         // Bottone split: solo per righe non-pedana con qty > 1
         const splitBtn = (!l.isPedana && Number(l.qty) > 1)
-          ? `<button class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 6px;" title="Dividi in due lotti distinti" onclick="splitLineaOrdine(${o.id},${li})">✂</button>`
+          ? `<button class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 6px;" title="Scarico parziale lotto / dividi riga" onclick="splitLineaOrdine(${o.id},${li})">◐</button>`
           : '';
 
         // Lotto: dropdown se ci sono giacenze per questo prodotto, altrimenti text input
@@ -4994,7 +4994,7 @@ function renderMagazzino() {
         const lottoEl = giacenzeLotto.length > 0
           ? `<select id="lotto-sel-${o.id}-${li}"
               data-mgnav="${navLotto}"
-              style="width:170px;font-size:12px;padding:3px 6px;border:1px solid;border-radius:5px;${lottoBorderStyle}"
+              style="width:290px;max-width:42vw;font-size:12px;padding:3px 6px;border:1px solid;border-radius:5px;${lottoBorderStyle}"
               onchange="onLottoSelectChange(${o.id},${li},this)"
               onkeydown="if(event.key==='Enter'){event.preventDefault();magazzinoNavNext(${navLotto})}">
               <option value="">-- nessun lotto --</option>
@@ -5002,12 +5002,12 @@ function renderMagazzino() {
               <option value="__altro__" ${hasAltroSelected ? 'selected' : ''}>✏ Altro lotto...</option>
             </select>
             ${hasAltroSelected ? `<input type="text" id="lotto-txt-${o.id}-${li}" value="${escapeHtml(l.lotto || '')}" placeholder="Lotto *"
-              style="width:110px;font-size:12px;padding:3px 6px;border:1px solid;border-radius:5px;${lottoBorderStyle}"
+              style="width:150px;font-size:12px;padding:3px 6px;border:1px solid;border-radius:5px;${lottoBorderStyle}"
               oninput="onLineLottoInput(${o.id},${li},this)"
               onchange="setLineLotto(${o.id},${li},this.value)">` : ''}`
           : `<input type="text" id="lotto-txt-${o.id}-${li}" value="${escapeHtml(l.lotto || '')}" placeholder="Lotto *"
               data-mgnav="${navLotto}"
-              style="width:110px;font-size:12px;padding:3px 6px;border:1px solid;border-radius:5px;${lottoBorderStyle}"
+              style="width:150px;font-size:12px;padding:3px 6px;border:1px solid;border-radius:5px;${lottoBorderStyle}"
               oninput="onLineLottoInput(${o.id},${li},this)"
               onchange="setLineLotto(${o.id},${li},this.value)"
               onkeydown="if(event.key==='Enter'){event.preventDefault();magazzinoNavNext(${navLotto})}">`;
@@ -5169,6 +5169,9 @@ function onLinePesoInput(ordineId, lineIdx, el) {
 
 // Handler per cambio del select lotto (con opzione "Altro lotto...")
 function onLottoSelectChange(ordineId, lineIdx, selectEl) {
+  const o = state.ordini.find(x => x.id === ordineId);
+  const line = o?.linee?.[lineIdx];
+  if (!o || !line) return;
   const val = selectEl.value;
   if (val === '__altro__') {
     // Mostra un input testo accanto al select
@@ -5178,12 +5181,13 @@ function onLottoSelectChange(ordineId, lineIdx, selectEl) {
       inp.type = 'text';
       inp.id = `lotto-txt-${ordineId}-${lineIdx}`;
       inp.placeholder = 'Lotto *';
-      inp.style.cssText = 'width:110px;font-size:12px;padding:3px 6px;border:1px solid #e74c3c;border-radius:5px;';
+      inp.style.cssText = 'width:150px;font-size:12px;padding:3px 6px;border:1px solid #e74c3c;border-radius:5px;';
       inp.oninput = () => onLineLottoInput(ordineId, lineIdx, inp);
       inp.onchange = () => setLineLotto(ordineId, lineIdx, inp.value);
       selectEl.parentNode.insertBefore(inp, selectEl.nextSibling);
       inp.focus();
     }
+    updateMagazzinoProntoBtn(ordineId);
     return;
   }
   // Rimuovi eventuale text input se esisteva
@@ -5192,6 +5196,15 @@ function onLottoSelectChange(ordineId, lineIdx, selectEl) {
   setLineLotto(ordineId, lineIdx, val);
   // Aggiorna bordo select
   selectEl.style.borderColor = val ? 'var(--border)' : '#e74c3c';
+  if (val && !line.preparato) {
+    line.preparato = true;
+    saveLineaPreparazione(ordineId, lineIdx, { preparato: true });
+    const cb = document.querySelector(`[data-line-cb="${ordineId}-${lineIdx}"]`);
+    if (cb) cb.checked = true;
+    const nm = document.querySelector(`[data-line-nome="${ordineId}-${lineIdx}"]`);
+    if (nm) { nm.style.textDecoration = 'line-through'; nm.style.color = 'var(--text3)'; }
+  }
+  updateMagazzinoProntoBtn(ordineId);
 }
 
 // Aggiorna il pulsante Pronto leggendo i valori DOM (non lo state, che non è ancora aggiornato)
@@ -5268,8 +5281,8 @@ async function splitLineaOrdine(ordineId, lineIdx) {
   const origQty = Number(line.qty);
   if (origQty <= 1) { showToast('Quantità già minima, impossibile dividere', 'warning'); return; }
   const input = prompt(
-    `Dividi la riga "${line.prodottoNomeLibero || getProdotto(line.prodId)?.nome || '?'}" (qty totale: ${origQty})\n` +
-    `Quante unità vuoi separare nel secondo lotto? (1–${origQty - 1})`,
+    `Scarico parziale lotto per "${line.prodottoNomeLibero || getProdotto(line.prodId)?.nome || '?'}" (qty totale: ${origQty})\n` +
+    `Quante unità vuoi spostare sulla seconda riga/lotto? (1–${origQty - 1})`,
     '1'
   );
   if (input === null) return;
@@ -5292,7 +5305,7 @@ async function splitLineaOrdine(ordineId, lineIdx) {
       }
     }
     renderMagazzino();
-    showToast(`Riga divisa: ${origQty - qtySplit} + ${qtySplit}`, 'success');
+    showToast(`Scarico parziale creato: ${origQty - qtySplit} + ${qtySplit}`, 'success');
   } catch (e) {
     showToast(e.message, 'warning');
   }
