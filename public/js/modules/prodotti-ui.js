@@ -12,9 +12,35 @@ function renderProdottiSchedaStatus(prodotto) {
   if (delBtn) delBtn.style.display = (hasScheda && state.editingId) ? '' : 'none';
 }
 
+function getProdottoDefaultsByCategoria(categoria) {
+  if (categoria === 'CAGLIATA') {
+    return { gestioneGiacenza: false, puntoRiordino: null };
+  }
+  if (categoria === 'PANNA UHT') {
+    return { gestioneGiacenza: true, puntoRiordino: 500 };
+  }
+  if (categoria === 'FORMAGGI') {
+    return { gestioneGiacenza: true, puntoRiordino: 50 };
+  }
+  return null;
+}
+
+function applyProdottoCategoriaDefaults(force = false) {
+  if (state.editingId) return;
+  const categoria = document.getElementById('pr-cat')?.value || '';
+  const defaults = getProdottoDefaultsByCategoria(categoria);
+  if (!defaults) return;
+
+  const gestioneEl = document.getElementById('pr-gestione-giacenza');
+  const riordinoEl = document.getElementById('pr-punto-riordino');
+  if (gestioneEl && (force || !gestioneEl.dataset.touched)) gestioneEl.value = defaults.gestioneGiacenza ? '1' : '0';
+  if (riordinoEl && (force || !riordinoEl.dataset.touched)) riordinoEl.value = defaults.puntoRiordino ?? '';
+}
+
 function renderProdottiTable() {
   const q = (document.getElementById('search-prodotti')?.value || '').toLowerCase();
   const filterCat = document.getElementById('filter-cat-prodotti')?.value || '';
+  const filterVerifica = document.getElementById('filter-verifica-prodotti')?.value || '';
   let list = state.prodotti;
   if (q) list = list.filter(p =>
     p.nome.toLowerCase().includes(q) ||
@@ -22,6 +48,12 @@ function renderProdottiTable() {
     p.categoria.toLowerCase().includes(q)
   );
   if (filterCat) list = list.filter(p => p.categoria === filterCat);
+  if (filterVerifica === 'da_verificare') list = list.filter(p => p.autoAnagrafato);
+  list = [...list].sort((a, b) => {
+    const autoDiff = Number(!!b.autoAnagrafato) - Number(!!a.autoAnagrafato);
+    if (autoDiff !== 0) return autoDiff;
+    return (a.nome || '').localeCompare(b.nome || '', 'it', { sensitivity: 'base' });
+  });
 
   const tbody = document.getElementById('prodotti-table');
   if (!list.length) {
@@ -32,7 +64,10 @@ function renderProdottiTable() {
   tbody.innerHTML = list.map(p => `
     <tr>
       <td><span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text3);">${escapeHtml(p.codice)}</span></td>
-      <td><b>${escapeHtml(p.nome)}</b></td>
+      <td>
+        <b>${escapeHtml(p.nome)}</b>
+        ${p.autoAnagrafato ? `<div style="margin-top:4px;"><span class="badge badge-orange">Da verificare</span></div>` : ''}
+      </td>
       <td><span class="badge badge-gray">${escapeHtml(p.categoria)}</span></td>
       <td style="font-family:'DM Mono',monospace;">${escapeHtml(p.um)}</td>
       <td style="font-size:12px;color:var(--text2);">${escapeHtml(p.packaging || '')}</td>
@@ -60,6 +95,11 @@ function openNewProdotto() {
   document.getElementById('pr-um').value = 'kg';
   document.getElementById('pr-peso').value = 'F';
   document.getElementById('pr-gestione-giacenza').value = '1';
+  ['pr-gestione-giacenza', 'pr-punto-riordino', 'pr-um', 'pr-peso'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) delete el.dataset.touched;
+  });
+  applyProdottoCategoriaDefaults(true);
   const fileInput = document.getElementById('pr-scheda-file');
   if (fileInput) fileInput.value = '';
   renderProdottiSchedaStatus(null);
@@ -85,6 +125,20 @@ function openEditProdotto(id) {
   renderProdottiSchedaStatus(p);
   openModal('modal-prodotto');
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const catEl = document.getElementById('pr-cat');
+  const touchedIds = ['pr-gestione-giacenza', 'pr-punto-riordino', 'pr-um', 'pr-peso'];
+  touchedIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => { el.dataset.touched = '1'; });
+    el.addEventListener('change', () => { el.dataset.touched = '1'; });
+  });
+  if (catEl) {
+    catEl.addEventListener('change', () => applyProdottoCategoriaDefaults(false));
+  }
+});
 
 async function saveProdotto() {
   const codice = document.getElementById('pr-codice').value.trim().toUpperCase();
@@ -125,6 +179,8 @@ async function saveProdotto() {
           peso_fisso: body.peso_fisso ? 1 : 0,
           gestione_giacenza: body.gestione_giacenza ? 1 : 0,
           punto_riordino: body.punto_riordino,
+          auto_anagrafato: 0,
+          auto_anagrafato_at: null,
           has_scheda_tecnica: state.prodotti[idx].hasSchedaTecnica,
           scheda_tecnica_nome: state.prodotti[idx].schedaTecnicaNome,
           scheda_tecnica_mime: state.prodotti[idx].schedaTecnicaMime,

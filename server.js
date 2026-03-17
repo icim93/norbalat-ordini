@@ -529,6 +529,8 @@ async function createSchema() {
       peso_fisso  BOOLEAN DEFAULT FALSE,
       gestione_giacenza BOOLEAN DEFAULT TRUE,
       punto_riordino NUMERIC,
+      auto_anagrafato BOOLEAN DEFAULT FALSE,
+      auto_anagrafato_at TIMESTAMPTZ,
       note        TEXT DEFAULT '',
       scheda_tecnica_nome TEXT DEFAULT '',
       scheda_tecnica_mime TEXT DEFAULT '',
@@ -808,6 +810,8 @@ async function createSchema() {
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_uploaded_at TIMESTAMPTZ;
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS gestione_giacenza BOOLEAN DEFAULT TRUE;
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS punto_riordino NUMERIC;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS auto_anagrafato BOOLEAN DEFAULT FALSE;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS auto_anagrafato_at TIMESTAMPTZ;
     CREATE INDEX IF NOT EXISTS idx_crm_followup ON clienti_crm_eventi(followup_date);
     UPDATE clienti_crm_eventi SET priorita = 'media' WHERE priorita IS NULL OR priorita = '';
     ALTER TABLE listini     ALTER COLUMN prezzo DROP NOT NULL;
@@ -936,6 +940,44 @@ async function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_movimenti_giacenza_prodotto ON movimenti_giacenza(prodotto_id);
     CREATE INDEX IF NOT EXISTS idx_movimenti_giacenza_created ON movimenti_giacenza(created_at DESC);
   `);
+
+  const categoriaDefaultsKey = 'prodotti_categoria_defaults_v1';
+  const categoriaDefaultsApplied = await q('SELECT key FROM app_settings WHERE key=$1 LIMIT 1', [categoriaDefaultsKey]);
+  if (!categoriaDefaultsApplied.rows.length) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE prodotti
+         SET gestione_giacenza = FALSE
+         WHERE categoria = 'CAGLIATA'`
+      );
+      await client.query(
+        `UPDATE prodotti
+         SET gestione_giacenza = TRUE,
+             punto_riordino = 500
+         WHERE categoria = 'PANNA UHT'`
+      );
+      await client.query(
+        `UPDATE prodotti
+         SET gestione_giacenza = TRUE,
+             punto_riordino = 50
+         WHERE categoria = 'FORMAGGI'`
+      );
+      await client.query(
+        `INSERT INTO app_settings (key, value, updated_at)
+         VALUES ($1, $2::jsonb, NOW())
+         ON CONFLICT (key) DO NOTHING`,
+        [categoriaDefaultsKey, JSON.stringify({ applied_at: new Date().toISOString() })]
+      );
+      await client.query('COMMIT');
+      client.release();
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      client.release();
+      throw e;
+    }
+  }
 
   console.log('✅ Schema OK');
 }
@@ -1847,7 +1889,8 @@ app.get('/api/prodotti', authMiddleware, async (req, res) => {
   try {
     const { rows } = await q(`
       SELECT
-        id, codice, nome, categoria, um, packaging, peso_fisso, gestione_giacenza, punto_riordino, note,
+        id, codice, nome, categoria, um, packaging, peso_fisso, gestione_giacenza, punto_riordino,
+        auto_anagrafato, auto_anagrafato_at, note,
         scheda_tecnica_nome, scheda_tecnica_mime, scheda_tecnica_uploaded_at,
         (scheda_tecnica_data IS NOT NULL) AS has_scheda_tecnica
       FROM prodotti
@@ -1900,7 +1943,7 @@ app.put('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req, r
     await q(
       `UPDATE prodotti
        SET codice=$1,nome=$2,categoria=$3,um=$4,packaging=$5,peso_fisso=$6,
-           gestione_giacenza=$7,punto_riordino=$8,note=$9 WHERE id=$10`,
+           gestione_giacenza=$7,punto_riordino=$8,auto_anagrafato=FALSE,auto_anagrafato_at=NULL,note=$9 WHERE id=$10`,
       [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, note, id]
     );
     res.json({ ok: true });
@@ -4116,21 +4159,44 @@ app.post('/api/giacenze/import', authMiddleware, requireRole('admin', 'magazzino
     }
 
     const codici = [...new Set(normalized.map(r => r.codice))];
-    const { rows: prodotti } = await client.query(
+    let { rows: prodotti } = await client.query(
       `SELECT id, codice, nome, um, gestione_giacenza
        FROM prodotti
        WHERE UPPER(codice) = ANY($1::text[])`,
       [codici]
     );
     const prodottiMap = new Map(prodotti.map(p => [String(p.codice || '').trim().toUpperCase(), p]));
+    const createdProducts = [];
 
-    const missing = normalized.filter(r => !prodottiMap.has(r.codice));
-    if (missing.length) {
-      client.release();
-      return res.status(400).json({
-        error: 'Alcuni codici articolo non esistono',
-        missing_codes: [...new Set(missing.map(r => r.codice))],
-      });
+    const missingByCode = new Map();
+    normalized.forEach(r => {
+      if (!prodottiMap.has(r.codice) && !missingByCode.has(r.codice)) missingByCode.set(r.codice, r);
+    });
+
+    if (missingByCode.size) {
+      for (const row of missingByCode.values()) {
+        const um = row.um || 'pz';
+        const pesoFisso = String(um).toLowerCase() !== 'kg';
+        const ins = await client.query(
+          `INSERT INTO prodotti
+            (codice,nome,categoria,um,packaging,peso_fisso,gestione_giacenza,punto_riordino,auto_anagrafato,auto_anagrafato_at,note)
+           VALUES ($1,$2,$3,$4,$5,$6,TRUE,NULL,TRUE,NOW(),$7)
+           RETURNING id, codice, nome, um, gestione_giacenza`,
+          [
+            row.codice,
+            row.descrizione || row.codice,
+            'ALTRO',
+            um,
+            '',
+            pesoFisso,
+            'Creato automaticamente da import giacenze Excel',
+          ]
+        );
+        const created = ins.rows[0];
+        prodottiMap.set(created.codice, created);
+        createdProducts.push({ codice: created.codice, nome: created.nome });
+      }
+      prodotti = [...prodotti, ...createdProducts];
     }
 
     const excluded = normalized.filter(r => !prodottiMap.get(r.codice)?.gestione_giacenza);
@@ -4223,6 +4289,7 @@ app.post('/api/giacenze/import', authMiddleware, requireRole('admin', 'magazzino
     res.json({
       ok: true,
       imported_rows: imported,
+      created_products: createdProducts,
       warnings: warnings.slice(0, 50),
     });
   } catch (e) {

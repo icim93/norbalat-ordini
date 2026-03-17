@@ -2176,6 +2176,10 @@
                 <option value="PANNA UHT">Panna UHT</option>
                 <option value="ALTRO">Altro</option>
               </select>
+              <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-verifica-prodotti" onchange="renderProdottiTable()">
+                <option value="">Tutti i prodotti</option>
+                <option value="da_verificare">Solo da verificare</option>
+              </select>
               <button class="btn btn-green" onclick="openNewProdotto()">+ Nuovo Prodotto</button>
             </div>
           </div>
@@ -6525,12 +6529,19 @@ async function importGiacenzeExcel(input) {
     showToast(`📥 Importazione giacenze in corso: ${sourceRows} righe, ${aggregated.size} lotti...`);
     const payload = { rows: [...aggregated.values()] };
     const result = await api('POST', '/api/giacenze/import', payload);
+    state.prodotti = (await api('GET', '/api/prodotti')).map(normalizeProdotto);
     await reloadGiacenze();
     renderGiacenze();
     renderGiacenzeAlerts();
+    if (typeof renderProdottiTable === 'function' && state.currentPage === 'prodotti') renderProdottiTable();
 
     const warnings = Array.isArray(result?.warnings) ? result.warnings : [];
-    if (warnings.length) {
+    const createdProducts = Array.isArray(result?.created_products) ? result.created_products : [];
+    if (createdProducts.length && warnings.length) {
+      showToast(`Import completato: ${result.imported_rows} lotti, ${createdProducts.length} prodotti creati, ${warnings.length} avvisi`, 'success');
+    } else if (createdProducts.length) {
+      showToast(`Import completato: ${result.imported_rows} lotti, ${createdProducts.length} prodotti creati da verificare`, 'success');
+    } else if (warnings.length) {
       showToast(`Import completato: ${result.imported_rows} lotti. ${warnings.length} avvisi descrizione/U.M.`, 'success');
     } else {
       showToast(`Import completato: ${result.imported_rows} lotti caricati`, 'success');

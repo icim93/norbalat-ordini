@@ -50,6 +50,8 @@
       pesoFisso: !!p.peso_fisso,
       gestioneGiacenza: p.gestione_giacenza !== undefined ? !!p.gestione_giacenza : true,
       puntoRiordino: (p.punto_riordino !== undefined && p.punto_riordino !== null) ? Number(p.punto_riordino) : null,
+      autoAnagrafato: !!p.auto_anagrafato,
+      autoAnagrafatoAt: p.auto_anagrafato_at || null,
       note: p.note || '',
       schedaTecnicaNome: p.scheda_tecnica_nome || '',
       schedaTecnicaMime: p.scheda_tecnica_mime || '',
