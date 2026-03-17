@@ -5588,7 +5588,6 @@ function renderTentataConfigList() {
     const templatesHtml = templates.map(tpl => {
       const searchKey = `${a.id}:${tpl.id}`;
       const searchValue = state.tentataConfigSearch?.[searchKey] || '';
-      const filteredProducts = getTentataFilteredProducts(a.id, tpl.id);
       const lineeHtml = (tpl.linee || []).map((l, li) => {
         const p = getProdotto(l.prodId);
         if (!p) return '';
@@ -5621,9 +5620,9 @@ function renderTentataConfigList() {
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
               <div style="flex:1;min-width:260px;">
                 <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:4px;">Ricerca prodotto</label>
-                <input type="text" id="tentata-search-${a.id}-${tpl.id}" value="${escapeHtml(searchValue)}" placeholder="Cerca codice o nome..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;" oninput="setTentataConfigSearch(${a.id},'${tpl.id}',this.value)">
-                <div style="margin-top:6px;max-height:140px;overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface);">
-                  ${filteredProducts.length ? filteredProducts.slice(0, 8).map(p => `<button type="button" style="display:block;width:100%;text-align:left;padding:8px 10px;border:none;background:transparent;border-bottom:1px solid var(--border);cursor:pointer;" onclick="addCaricoTentataLine(${a.id},'${tpl.id}',${p.id})">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</button>`).join('') : '<div style="padding:8px 10px;font-size:12px;color:var(--text3);">Nessun prodotto trovato</div>'}
+                <div class="ac-wrap">
+                  <input type="text" class="ac-input" id="tentata-search-${a.id}-${tpl.id}" name="tentata-product-search-${a.id}-${tpl.id}" value="${escapeHtml(searchValue)}" placeholder="Cerca codice o nome..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" inputmode="search" style="width:100%;" oninput="setTentataConfigSearch(${a.id},'${tpl.id}',this.value)" onfocus="openTentataConfigSearch(${a.id},'${tpl.id}')" onkeydown="handleTentataConfigSearchKey(event,${a.id},'${tpl.id}')">
+                  <div class="ac-dropdown" id="tentata-search-dd-${a.id}-${tpl.id}"></div>
                 </div>
               </div>
             </div>
@@ -5739,16 +5738,85 @@ function getTentataFilteredProducts(userId, templateId) {
     .filter(p => {
       if (template.linee.some(line => line.prodId === p.id)) return false;
       if (!q) return true;
-      return p.codice.toLowerCase().includes(q) || p.nome.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q);
+      return p.codice.toLowerCase().includes(q) ||
+        p.nome.toLowerCase().includes(q) ||
+        String(p.categoria || '').toLowerCase().includes(q) ||
+        String(p.packaging || '').toLowerCase().includes(q);
     })
     .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'it', { sensitivity: 'base' }))
-    .slice(0, q ? 50 : 200);
+    .slice(0, q ? 40 : 80);
 }
 
 function setTentataConfigSearch(userId, templateId, value) {
   if (!state.tentataConfigSearch) state.tentataConfigSearch = {};
   state.tentataConfigSearch[`${userId}:${templateId}`] = String(value || '');
-  renderTentataConfigList();
+  renderTentataConfigDropdown(userId, templateId);
+}
+
+function openTentataConfigSearch(userId, templateId) {
+  renderTentataConfigDropdown(userId, templateId);
+  document.getElementById(`tentata-search-dd-${userId}-${templateId}`)?.classList.add('open');
+}
+
+function renderTentataConfigDropdown(userId, templateId) {
+  const dd = document.getElementById(`tentata-search-dd-${userId}-${templateId}`);
+  const inp = document.getElementById(`tentata-search-${userId}-${templateId}`);
+  if (!dd || !inp) return;
+  const q = String(state.tentataConfigSearch?.[`${userId}:${templateId}`] || '').trim().toLowerCase();
+  const prodotti = getTentataFilteredProducts(userId, templateId);
+  let html = '';
+  let total = 0;
+  const categorie = [...new Set(prodotti.map(p => String(p.categoria || 'ALTRO').trim() || 'ALTRO'))]
+    .sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+  categorie.forEach(cat => {
+    const gruppo = prodotti.filter(p => (String(p.categoria || 'ALTRO').trim() || 'ALTRO') === cat);
+    if (!gruppo.length) return;
+    html += `<div class="ac-group-label">${escapeHtml(cat)}</div>`;
+    gruppo.forEach(p => {
+      html += `<div class="ac-item" data-id="${p.id}" onmousedown="selectTentataConfigProduct(${userId},'${templateId}',${p.id})">
+        <span><span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">[${escapeHtml(p.codice)}]</span> ${typeof acHighlight === 'function' ? acHighlight(p.nome, q) : escapeHtml(p.nome)}</span>
+        <span class="ac-sub">${escapeHtml(p.categoria || 'ALTRO')} · ${escapeHtml(p.um || 'pz')}${p.packaging ? ' · ' + escapeHtml(p.packaging) : ''}</span>
+      </div>`;
+      total++;
+    });
+  });
+  dd.innerHTML = total ? html : '<div class="ac-empty">Nessun prodotto trovato</div>';
+  dd.dataset.focus = '-1';
+  dd.querySelectorAll('.ac-item').forEach(el => el.classList.remove('focused'));
+  dd.classList.add('open');
+}
+
+function selectTentataConfigProduct(userId, templateId, prodId) {
+  addCaricoTentataLine(userId, templateId, prodId);
+  if (!state.tentataConfigSearch) state.tentataConfigSearch = {};
+  state.tentataConfigSearch[`${userId}:${templateId}`] = '';
+}
+
+function handleTentataConfigSearchKey(e, userId, templateId) {
+  const dd = document.getElementById(`tentata-search-dd-${userId}-${templateId}`);
+  const items = dd?.querySelectorAll('.ac-item') || [];
+  let idx = parseInt(dd?.dataset.focus || '-1', 10);
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    idx = Math.min(idx + 1, items.length - 1);
+    dd.dataset.focus = idx;
+    items.forEach((el, j) => el.classList.toggle('focused', j === idx));
+    items[idx]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    idx = Math.max(idx - 1, 0);
+    dd.dataset.focus = idx;
+    items.forEach((el, j) => el.classList.toggle('focused', j === idx));
+    items[idx]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (idx >= 0 && items[idx]) {
+      const id = parseInt(items[idx].dataset.id, 10);
+      if (Number.isFinite(id)) selectTentataConfigProduct(userId, templateId, id);
+    }
+  } else if (e.key === 'Escape') {
+    dd?.classList.remove('open');
+  }
 }
 
 function addCaricoTentataLine(userId, templateId, prodId) {
@@ -6085,6 +6153,16 @@ if (!window._tentataProdDdListenerSet) {
       if (wrap && !wrap.contains(e.target)) {
         document.getElementById(`ac-tentata-prod-dd-${i}`)?.classList.remove('open');
       }
+    });
+  });
+}
+
+if (!window._tentataConfigDdListenerSet) {
+  window._tentataConfigDdListenerSet = true;
+  document.addEventListener('click', function(e) {
+    document.querySelectorAll('[id^="tentata-search-dd-"]').forEach(dd => {
+      const wrap = dd.closest('.ac-wrap');
+      if (wrap && !wrap.contains(e.target)) dd.classList.remove('open');
     });
   });
 }
