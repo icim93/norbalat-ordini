@@ -1718,16 +1718,17 @@
     position: absolute;
     top: calc(100% + 4px);
     left: 0; right: 0;
-    z-index: 1000;
     background: var(--surface);
     border: 1.5px solid var(--accent);
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-lg);
-    z-index: 500;
+    z-index: 2000;
     max-height: 260px;
     overflow-y: auto;
   }
   .ac-dropdown.open { display: block; }
+  .tentata-config-card { overflow: visible; }
+  .tentata-config-card .ac-wrap { z-index: 30; }
 
   .ac-group-label {
     padding: 6px 12px 4px;
@@ -5599,7 +5600,7 @@ function renderTentataConfigList() {
         </div>`;
       }).join('');
       return `
-        <div class="card" style="margin-top:10px;border:1px solid var(--border);">
+        <div class="card tentata-config-card" style="margin-top:10px;border:1px solid var(--border);">
           <div class="card-header">
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex:1;">
               <input type="text" value="${escapeHtml(tpl.nome)}" placeholder="Nome profilo" style="min-width:180px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;" oninput="updateTentataTemplateName(${a.id},'${tpl.id}',this.value)">
