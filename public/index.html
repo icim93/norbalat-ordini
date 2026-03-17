@@ -2237,6 +2237,14 @@
         </div>
       </div>
 
+      <div class="page" id="page-ferie">
+        <div class="page-header">
+          <div class="page-title">Ferie</div>
+          <div class="page-sub">Pianificazione assenze dipendenti</div>
+        </div>
+        <div id="ferie-page-body"></div>
+      </div>
+
       <!-- ─── PAGE: Vista Autista ─── -->
       <div class="page" id="page-autista">
         <div class="page-header">
@@ -3834,6 +3842,57 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-ferie">
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-ferie-title">Nuovo periodo ferie</div>
+      <button class="modal-close" onclick="closeModal('modal-ferie')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ferie-id">
+      <div class="form-row">
+        <div class="field form-full">
+          <label>Dipendente *</label>
+          <select id="ferie-utente"></select>
+        </div>
+        <div class="field">
+          <label>Dal *</label>
+          <input type="date" id="ferie-data-inizio">
+        </div>
+        <div class="field">
+          <label>Al *</label>
+          <input type="date" id="ferie-data-fine">
+        </div>
+        <div class="field">
+          <label>Tipo</label>
+          <select id="ferie-tipo">
+            <option value="ferie">Ferie</option>
+            <option value="permesso">Permesso</option>
+            <option value="rol">ROL</option>
+            <option value="recupero">Recupero</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Stato</label>
+          <select id="ferie-stato">
+            <option value="programmata">Programmata</option>
+            <option value="confermata">Confermata</option>
+            <option value="da_approvare">Da approvare</option>
+          </select>
+        </div>
+        <div class="field form-full">
+          <label>Note</label>
+          <textarea id="ferie-note" rows="3" placeholder="Note interne, sostituzioni, mezza giornata, ecc."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-ferie')">Annulla</button>
+      <button class="btn btn-green" onclick="saveFerie()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -3885,6 +3944,7 @@ let state = {
   docCurrentFolderId: null,
   docCurrentFiles: [],
   docCanManage: false,
+  ferie: [],
   giacenze: [],
   giacenzeLotti: {},
   giacenzeAlerts: { sotto_soglia: [], in_scadenza: [] },
@@ -3967,7 +4027,8 @@ async function loadAllData() {
     if (!state.pianoData) state.pianoData = today();
     const canSeePiano = ['admin', 'autista', 'magazzino'].includes(state.currentUser?.ruolo);
     const canSeeRese = ['admin', 'direzione'].includes(state.currentUser?.ruolo);
-    const [utenti, clienti, prodotti, listini, rese, ordini, camions, giri, tentataConfig] = await Promise.all([
+    const canSeeFerie = ['admin', 'amministrazione', 'direzione'].includes(state.currentUser?.ruolo);
+    const [utenti, clienti, prodotti, listini, rese, ordini, camions, giri, tentataConfig, ferie] = await Promise.all([
       api('GET', '/api/utenti'),
       api('GET', '/api/clienti'),
       api('GET', '/api/prodotti'),
@@ -3977,6 +4038,7 @@ async function loadAllData() {
       canSeePiano ? api('GET', `/api/camions?data=${state.pianoData}`) : Promise.resolve([]),
       api('GET', '/api/giri'),
       api('GET', '/api/impostazioni/tentata-vendita').catch(() => ({ carichi: [] })),
+      canSeeFerie ? api('GET', '/api/ferie').catch(() => []) : Promise.resolve([]),
     ]);
     // Normalizza campi: il backend usa snake_case, il frontend usa camelCase
     state.utenti   = (utenti   ||[]).map(normalizeUtente);
@@ -3986,6 +4048,7 @@ async function loadAllData() {
     state.rese     = (rese     ||[]).map(normalizeResa);
     state.ordini   = (ordini   ||[]).map(normalizeOrdine);
     state.camions  = (camions  ||[]).map(normalizeCamion);
+    state.ferie    = Array.isArray(ferie) ? ferie : [];
     state.giriCalendario = (giri||[]).map(g => ({...g, giorni: g.giorni||[]}));
     state.carichiTentataVendita = Array.isArray(tentataConfig?.carichi) ? tentataConfig.carichi.map(entry => ({
       userId: Number(entry.userId),
@@ -5782,6 +5845,232 @@ function renderImpostazioni() {
   if (!state.emailNotificationsLoaded) {
     loadEmailNotificationSettings().catch(() => {});
   }
+}
+
+function canManageFerie() {
+  return ['admin', 'amministrazione', 'direzione'].includes(state.currentUser?.ruolo);
+}
+
+function getFerieTipoLabel(tipo) {
+  const labels = { ferie: 'Ferie', permesso: 'Permesso', rol: 'ROL', recupero: 'Recupero' };
+  return labels[String(tipo || '').toLowerCase()] || (tipo || 'Ferie');
+}
+
+function getFerieStatoBadge(stato) {
+  const map = { programmata: 'badge-blue', confermata: 'badge-green', da_approvare: 'badge-orange' };
+  const key = String(stato || 'programmata');
+  const label = key.replaceAll('_', ' ');
+  return `<span class="badge ${map[key] || 'badge-gray'}">${escapeHtml(label.charAt(0).toUpperCase() + label.slice(1))}</span>`;
+}
+
+function getFerieDays(entry) {
+  const start = new Date(String(entry.data_inizio || '').substring(0, 10));
+  const end = new Date(String(entry.data_fine || '').substring(0, 10));
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+  return Math.floor((end - start) / 86400000) + 1;
+}
+
+function fillFerieUsersSelect(selectedId) {
+  const select = document.getElementById('ferie-utente');
+  if (!select) return;
+  select.innerHTML = [...state.utenti]
+    .sort((a, b) => String((a.nome + ' ' + (a.cognome || '')).trim()).localeCompare(String((b.nome + ' ' + (b.cognome || '')).trim()), 'it', { sensitivity: 'base' }))
+    .map(u => `<option value="${u.id}" ${Number(selectedId) === Number(u.id) ? 'selected' : ''}>${escapeHtml((u.nome + ' ' + (u.cognome || '')).trim())} · ${escapeHtml(u.ruolo)}</option>`)
+    .join('');
+}
+
+function openNewFerie() {
+  if (!canManageFerie()) return;
+  document.getElementById('modal-ferie-title').textContent = 'Nuovo periodo ferie';
+  document.getElementById('ferie-id').value = '';
+  fillFerieUsersSelect('');
+  document.getElementById('ferie-data-inizio').value = today();
+  document.getElementById('ferie-data-fine').value = today();
+  document.getElementById('ferie-tipo').value = 'ferie';
+  document.getElementById('ferie-stato').value = 'programmata';
+  document.getElementById('ferie-note').value = '';
+  openModal('modal-ferie');
+}
+
+function openEditFerie(id) {
+  const item = (state.ferie || []).find(f => Number(f.id) === Number(id));
+  if (!item) return;
+  document.getElementById('modal-ferie-title').textContent = 'Modifica periodo ferie';
+  document.getElementById('ferie-id').value = item.id;
+  fillFerieUsersSelect(item.utente_id);
+  document.getElementById('ferie-data-inizio').value = String(item.data_inizio || '').substring(0, 10);
+  document.getElementById('ferie-data-fine').value = String(item.data_fine || '').substring(0, 10);
+  document.getElementById('ferie-tipo').value = item.tipo || 'ferie';
+  document.getElementById('ferie-stato').value = item.stato || 'programmata';
+  document.getElementById('ferie-note').value = item.note || '';
+  openModal('modal-ferie');
+}
+
+async function saveFerie() {
+  const id = Number(document.getElementById('ferie-id').value);
+  const body = {
+    utente_id: Number(document.getElementById('ferie-utente').value),
+    data_inizio: document.getElementById('ferie-data-inizio').value,
+    data_fine: document.getElementById('ferie-data-fine').value,
+    tipo: document.getElementById('ferie-tipo').value,
+    stato: document.getElementById('ferie-stato').value,
+    note: document.getElementById('ferie-note').value.trim(),
+  };
+  if (!body.utente_id || !body.data_inizio || !body.data_fine) {
+    showToast('Compila dipendente e periodo', 'warning');
+    return;
+  }
+  try {
+    const saved = id ? await api('PUT', `/api/ferie/${id}`, body) : await api('POST', '/api/ferie', body);
+    const user = state.utenti.find(u => Number(u.id) === Number(saved.utente_id));
+    const normalized = { ...saved, nome: user?.nome || '', cognome: user?.cognome || '', ruolo: user?.ruolo || '' };
+    const idx = state.ferie.findIndex(f => Number(f.id) === Number(saved.id));
+    if (idx >= 0) state.ferie[idx] = normalized;
+    else state.ferie.unshift(normalized);
+    closeModal('modal-ferie');
+    renderFeriePage();
+    showToast('Periodo ferie salvato', 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore salvataggio ferie', 'warning');
+  }
+}
+
+async function deleteFerie(id) {
+  const item = (state.ferie || []).find(f => Number(f.id) === Number(id));
+  if (!item) return;
+  const ok = await customConfirm(`Eliminare il periodo ferie di ${(item.nome || '')} ${(item.cognome || '')}?`, 'Elimina', 'Conferma eliminazione');
+  if (!ok) return;
+  try {
+    await api('DELETE', `/api/ferie/${id}`);
+    state.ferie = state.ferie.filter(f => Number(f.id) !== Number(id));
+    renderFeriePage();
+    showToast('Periodo ferie eliminato', 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore eliminazione ferie', 'warning');
+  }
+}
+
+function renderFeriePage() {
+  const container = document.getElementById('ferie-page-body');
+  if (!container) return;
+  if (!canManageFerie()) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔒</div><p>Sezione non disponibile per il tuo profilo.</p></div>`;
+    return;
+  }
+  const search = (document.getElementById('search-ferie')?.value || '').trim().toLowerCase();
+  const monthFilter = document.getElementById('filter-ferie-mese')?.value || '';
+  const userFilter = document.getElementById('filter-ferie-utente')?.value || '';
+  const users = [...state.utenti].sort((a, b) => String((a.nome + ' ' + (a.cognome || '')).trim()).localeCompare(String((b.nome + ' ' + (b.cognome || '')).trim()), 'it', { sensitivity: 'base' }));
+  const ferieRows = (state.ferie || []).filter(f => {
+    const fullName = `${f.nome || ''} ${f.cognome || ''}`.trim().toLowerCase();
+    const text = `${fullName} ${f.note || ''} ${f.tipo || ''} ${f.stato || ''}`.toLowerCase();
+    if (search && !text.includes(search)) return false;
+    if (monthFilter) {
+      const startMonth = String(f.data_inizio || '').slice(0, 7);
+      const endMonth = String(f.data_fine || '').slice(0, 7);
+      if (monthFilter < startMonth || monthFilter > endMonth) return false;
+    }
+    if (userFilter && Number(f.utente_id) !== Number(userFilter)) return false;
+    return true;
+  }).sort((a, b) => String(a.data_inizio || '').localeCompare(String(b.data_inizio || '')) || String(a.cognome || '').localeCompare(String(b.cognome || ''), 'it', { sensitivity: 'base' }));
+  const upcoming = ferieRows.filter(f => String(f.data_inizio || '') >= today()).slice(0, 6);
+  const monthlySummary = ferieRows.reduce((acc, item) => {
+    const key = String(item.data_inizio || '').slice(0, 7) || 'n.d.';
+    acc[key] = (acc[key] || 0) + getFerieDays(item);
+    return acc;
+  }, {});
+
+  container.innerHTML = `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <div class="toolbar-shell">
+          <div class="toolbar-filters">
+            <div class="toolbar-field grow">
+              <label class="toolbar-label">Cerca</label>
+              <input type="text" class="search-input" id="search-ferie" value="${escapeHtml(search)}" placeholder="Dipendente, note, tipo..." oninput="renderFeriePage()">
+            </div>
+            <div class="toolbar-field">
+              <label class="toolbar-label">Mese</label>
+              <input type="month" id="filter-ferie-mese" value="${escapeHtml(monthFilter)}" onchange="renderFeriePage()">
+            </div>
+            <div class="toolbar-field">
+              <label class="toolbar-label">Dipendente</label>
+              <select class="toolbar-select" id="filter-ferie-utente" onchange="renderFeriePage()">
+                <option value="">Tutti</option>
+                ${users.map(u => `<option value="${u.id}" ${Number(userFilter) === Number(u.id) ? 'selected' : ''}>${escapeHtml((u.nome + ' ' + (u.cognome || '')).trim())}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('search-ferie').value='';document.getElementById('filter-ferie-mese').value='';document.getElementById('filter-ferie-utente').value='';renderFeriePage()">Reset</button>
+            <button class="btn btn-green btn-sm" onclick="openNewFerie()">+ Nuovo periodo</button>
+          </div>
+        </div>
+      </div>
+      <div style="padding:0 16px 16px;">
+        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));">
+          <div class="stat-card blue"><div class="stat-label">Periodi visibili</div><div class="stat-value" style="font-size:28px;">${ferieRows.length}</div></div>
+          <div class="stat-card green"><div class="stat-label">Giorni totali</div><div class="stat-value" style="font-size:28px;">${ferieRows.reduce((sum, item) => sum + getFerieDays(item), 0)}</div></div>
+          <div class="stat-card orange"><div class="stat-label">Dipendenti coinvolti</div><div class="stat-value" style="font-size:28px;">${new Set(ferieRows.map(f => f.utente_id)).size}</div></div>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,0.9fr);gap:16px;align-items:start;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Pianificazione ferie</div>
+          <div style="font-size:12px;color:var(--text2);">Elenco completo periodi</div>
+        </div>
+        <div class="table-scroll-wrap"><table>
+          <thead>
+            <tr>
+              <th>Dipendente</th>
+              <th>Periodo</th>
+              <th>Giorni</th>
+              <th>Tipo</th>
+              <th>Stato</th>
+              <th>Note</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${ferieRows.length ? ferieRows.map(item => `
+              <tr>
+                <td><strong>${escapeHtml(`${item.nome || ''} ${item.cognome || ''}`.trim())}</strong><div style="font-size:11px;color:var(--text3);">${escapeHtml(item.ruolo || '')}</div></td>
+                <td>${formatDate(item.data_inizio)}<br><span style="font-size:11px;color:var(--text3);">al ${formatDate(item.data_fine)}</span></td>
+                <td>${getFerieDays(item)}</td>
+                <td>${escapeHtml(getFerieTipoLabel(item.tipo))}</td>
+                <td>${getFerieStatoBadge(item.stato)}</td>
+                <td style="max-width:260px;">${item.note ? escapeHtml(item.note) : '<span style="color:var(--text3);">—</span>'}</td>
+                <td><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="openEditFerie(${item.id})">✏️ Modifica</button><button class="btn btn-outline btn-sm" style="border-color:var(--danger);color:var(--danger);" onclick="deleteFerie(${item.id})">🗑 Elimina</button></div></td>
+              </tr>`).join('') : `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px;">Nessun periodo ferie trovato.</td></tr>`}
+          </tbody>
+        </table></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Prossime assenze</div></div>
+          <div style="padding:0 16px 14px;display:flex;flex-direction:column;gap:10px;">
+            ${upcoming.length ? upcoming.map(item => `
+              <div style="padding:12px;border:1px solid var(--border);border-radius:10px;background:linear-gradient(180deg,#fbfdff 0%,#f4f8fc 100%);">
+                <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><strong>${escapeHtml(`${item.nome || ''} ${item.cognome || ''}`.trim())}</strong>${getFerieStatoBadge(item.stato)}</div>
+                <div style="font-size:12px;color:var(--text2);margin-top:4px;">${formatDate(item.data_inizio)} - ${formatDate(item.data_fine)} · ${getFerieDays(item)} giorni</div>
+                <div style="font-size:12px;color:var(--text3);margin-top:4px;">${escapeHtml(getFerieTipoLabel(item.tipo))}${item.note ? ` · ${escapeHtml(item.note)}` : ''}</div>
+              </div>`).join('') : `<div style="color:var(--text3);padding:6px 0;">Nessuna assenza imminente.</div>`}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Carico per mese</div></div>
+          <div style="padding:0 16px 16px;display:flex;flex-direction:column;gap:8px;">
+            ${Object.keys(monthlySummary).length ? Object.entries(monthlySummary).sort((a, b) => a[0].localeCompare(b[0])).map(([month, days]) => `
+              <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+                <span style="font-weight:700;">${escapeHtml(month)}</span>
+                <span style="color:var(--accent);font-weight:800;">${days} giorni</span>
+              </div>`).join('') : `<div style="color:var(--text3);padding:6px 0;">Nessun dato disponibile.</div>`}
+          </div>
+        </div>
+      </div>
+    </div>`;
 }
 
 async function deleteLineaOrdinePreparazione(ordineId, lineIdx) {

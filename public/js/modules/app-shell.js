@@ -32,6 +32,7 @@
           { page: 'clienti', icon: '🏢', label: 'Clienti' },
           { page: 'prodotti', icon: '🧀', label: 'Prodotti' },
           { page: 'utenti', icon: '👥', label: 'Utenti' },
+          { page: 'ferie', icon: '🌴', label: 'Ferie' },
         ],
       },
       {
@@ -60,6 +61,7 @@
     amministrazione: [
       { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'clienti', icon: '🏢', label: 'Clienti' },
+      { page: 'ferie', icon: '🌴', label: 'Ferie' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
@@ -88,6 +90,7 @@
     ],
     direzione: [
       { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
+      { page: 'ferie', icon: '🌴', label: 'Ferie' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
       { page: 'rese', icon: '♻️', label: 'Gestione Rese' },
@@ -456,6 +459,7 @@
     if (page === 'giacenze') window.renderGiacenzePage();
     if (page === 'tentata') window.renderTentataPage();
     if (page === 'piano') window.renderPianoPage();
+    if (page === 'ferie') window.renderFeriePage();
     if (page === 'report') window.renderReport();
     if (page === 'impostazioni') window.renderImpostazioni();
     if (page === 'sperimentale') window.renderSperimentale();

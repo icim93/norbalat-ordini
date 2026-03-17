@@ -1149,6 +1149,23 @@ async function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_movimenti_giacenza_created ON movimenti_giacenza(created_at DESC);
   `);
 
+  await q(`
+    CREATE TABLE IF NOT EXISTS ferie_dipendenti (
+      id              SERIAL PRIMARY KEY,
+      utente_id       INTEGER NOT NULL REFERENCES utenti(id) ON DELETE CASCADE,
+      data_inizio     DATE NOT NULL,
+      data_fine       DATE NOT NULL,
+      tipo            TEXT NOT NULL DEFAULT 'ferie',
+      stato           TEXT NOT NULL DEFAULT 'programmata',
+      note            TEXT DEFAULT '',
+      created_by      INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      created_at      TIMESTAMPTZ DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ferie_utente_periodo ON ferie_dipendenti(utente_id, data_inizio, data_fine);
+  `);
+
   const categoriaDefaultsKey = 'prodotti_categoria_defaults_v1';
   const categoriaDefaultsApplied = await q('SELECT key FROM app_settings WHERE key=$1 LIMIT 1', [categoriaDefaultsKey]);
   if (!categoriaDefaultsApplied.rows.length) {
@@ -1859,6 +1876,78 @@ app.delete('/api/utenti/:id', authMiddleware, requireRole('admin'), async (req, 
 });
 
 // ─── CLIENTI ────────────────────────────────────────────────────
+app.get('/api/ferie', authMiddleware, requireRole('admin', 'amministrazione', 'direzione'), async (req, res) => {
+  try {
+    const { rows } = await q(
+      `SELECT f.*, u.nome, u.cognome, u.ruolo,
+              c.nome AS created_by_nome, c.cognome AS created_by_cognome
+       FROM ferie_dipendenti f
+       JOIN utenti u ON u.id = f.utente_id
+       LEFT JOIN utenti c ON c.id = f.created_by
+       ORDER BY f.data_inizio DESC, f.id DESC`
+    );
+    res.json(rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/ferie', authMiddleware, requireRole('admin', 'amministrazione', 'direzione'), async (req, res) => {
+  try {
+    const utenteId = Number(req.body?.utente_id);
+    const dataInizio = String(req.body?.data_inizio || '').trim();
+    const dataFine = String(req.body?.data_fine || '').trim();
+    const tipo = String(req.body?.tipo || 'ferie').trim() || 'ferie';
+    const stato = String(req.body?.stato || 'programmata').trim() || 'programmata';
+    const note = String(req.body?.note || '').trim();
+    if (!Number.isFinite(utenteId) || utenteId <= 0) return res.status(400).json({ error: 'Dipendente non valido' });
+    if (!dataInizio || !dataFine) return res.status(400).json({ error: 'Periodo obbligatorio' });
+    if (dataFine < dataInizio) return res.status(400).json({ error: 'La data fine non puo essere precedente alla data inizio' });
+    const { rows: userRows } = await q('SELECT id FROM utenti WHERE id=$1 LIMIT 1', [utenteId]);
+    if (!userRows.length) return res.status(404).json({ error: 'Dipendente non trovato' });
+    const { rows } = await q(
+      `INSERT INTO ferie_dipendenti (utente_id, data_inizio, data_fine, tipo, stato, note, created_by, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+       RETURNING *`,
+      [utenteId, dataInizio, dataFine, tipo, stato, note, req.user.id || null]
+    );
+    res.json(rows[0]);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/ferie/:id', authMiddleware, requireRole('admin', 'amministrazione', 'direzione'), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const utenteId = Number(req.body?.utente_id);
+    const dataInizio = String(req.body?.data_inizio || '').trim();
+    const dataFine = String(req.body?.data_fine || '').trim();
+    const tipo = String(req.body?.tipo || 'ferie').trim() || 'ferie';
+    const stato = String(req.body?.stato || 'programmata').trim() || 'programmata';
+    const note = String(req.body?.note || '').trim();
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'ID non valido' });
+    if (!Number.isFinite(utenteId) || utenteId <= 0) return res.status(400).json({ error: 'Dipendente non valido' });
+    if (!dataInizio || !dataFine) return res.status(400).json({ error: 'Periodo obbligatorio' });
+    if (dataFine < dataInizio) return res.status(400).json({ error: 'La data fine non puo essere precedente alla data inizio' });
+    const { rows } = await q(
+      `UPDATE ferie_dipendenti
+       SET utente_id=$1, data_inizio=$2, data_fine=$3, tipo=$4, stato=$5, note=$6, updated_at=NOW()
+       WHERE id=$7
+       RETURNING *`,
+      [utenteId, dataInizio, dataFine, tipo, stato, note, id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Voce ferie non trovata' });
+    res.json(rows[0]);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/ferie/:id', authMiddleware, requireRole('admin', 'amministrazione', 'direzione'), async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'ID non valido' });
+    const result = await q('DELETE FROM ferie_dipendenti WHERE id=$1', [id]);
+    if (!result.rowCount) return res.status(404).json({ error: 'Voce ferie non trovata' });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/clienti', authMiddleware, async (req, res) => {
   try {
     await ensureTentataVenditaCliente();
