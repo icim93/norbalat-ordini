@@ -3545,9 +3545,9 @@
         <select id="tentata-template-select" onchange="changeTentataTemplate(this.value)"></select>
       </div>
       <div class="field">
-        <label>Cliente</label>
+        <label>Cliente tecnico</label>
         <div class="ac-wrap" id="ac-tentata-wrap">
-          <input type="text" class="ac-input" id="ac-tentata-input" placeholder="Cerca cliente…" autocomplete="off" oninput="acFilter('tentata')" onfocus="acOpen('tentata')" onkeydown="acKey(event,'tentata')">
+          <input type="text" class="ac-input" id="ac-tentata-input" placeholder="Cliente tecnico TV" autocomplete="off" readonly style="width:100%;background:var(--surface2);cursor:not-allowed;">
           <input type="hidden" id="tentata-cliente">
           <div class="ac-dropdown" id="ac-tentata-dd"></div>
         </div>
@@ -3856,7 +3856,16 @@ function isClienteSbloccato(c) {
 }
 
 function clientiOrdinabili() {
-  return state.clienti.filter(isClienteSbloccato);
+  return state.clienti.filter(c => isClienteSbloccato(c) && !(typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c)));
+}
+
+async function ensureTentataVenditaClienteLoaded() {
+  let cliente = state.clienti.find(c => typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c));
+  if (cliente) return cliente;
+  const rows = await api('GET', '/api/clienti');
+  state.clienti = (rows || []).map(row => typeof normalizeCliente === 'function' ? normalizeCliente(row) : row);
+  cliente = state.clienti.find(c => typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c));
+  return cliente || null;
 }
 
 function getOrdineGiroEffettivo(o) {
@@ -5960,17 +5969,22 @@ function createEmptyTentataLine() {
   return { prodId: null, qty: 1 };
 }
 
-function openTentataVendita(userId = null) {
+async function openTentataVendita(userId = null) {
   userId = Number(userId) || state.currentUser.id;
   tentataUserId = userId;
+  const tentataCliente = await ensureTentataVenditaClienteLoaded();
+  if (!tentataCliente) {
+    showToast('Cliente tecnico tentata vendita non disponibile', 'warning');
+    return;
+  }
   const activeTemplate = getTentataActiveTemplate(userId, getNextBusinessDate());
   const config = getTentataConfigForUser(userId);
   tentataTemplateId = activeTemplate?.id || config.templates?.[0]?.id || null;
   tentataLines = activeTemplate ? activeTemplate.linee.map(l => ({ ...l })) : [];
   if (!tentataLines.length) tentataLines = [createEmptyTentataLine()];
   acState.tentata = { value: null, query: '', focusIdx: -1 };
-  document.getElementById('ac-tentata-input').value = '';
-  document.getElementById('tentata-cliente').value = '';
+  document.getElementById('ac-tentata-input').value = tentataCliente.nome;
+  document.getElementById('tentata-cliente').value = tentataCliente.id;
   document.getElementById('tentata-note').value = '';
   const targetAutista = state.utenti.find(u => u.id === userId);
   const targetNome = targetAutista ? `${targetAutista.nome} ${targetAutista.cognome || ''}`.trim() : 'autista';
@@ -6153,12 +6167,15 @@ function acTentataProdKey(e, i) {
 }
 
 async function saveTentataVendita() {
-  const clienteId = parseInt(document.getElementById('tentata-cliente').value);
+  let clienteId = parseInt(document.getElementById('tentata-cliente').value);
   const note = document.getElementById('tentata-note').value.trim();
   const validLines = tentataLines.filter(l => l.prodId);
-  if (!clienteId) { showToast('Seleziona un cliente', 'warning'); return; }
-  const cliente = getCliente(clienteId);
-  if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
+  if (!clienteId) {
+    const tentataCliente = await ensureTentataVenditaClienteLoaded();
+    clienteId = tentataCliente?.id || null;
+    if (clienteId) document.getElementById('tentata-cliente').value = clienteId;
+  }
+  if (!clienteId) { showToast('Cliente tecnico tentata vendita non disponibile', 'warning'); return; }
   if (!validLines.length) { showToast('Aggiungi almeno un prodotto', 'warning'); return; }
   const dataTentata = getNextBusinessDate();
 

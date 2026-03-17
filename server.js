@@ -78,6 +78,8 @@ const EXPERIMENTAL_AUTO_IMPORT_CHECK_MS = Math.max(5 * 60 * 1000, Number(process
 
 const app  = express();
 const pool = new Pool({ connectionString: DATABASE_URL });
+const TENTATA_VENDITA_CLIENT_NAME = 'TENTATA VENDITA';
+const TENTATA_VENDITA_CLIENT_CLASS = 'cliente_tecnico_tentata';
 
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
@@ -85,6 +87,41 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Helper query
 const q = (text, params) => pool.query(text, params);
+
+async function ensureTentataVenditaCliente(client = null) {
+  const db = client || pool;
+  const existing = await db.query(
+    `SELECT id FROM clienti WHERE UPPER(TRIM(nome)) = UPPER(TRIM($1)) ORDER BY id LIMIT 1`,
+    [TENTATA_VENDITA_CLIENT_NAME]
+  );
+  if (existing.rows.length) {
+    await db.query(
+      `UPDATE clienti
+         SET nome = $1,
+             localita = COALESCE(NULLIF(localita, ''), 'SISTEMA'),
+             giro = COALESCE(NULLIF(giro, ''), 'variabile'),
+             classificazione = $2,
+             onboarding_stato = 'approvato',
+             sbloccato = TRUE
+       WHERE id = $3`,
+      [TENTATA_VENDITA_CLIENT_NAME, TENTATA_VENDITA_CLIENT_CLASS, existing.rows[0].id]
+    );
+    return existing.rows[0].id;
+  }
+  const inserted = await db.query(
+    `INSERT INTO clienti (
+        nome, alias, localita, giro, agente_id, autista_di_giro, note, piva,
+        codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore,
+        classificazione, onboarding_stato, onboarding_checklist, fido, sbloccato
+      ) VALUES (
+        $1, '', 'SISTEMA', 'variabile', NULL, NULL, 'Cliente tecnico generato automaticamente per le tentate vendite',
+        '', '', '', '', '', FALSE, $2, 'approvato', $3::jsonb, 0, TRUE
+      )
+      RETURNING id`,
+    [TENTATA_VENDITA_CLIENT_NAME, TENTATA_VENDITA_CLIENT_CLASS, JSON.stringify({})]
+  );
+  return inserted.rows[0].id;
+}
 
 function normalizePiva(raw) {
   return String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -1748,6 +1785,7 @@ app.delete('/api/utenti/:id', authMiddleware, requireRole('admin'), async (req, 
 // ─── CLIENTI ────────────────────────────────────────────────────
 app.get('/api/clienti', authMiddleware, async (req, res) => {
   try {
+    await ensureTentataVenditaCliente();
     const { rows } = await q(`
       SELECT c.*, u.nome as agente_nome,
              a.nome||' '||COALESCE(a.cognome,'') as autista_nome

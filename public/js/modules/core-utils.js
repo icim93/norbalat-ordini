@@ -1,4 +1,7 @@
 (function () {
+  const TENTATA_VENDITA_CLIENT_NAME = 'TENTATA VENDITA';
+  const TENTATA_VENDITA_CLIENT_CLASS = 'cliente_tecnico_tentata';
+
   function eur(v) {
     const n = Number(v);
     if (!Number.isFinite(n)) return '-';
@@ -17,6 +20,13 @@
 
   function getProdotto(id) {
     return window.state.prodotti.find(p => p.id === id) || { nome: '?', um: '' };
+  }
+
+  function isTentataVenditaCliente(cliente) {
+    if (!cliente) return false;
+    const nome = String(cliente.nome || '').trim().toUpperCase();
+    const classificazione = String(cliente.classificazione || '').trim().toLowerCase();
+    return classificazione === TENTATA_VENDITA_CLIENT_CLASS || nome === TENTATA_VENDITA_CLIENT_NAME;
   }
 
   function today() {
@@ -82,6 +92,9 @@
   window.getCliente = getCliente;
   window.getAgente = getAgente;
   window.getProdotto = getProdotto;
+  window.isTentataVenditaCliente = isTentataVenditaCliente;
+  window.TENTATA_VENDITA_CLIENT_NAME = TENTATA_VENDITA_CLIENT_NAME;
+  window.TENTATA_VENDITA_CLIENT_CLASS = TENTATA_VENDITA_CLIENT_CLASS;
   window.today = today;
   window.getNextBusinessDate = getNextBusinessDate;
   window.escapeHtml = escapeHtml;

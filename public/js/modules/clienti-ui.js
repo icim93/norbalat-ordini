@@ -26,7 +26,7 @@ function renderClientiStatusStrip(list) {
 function renderClientiTable() {
   const q = (document.getElementById('search-clienti')?.value || '').toLowerCase();
   const filterGiro = document.getElementById('filter-giro')?.value || '';
-  let list = state.clienti;
+  let list = state.clienti.filter(c => !(typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c)));
   if (q) list = list.filter(c =>
     c.nome.toLowerCase().includes(q) ||
     (c.alias || '').toLowerCase().includes(q) ||
