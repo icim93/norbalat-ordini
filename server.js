@@ -211,10 +211,30 @@ async function getTentataVenditaSettings() {
     return {
       carichi: carichi.map(entry => ({
         userId: Number(entry?.userId),
-        linee: Array.isArray(entry?.linee) ? entry.linee.map(line => ({
-          prodId: Number(line?.prodId),
-          qty: Number(line?.qty || 0),
-        })).filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0) : [],
+        templates: (() => {
+          const rawTemplates = Array.isArray(entry?.templates) && entry.templates.length
+            ? entry.templates
+            : [{
+                id: `default-${Number(entry?.userId) || 'x'}`,
+                nome: 'Predefinita',
+                giorni: [],
+                linee: Array.isArray(entry?.linee) ? entry.linee : [],
+              }];
+          return rawTemplates.map(template => ({
+            id: String(template?.id || `tpl-${Date.now()}`),
+            nome: String(template?.nome || 'Profilo TV').trim() || 'Profilo TV',
+            giorni: Array.isArray(template?.giorni)
+              ? template.giorni.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6)
+              : [],
+            linee: Array.isArray(template?.linee) ? template.linee.map(line => ({
+              prodId: Number(line?.prodId),
+              qty: Number(line?.qty || 0),
+            })).filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0) : [],
+          }));
+        })(),
+        assegnazioni: (entry?.assegnazioni && typeof entry.assegnazioni === 'object')
+          ? Object.fromEntries(Object.entries(entry.assegnazioni).map(([date, templateId]) => [String(date).slice(0, 10), String(templateId || '')]).filter(([, templateId]) => templateId))
+          : {},
       })).filter(entry => Number.isFinite(entry.userId)),
     };
   } catch (_) {
@@ -226,10 +246,20 @@ async function saveTentataVenditaSettings(next) {
   const payload = {
     carichi: Array.isArray(next?.carichi) ? next.carichi.map(entry => ({
       userId: Number(entry?.userId),
-      linee: Array.isArray(entry?.linee) ? entry.linee.map(line => ({
-        prodId: Number(line?.prodId),
-        qty: Number(line?.qty || 0),
-      })).filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0) : [],
+      templates: Array.isArray(entry?.templates) ? entry.templates.map(template => ({
+        id: String(template?.id || `tpl-${Date.now()}`),
+        nome: String(template?.nome || 'Profilo TV').trim() || 'Profilo TV',
+        giorni: Array.isArray(template?.giorni)
+          ? template.giorni.map(Number).filter(day => Number.isInteger(day) && day >= 0 && day <= 6)
+          : [],
+        linee: Array.isArray(template?.linee) ? template.linee.map(line => ({
+          prodId: Number(line?.prodId),
+          qty: Number(line?.qty || 0),
+        })).filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0) : [],
+      })).filter(template => template.id) : [],
+      assegnazioni: (entry?.assegnazioni && typeof entry.assegnazioni === 'object')
+        ? Object.fromEntries(Object.entries(entry.assegnazioni).map(([date, templateId]) => [String(date).slice(0, 10), String(templateId || '')]).filter(([, templateId]) => templateId))
+        : {},
     })).filter(entry => Number.isFinite(entry.userId)) : [],
   };
   await q(
