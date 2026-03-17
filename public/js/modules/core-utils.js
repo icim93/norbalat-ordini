@@ -74,7 +74,9 @@
 
   function formatDate(d) {
     if (!d) return '';
-    const [y, m, dd] = d.split('-');
+    const dateOnly = String(d).trim().split('T')[0];
+    const [y, m, dd] = dateOnly.split('-');
+    if (!y || !m || !dd) return dateOnly;
     return `${dd}/${m}/${y}`;
   }
 

@@ -351,6 +351,8 @@ document.addEventListener('click', function(e) {
 
 function getDefaultUM(prodotto) {
   if (!prodotto) return 'Pezzi';
+  const packaging = String(prodotto.packaging || '').toLowerCase();
+  if (/\b1\s*pz\b/.test(packaging) || /\bpezz/i.test(packaging)) return 'Pezzi';
   if (prodotto.cartoniAttivi) return 'Cartoni';
   const base = String(prodotto.um || '').toLowerCase();
   if (base === 'kg') return 'Kg';
@@ -374,12 +376,32 @@ function getProductOrderUnits(prodotto) {
   if (!prodotto) return ['Pezzi'];
   const units = [];
   const base = String(prodotto.um || '').toLowerCase();
+  const packaging = String(prodotto.packaging || '').toLowerCase();
+  const hasLegacyPieces = /\b1\s*pz\b/.test(packaging) || /\bpezz/i.test(packaging);
   if (base === 'kg') units.push('Kg');
   else if (base === 'lt') units.push('Litri');
   else units.push('Pezzi');
+  if (hasLegacyPieces && !units.includes('Pezzi')) units.unshift('Pezzi');
   if (prodotto.cartoniAttivi && Number.isFinite(Number(prodotto.unitaPerCartone)) && Number(prodotto.unitaPerCartone) > 0) units.push('Cartoni');
   if (prodotto.pedaneAttive && Number.isFinite(Number(prodotto.cartoniPerPedana)) && Number(prodotto.cartoniPerPedana) > 0 && units.includes('Cartoni')) units.push('Pedana');
   return units;
+}
+
+function getLegacyBaseQtyFromPackaging(prodotto, qty, um) {
+  const packaging = String(prodotto?.packaging || '').toLowerCase().replace(/\s+/g, '');
+  if (!packaging) return null;
+  const current = String(um || '').toLowerCase();
+  const pieceMatch = packaging.match(/1pz=([\d.,]+)(kg|lt|l)/i);
+  if (pieceMatch && current === 'pezzi') {
+    const factor = Number(String(pieceMatch[1]).replace(',', '.'));
+    return Number.isFinite(factor) && factor > 0 ? qty * factor : null;
+  }
+  const cartoniMatch = packaging.match(/1c(?:t|artone)=([\d.,]+)(kg|lt|l|pz)/i);
+  if (cartoniMatch && current === 'cartoni') {
+    const factor = Number(String(cartoniMatch[1]).replace(',', '.'));
+    return Number.isFinite(factor) && factor > 0 ? qty * factor : null;
+  }
+  return null;
 }
 
 function getLineBaseQty(line) {
@@ -396,6 +418,10 @@ function getLineBaseQty(line) {
   if (um === 'cartoni') {
     if (!p.cartoniAttivi || !Number.isFinite(Number(p.unitaPerCartone))) return null;
     return qty * Number(p.unitaPerCartone);
+  }
+  if (um === 'pezzi' || um === 'cartoni') {
+    const legacy = getLegacyBaseQtyFromPackaging(p, qty, um);
+    if (Number.isFinite(legacy) && legacy > 0) return legacy;
   }
   return qty;
 }

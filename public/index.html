@@ -3830,6 +3830,10 @@
     </div>
     <div class="modal-body">
       <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Scarica rapidamente piu prodotti e lotti senza passare dagli ordini.</div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Causale unica registrazione</label>
+        <input type="text" id="scarico-rapido-causale" placeholder="Es. vendita diretta fuori gestionale">
+      </div>
       <div id="scarico-rapido-rows" style="display:flex;flex-direction:column;gap:0;"></div>
       <div style="margin-top:12px;">
         <button class="btn btn-outline btn-sm" onclick="addScaricoRapidoRow()">+ Aggiungi riga</button>
@@ -3945,6 +3949,8 @@ let state = {
   docCurrentFiles: [],
   docCanManage: false,
   ferie: [],
+  ferieCalendarMode: 'mese',
+  ferieCalendarAnchor: '',
   giacenze: [],
   giacenzeLotti: {},
   giacenzeAlerts: { sotto_soglia: [], in_scadenza: [] },
@@ -5864,10 +5870,139 @@ function getFerieStatoBadge(stato) {
 }
 
 function getFerieDays(entry) {
-  const start = new Date(String(entry.data_inizio || '').substring(0, 10));
-  const end = new Date(String(entry.data_fine || '').substring(0, 10));
+  const start = new Date(getFerieDateOnly(entry.data_inizio) + 'T00:00:00');
+  const end = new Date(getFerieDateOnly(entry.data_fine) + 'T00:00:00');
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
   return Math.floor((end - start) / 86400000) + 1;
+}
+
+function getFerieDateOnly(value) {
+  return String(value || '').split('T')[0];
+}
+
+function getFerieUserColor(userId) {
+  const palette = ['#1f7a8c', '#c8553d', '#5b8e7d', '#7f5af0', '#d97706', '#4f46e5', '#b91c1c', '#0f766e'];
+  return palette[Math.abs(Number(userId) || 0) % palette.length];
+}
+
+function formatFerieMonthLabel(monthKey) {
+  const [year, month] = String(monthKey || '').split('-');
+  const date = new Date(`${year || today().slice(0,4)}-${month || '01'}-01T00:00:00`);
+  return Number.isNaN(date.getTime()) ? monthKey : date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+}
+
+function setFerieCalendarMode(mode) {
+  state.ferieCalendarMode = mode === 'settimana' ? 'settimana' : 'mese';
+  renderFeriePage();
+}
+
+function shiftFerieCalendar(step) {
+  const anchor = state.ferieCalendarAnchor || today();
+  const d = new Date(`${anchor}T00:00:00`);
+  if (state.ferieCalendarMode === 'settimana') d.setDate(d.getDate() + (7 * step));
+  else d.setMonth(d.getMonth() + step);
+  state.ferieCalendarAnchor = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  renderFeriePage();
+}
+
+function buildFerieCalendarHtml(ferieRows) {
+  const anchor = state.ferieCalendarAnchor || today();
+  state.ferieCalendarAnchor = anchor;
+  const events = ferieRows.map(item => ({
+    ...item,
+    start: new Date(`${getFerieDateOnly(item.data_inizio)}T00:00:00`),
+    end: new Date(`${getFerieDateOnly(item.data_fine)}T00:00:00`),
+    color: getFerieUserColor(item.utente_id),
+    fullName: `${item.nome || ''} ${item.cognome || ''}`.trim(),
+  })).filter(item => !Number.isNaN(item.start.getTime()) && !Number.isNaN(item.end.getTime()));
+  const legend = [...new Map(events.map(ev => [ev.utente_id, { utente_id: ev.utente_id, fullName: ev.fullName, color: ev.color }])).values()];
+
+  if (state.ferieCalendarMode === 'settimana') {
+    const base = new Date(`${anchor}T00:00:00`);
+    const day = base.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    base.setDate(base.getDate() + mondayOffset);
+    const weekDays = Array.from({ length: 7 }, (_, idx) => {
+      const d = new Date(base);
+      d.setDate(base.getDate() + idx);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dayEvents = events.filter(ev => key >= getFerieDateOnly(ev.data_inizio) && key <= getFerieDateOnly(ev.data_fine));
+      return { key, date: d, dayEvents };
+    });
+    return `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Calendario settimanale</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-outline btn-sm" onclick="shiftFerieCalendar(-1)">←</button>
+            <div style="font-size:12px;color:var(--text2);min-width:190px;text-align:center;">${formatDate(weekDays[0].key)} - ${formatDate(weekDays[6].key)}</div>
+            <button class="btn btn-outline btn-sm" onclick="shiftFerieCalendar(1)">→</button>
+          </div>
+        </div>
+        <div style="padding:0 16px 16px;">
+          <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;">
+            ${weekDays.map(dayItem => `
+              <div style="border:1px solid var(--border);border-radius:12px;background:var(--surface1);min-height:170px;padding:10px;">
+                <div style="font-weight:800;font-size:12px;text-transform:uppercase;">${dayItem.date.toLocaleDateString('it-IT', { weekday: 'short' })}</div>
+                <div style="font-size:18px;font-weight:800;margin:6px 0 10px;">${String(dayItem.date.getDate()).padStart(2, '0')}</div>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  ${dayItem.dayEvents.length ? dayItem.dayEvents.map(ev => `<div style="padding:6px 8px;border-radius:8px;background:${ev.color};color:#fff;font-size:11px;font-weight:700;">${escapeHtml(ev.fullName)}<div style="font-size:10px;font-weight:500;opacity:0.9;">${escapeHtml(getFerieTipoLabel(ev.tipo))}</div></div>`).join('') : `<div style="font-size:11px;color:var(--text3);">Nessuna assenza</div>`}
+                </div>
+              </div>`).join('')}
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+            ${legend.map(item => `<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:var(--surface2);font-size:12px;"><span style="width:10px;height:10px;border-radius:50%;background:${item.color};display:inline-block;"></span>${escapeHtml(item.fullName)}</span>`).join('') || '<span style="font-size:12px;color:var(--text3);">Nessuna legenda disponibile</span>'}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const ref = new Date(`${anchor}T00:00:00`);
+  const year = ref.getFullYear();
+  const month = ref.getMonth();
+  const first = new Date(year, month, 1);
+  const start = new Date(first);
+  const offset = first.getDay() === 0 ? -6 : 1 - first.getDay();
+  start.setDate(first.getDate() + offset);
+  const days = Array.from({ length: 42 }, (_, idx) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + idx);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const dayEvents = events.filter(ev => key >= getFerieDateOnly(ev.data_inizio) && key <= getFerieDateOnly(ev.data_fine));
+    return { key, date: d, inMonth: d.getMonth() === month, dayEvents };
+  });
+  return `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Calendario mensile</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-outline btn-sm" onclick="shiftFerieCalendar(-1)">←</button>
+          <div style="font-size:12px;color:var(--text2);min-width:180px;text-align:center;">${escapeHtml(formatFerieMonthLabel(`${year}-${String(month + 1).padStart(2, '0')}`))}</div>
+          <button class="btn btn-outline btn-sm" onclick="shiftFerieCalendar(1)">→</button>
+        </div>
+      </div>
+      <div style="padding:0 16px 16px;">
+        <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-bottom:8px;">
+          ${['Lun','Mar','Mer','Gio','Ven','Sab','Dom'].map(label => `<div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;padding:4px 6px;">${label}</div>`).join('')}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;">
+          ${days.map(dayItem => `
+            <div style="min-height:130px;border:1px solid ${dayItem.inMonth ? 'var(--border)' : '#e7edf4'};border-radius:12px;padding:8px;background:${dayItem.inMonth ? 'var(--surface1)' : '#f7fafc'};opacity:${dayItem.inMonth ? '1' : '0.72'};">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span style="font-size:12px;font-weight:800;">${String(dayItem.date.getDate()).padStart(2, '0')}</span>
+                ${dayItem.key === today() ? '<span class="badge badge-blue">Oggi</span>' : ''}
+              </div>
+              <div style="display:flex;flex-direction:column;gap:5px;">
+                ${dayItem.dayEvents.slice(0, 3).map(ev => `<div style="padding:5px 6px;border-radius:8px;background:${ev.color};color:#fff;font-size:10px;font-weight:700;line-height:1.2;">${escapeHtml(ev.fullName)}</div>`).join('')}
+                ${dayItem.dayEvents.length > 3 ? `<div style="font-size:10px;color:var(--text3);">+${dayItem.dayEvents.length - 3} altri</div>` : ''}
+              </div>
+            </div>`).join('')}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+          ${legend.map(item => `<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:var(--surface2);font-size:12px;"><span style="width:10px;height:10px;border-radius:50%;background:${item.color};display:inline-block;"></span>${escapeHtml(item.fullName)}</span>`).join('') || '<span style="font-size:12px;color:var(--text3);">Nessuna legenda disponibile</span>'}
+        </div>
+      </div>
+    </div>`;
 }
 
 function fillFerieUsersSelect(selectedId) {
@@ -5966,19 +6101,20 @@ function renderFeriePage() {
     const text = `${fullName} ${f.note || ''} ${f.tipo || ''} ${f.stato || ''}`.toLowerCase();
     if (search && !text.includes(search)) return false;
     if (monthFilter) {
-      const startMonth = String(f.data_inizio || '').slice(0, 7);
-      const endMonth = String(f.data_fine || '').slice(0, 7);
+      const startMonth = getFerieDateOnly(f.data_inizio).slice(0, 7);
+      const endMonth = getFerieDateOnly(f.data_fine).slice(0, 7);
       if (monthFilter < startMonth || monthFilter > endMonth) return false;
     }
     if (userFilter && Number(f.utente_id) !== Number(userFilter)) return false;
     return true;
-  }).sort((a, b) => String(a.data_inizio || '').localeCompare(String(b.data_inizio || '')) || String(a.cognome || '').localeCompare(String(b.cognome || ''), 'it', { sensitivity: 'base' }));
-  const upcoming = ferieRows.filter(f => String(f.data_inizio || '') >= today()).slice(0, 6);
+  }).sort((a, b) => getFerieDateOnly(a.data_inizio).localeCompare(getFerieDateOnly(b.data_inizio)) || String(a.cognome || '').localeCompare(String(b.cognome || ''), 'it', { sensitivity: 'base' }));
+  const upcoming = ferieRows.filter(f => getFerieDateOnly(f.data_inizio) >= today()).slice(0, 6);
   const monthlySummary = ferieRows.reduce((acc, item) => {
-    const key = String(item.data_inizio || '').slice(0, 7) || 'n.d.';
+    const key = getFerieDateOnly(item.data_inizio).slice(0, 7) || 'n.d.';
     acc[key] = (acc[key] || 0) + getFerieDays(item);
     return acc;
   }, {});
+  const calendarHtml = buildFerieCalendarHtml(ferieRows);
 
   container.innerHTML = `
     <div class="card" style="margin-bottom:16px;">
@@ -6015,6 +6151,16 @@ function renderFeriePage() {
         </div>
       </div>
     </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <div class="card-title">Calendario assenze</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline btn-sm ${state.ferieCalendarMode === 'settimana' ? 'active' : ''}" onclick="setFerieCalendarMode('settimana')">Settimana</button>
+          <button class="btn btn-outline btn-sm ${state.ferieCalendarMode === 'mese' ? 'active' : ''}" onclick="setFerieCalendarMode('mese')">Mese</button>
+        </div>
+      </div>
+      <div style="padding:0 0 0;">${calendarHtml}</div>
+    </div>
     <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,0.9fr);gap:16px;align-items:start;">
       <div class="card">
         <div class="card-header">
@@ -6037,7 +6183,7 @@ function renderFeriePage() {
             ${ferieRows.length ? ferieRows.map(item => `
               <tr>
                 <td><strong>${escapeHtml(`${item.nome || ''} ${item.cognome || ''}`.trim())}</strong><div style="font-size:11px;color:var(--text3);">${escapeHtml(item.ruolo || '')}</div></td>
-                <td>${formatDate(item.data_inizio)}<br><span style="font-size:11px;color:var(--text3);">al ${formatDate(item.data_fine)}</span></td>
+                <td>${formatDate(getFerieDateOnly(item.data_inizio))}<br><span style="font-size:11px;color:var(--text3);">al ${formatDate(getFerieDateOnly(item.data_fine))}</span></td>
                 <td>${getFerieDays(item)}</td>
                 <td>${escapeHtml(getFerieTipoLabel(item.tipo))}</td>
                 <td>${getFerieStatoBadge(item.stato)}</td>
@@ -6054,7 +6200,7 @@ function renderFeriePage() {
             ${upcoming.length ? upcoming.map(item => `
               <div style="padding:12px;border:1px solid var(--border);border-radius:10px;background:linear-gradient(180deg,#fbfdff 0%,#f4f8fc 100%);">
                 <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><strong>${escapeHtml(`${item.nome || ''} ${item.cognome || ''}`.trim())}</strong>${getFerieStatoBadge(item.stato)}</div>
-                <div style="font-size:12px;color:var(--text2);margin-top:4px;">${formatDate(item.data_inizio)} - ${formatDate(item.data_fine)} · ${getFerieDays(item)} giorni</div>
+                <div style="font-size:12px;color:var(--text2);margin-top:4px;">${formatDate(getFerieDateOnly(item.data_inizio))} - ${formatDate(getFerieDateOnly(item.data_fine))} · ${getFerieDays(item)} giorni</div>
                 <div style="font-size:12px;color:var(--text3);margin-top:4px;">${escapeHtml(getFerieTipoLabel(item.tipo))}${item.note ? ` · ${escapeHtml(item.note)}` : ''}</div>
               </div>`).join('') : `<div style="color:var(--text3);padding:6px 0;">Nessuna assenza imminente.</div>`}
           </div>
@@ -6064,7 +6210,7 @@ function renderFeriePage() {
           <div style="padding:0 16px 16px;display:flex;flex-direction:column;gap:8px;">
             ${Object.keys(monthlySummary).length ? Object.entries(monthlySummary).sort((a, b) => a[0].localeCompare(b[0])).map(([month, days]) => `
               <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
-                <span style="font-weight:700;">${escapeHtml(month)}</span>
+                <span style="font-weight:700;">${escapeHtml(formatFerieMonthLabel(month))}</span>
                 <span style="color:var(--accent);font-weight:800;">${days} giorni</span>
               </div>`).join('') : `<div style="color:var(--text3);padding:6px 0;">Nessun dato disponibile.</div>`}
           </div>
@@ -7319,11 +7465,15 @@ function updatePDFPreview() {
     const linee = o.linee.map(l => {
       const p = l.prodId ? getProdotto(l.prodId) : null;
       const nome = l.prodottoNomeLibero || p?.nome || 'Prodotto libero';
-      const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
       const qty = l.qty || 1;
+      const qtyBase = Number(l.qtyBase);
+      const qtyBaseLabel = Number.isFinite(qtyBase) && qtyBase > 0
+        ? `${Number(qtyBase).toFixed(2).replace(/\.00$/, '')} ${p?.um || ''}`
+        : (typeof getLineBaseQtyLabel === 'function' ? getLineBaseQtyLabel(l) : '');
+      const qtyDisplay = qtyBaseLabel || `${qty} ${umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), qty)}`;
       const peso = l.pesoEffettivo
         ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>`
-        : (p?.pesoFisso ? `<span style="color:#555;">${qty} ${um}</span>` : `<span style="color:#c0392b;">peso mancante</span>`);
+        : (p?.pesoFisso ? `<span style="color:#555;">${qtyDisplay}</span>` : `<span style="color:#c0392b;">peso mancante</span>`);
       const lotto = l.lotto
         ? `<span style="color:#1a6196;font-weight:600;">Lotto: ${l.lotto}</span>`
         : `<span style="color:#c0392b;">lotto mancante</span>`;
@@ -8152,11 +8302,13 @@ async function openScaricoManuale(giacenzaId) {
 }
 
 function createScaricoRapidoRow() {
-  return { prodottoId: '', lotto: '', quantita: '', note: '' };
+  return { prodottoId: '', lotto: '', quantita: '' };
 }
 
 function openScaricoRapidoModal() {
   state.scaricoRapidoRows = [createScaricoRapidoRow()];
+  const causale = document.getElementById('scarico-rapido-causale');
+  if (causale) causale.value = '';
   renderScaricoRapidoRows();
   openModal('modal-giacenza-scarico-rapido');
 }
@@ -8172,6 +8324,7 @@ function renderScaricoRapidoRows() {
     const selectedLotto = lotti.find(g => g.lotto === row.lotto);
     return `
       <div style="display:grid;grid-template-columns:minmax(220px,2fr) minmax(220px,2fr) minmax(110px,0.8fr) minmax(180px,1.4fr) auto;gap:10px;align-items:end;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="display:grid;grid-template-columns:minmax(220px,2fr) minmax(220px,2fr) minmax(110px,0.8fr) auto;gap:10px;align-items:end;padding:10px 0;border-bottom:1px solid var(--border);">
         <div class="field" style="margin:0;">
           <label>Prodotto</label>
           <select onchange="setScaricoRapidoProdotto(${idx}, this.value)">
@@ -8190,10 +8343,6 @@ function renderScaricoRapidoRows() {
         <div class="field" style="margin:0;">
           <label>Quantità</label>
           <input type="number" step="0.01" min="0.01" value="${escapeHtml(String(row.quantita || ''))}" oninput="setScaricoRapidoQuantita(${idx}, this.value)">
-        </div>
-        <div class="field" style="margin:0;">
-          <label>Note</label>
-          <input type="text" value="${escapeHtml(row.note || '')}" placeholder="Causale" oninput="setScaricoRapidoNote(${idx}, this.value)">
         </div>
         <div style="display:flex;justify-content:flex-end;">
           <button class="btn btn-outline btn-sm" style="border-color:var(--danger);color:var(--danger);" onclick="removeScaricoRapidoRow(${idx})">✕</button>
@@ -8235,19 +8384,14 @@ function setScaricoRapidoQuantita(idx, value) {
   row.quantita = value;
 }
 
-function setScaricoRapidoNote(idx, value) {
-  const row = state.scaricoRapidoRows[idx];
-  if (!row) return;
-  row.note = value;
-}
-
 async function saveScaricoRapido() {
+  const causale = String(document.getElementById('scarico-rapido-causale')?.value || '').trim();
   const rows = (state.scaricoRapidoRows || []).map(r => ({
     prodotto_id: r.prodottoId ? Number(r.prodottoId) : null,
     lotto: String(r.lotto || '').trim(),
     quantita: Number(String(r.quantita || '').replace(',', '.')),
-    note: String(r.note || '').trim(),
-  })).filter(r => r.prodotto_id || r.lotto || r.quantita || r.note);
+    note: causale,
+  })).filter(r => r.prodotto_id || r.lotto || r.quantita);
   if (!rows.length) { showToast('Inserisci almeno una riga', 'warning'); return; }
   const invalid = rows.find(r => !r.prodotto_id || !r.lotto || !Number.isFinite(r.quantita) || r.quantita <= 0);
   if (invalid) { showToast('Compila prodotto, lotto e quantità per tutte le righe', 'warning'); return; }
