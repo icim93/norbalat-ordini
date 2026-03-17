@@ -32,7 +32,7 @@
       </td>
     </tr>
   `).join('');
-  if (typeof renderScortePanels === 'function') renderScortePanels();
+  if (typeof renderGiacenzeAlerts === 'function') renderGiacenzeAlerts();
 }
 
 // ================================================

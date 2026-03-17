@@ -527,6 +527,8 @@ async function createSchema() {
       um          TEXT NOT NULL,
       packaging   TEXT DEFAULT '',
       peso_fisso  BOOLEAN DEFAULT FALSE,
+      gestione_giacenza BOOLEAN DEFAULT TRUE,
+      punto_riordino NUMERIC,
       note        TEXT DEFAULT '',
       scheda_tecnica_nome TEXT DEFAULT '',
       scheda_tecnica_mime TEXT DEFAULT '',
@@ -804,6 +806,8 @@ async function createSchema() {
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_mime TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_data BYTEA;
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_uploaded_at TIMESTAMPTZ;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS gestione_giacenza BOOLEAN DEFAULT TRUE;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS punto_riordino NUMERIC;
     CREATE INDEX IF NOT EXISTS idx_crm_followup ON clienti_crm_eventi(followup_date);
     UPDATE clienti_crm_eventi SET priorita = 'media' WHERE priorita IS NULL OR priorita = '';
     ALTER TABLE listini     ALTER COLUMN prezzo DROP NOT NULL;
@@ -1419,54 +1423,6 @@ async function listOrdiniApertiByDateGiro({ data, giro = '', client = null }) {
   return rows;
 }
 
-async function getScorteAttiveMap(client = null) {
-  const db = client || pool;
-  const { rows } = await db.query(
-    `SELECT id, prodotto_id, prodotto_nome, quantita_rimanente, unita_misura
-     FROM scorte_magazzino
-     WHERE stato='attiva'`
-  );
-  const map = new Map();
-  rows.forEach(r => {
-    if (!r.prodotto_id) return;
-    map.set(Number(r.prodotto_id), r);
-  });
-  return map;
-}
-
-function summarizeOrderQtyByProd(lines = []) {
-  const qtyMap = new Map();
-  for (const l of lines) {
-    const pid = l?.prodotto_id ? Number(l.prodotto_id) : null;
-    if (!pid) continue;
-    const q = Number(l?.qty || 0);
-    if (!Number.isFinite(q) || q <= 0) continue;
-    qtyMap.set(pid, (qtyMap.get(pid) || 0) + q);
-  }
-  return qtyMap;
-}
-
-async function detectScorteSuperateForOrder(lines = [], client = null) {
-  const scorteMap = await getScorteAttiveMap(client);
-  const qtyMap = summarizeOrderQtyByProd(lines);
-  const alerts = [];
-  for (const [pid, orderedQty] of qtyMap.entries()) {
-    const scorta = scorteMap.get(pid);
-    if (!scorta) continue;
-    const disponibile = Number(scorta.quantita_rimanente || 0);
-    if (orderedQty > disponibile) {
-      alerts.push({
-        prodotto_id: pid,
-        prodotto_nome: scorta.prodotto_nome,
-        ordinato: orderedQty,
-        disponibile,
-        unita_misura: scorta.unita_misura || '',
-      });
-    }
-  }
-  return alerts;
-}
-
 function applyListinoRule(currentPrice, rule) {
   const mode = rule.mode || 'final_price';
   if (mode === 'final_price') {
@@ -1891,7 +1847,7 @@ app.get('/api/prodotti', authMiddleware, async (req, res) => {
   try {
     const { rows } = await q(`
       SELECT
-        id, codice, nome, categoria, um, packaging, peso_fisso, note,
+        id, codice, nome, categoria, um, packaging, peso_fisso, gestione_giacenza, punto_riordino, note,
         scheda_tecnica_nome, scheda_tecnica_mime, scheda_tecnica_uploaded_at,
         (scheda_tecnica_data IS NOT NULL) AS has_scheda_tecnica
       FROM prodotti
@@ -1903,14 +1859,23 @@ app.get('/api/prodotti', authMiddleware, async (req, res) => {
 
 app.post('/api/prodotti', authMiddleware, requireRole('admin'), async (req, res) => {
   try {
-    const { codice, nome, categoria, um, packaging='', peso_fisso=false, note='' } = req.body;
+    const {
+      codice, nome, categoria, um, packaging = '', peso_fisso = false,
+      gestione_giacenza = true, punto_riordino = null, note = '',
+    } = req.body;
     if (!codice||!nome||!categoria||!um) return res.status(400).json({ error: 'Campi mancanti' });
+    const puntoRiordino = punto_riordino === '' || punto_riordino === null || punto_riordino === undefined
+      ? null
+      : Number(punto_riordino);
+    if (puntoRiordino !== null && (!Number.isFinite(puntoRiordino) || puntoRiordino < 0)) {
+      return res.status(400).json({ error: 'Punto di riordino non valido' });
+    }
     const dup = await q('SELECT id FROM prodotti WHERE codice=$1', [codice.toUpperCase()]);
     if (dup.rows.length) return res.status(409).json({ error: 'Codice già esistente' });
     const r = await q(
-      `INSERT INTO prodotti (codice,nome,categoria,um,packaging,peso_fisso,note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, note]
+      `INSERT INTO prodotti (codice,nome,categoria,um,packaging,peso_fisso,gestione_giacenza,punto_riordino,note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, note]
     );
     res.json({ id: r.rows[0].id });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -1919,13 +1884,24 @@ app.post('/api/prodotti', authMiddleware, requireRole('admin'), async (req, res)
 app.put('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { codice, nome, categoria, um, packaging='', peso_fisso=false, note='' } = req.body;
+    const {
+      codice, nome, categoria, um, packaging = '', peso_fisso = false,
+      gestione_giacenza = true, punto_riordino = null, note = '',
+    } = req.body;
     if (!codice||!nome) return res.status(400).json({ error: 'Campi mancanti' });
+    const puntoRiordino = punto_riordino === '' || punto_riordino === null || punto_riordino === undefined
+      ? null
+      : Number(punto_riordino);
+    if (puntoRiordino !== null && (!Number.isFinite(puntoRiordino) || puntoRiordino < 0)) {
+      return res.status(400).json({ error: 'Punto di riordino non valido' });
+    }
     const dup = await q('SELECT id FROM prodotti WHERE codice=$1 AND id!=$2', [codice.toUpperCase(), id]);
     if (dup.rows.length) return res.status(409).json({ error: 'Codice già in uso' });
     await q(
-      `UPDATE prodotti SET codice=$1,nome=$2,categoria=$3,um=$4,packaging=$5,peso_fisso=$6,note=$7 WHERE id=$8`,
-      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, note, id]
+      `UPDATE prodotti
+       SET codice=$1,nome=$2,categoria=$3,um=$4,packaging=$5,peso_fisso=$6,
+           gestione_giacenza=$7,punto_riordino=$8,note=$9 WHERE id=$10`,
+      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, note, id]
     );
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -2626,15 +2602,6 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
     const c = await q('SELECT id, sbloccato, onboarding_stato FROM clienti WHERE id=$1', [cliente_id]);
     if (!c.rows.length) return res.status(400).json({ error: 'Cliente non trovato' });
     if (!c.rows[0].sbloccato || c.rows[0].onboarding_stato !== 'approvato') return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
-    const scorteAlerts = await detectScorteSuperateForOrder(linee, client);
-    if (scorteAlerts.length) {
-      return res.status(409).json({
-        error: `Scorte insufficienti: ${scorteAlerts.map(a => `${a.prodotto_nome} (${a.ordinato} > ${a.disponibile})`).join(', ')}`,
-        code: 'SCORTE_INSUFFICIENTI',
-        alerts: scorteAlerts,
-      });
-    }
-
     await client.query('BEGIN');
     const r = await client.query(
       `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef,altro_vettore,giro_override)
@@ -2681,15 +2648,6 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
     const c = await q('SELECT id, sbloccato, onboarding_stato FROM clienti WHERE id=$1', [cliente_id]);
     if (!c.rows.length) return res.status(400).json({ error: 'Cliente non trovato' });
     if (!c.rows[0].sbloccato || c.rows[0].onboarding_stato !== 'approvato') return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
-    const scorteAlerts = await detectScorteSuperateForOrder(linee, client);
-    if (scorteAlerts.length) {
-      return res.status(409).json({
-        error: `Scorte insufficienti: ${scorteAlerts.map(a => `${a.prodotto_nome} (${a.ordinato} > ${a.disponibile})`).join(', ')}`,
-        code: 'SCORTE_INSUFFICIENTI',
-        alerts: scorteAlerts,
-      });
-    }
-
     await client.query('BEGIN');
     await client.query(
       `UPDATE ordini SET cliente_id=$1,agente_id=$2,autista_di_giro=$3,data=$4,stato=$5,
@@ -3999,8 +3957,9 @@ app.get('/api/experimental/clal/status', authMiddleware, requireRole('admin','di
 app.get('/api/giacenze', authMiddleware, async (req, res) => {
   try {
     const { rows } = await q(
-      `SELECT g.*, p.codice, p.nome, p.um, p.categoria, p.soglia_minima
+      `SELECT g.*, p.codice, p.nome, p.um, p.categoria, p.gestione_giacenza, p.punto_riordino
        FROM giacenze g JOIN prodotti p ON p.id = g.prodotto_id
+       WHERE COALESCE(p.gestione_giacenza, TRUE) = TRUE
        ORDER BY p.nome, g.lotto`
     );
     // Calcola totale per prodotto
@@ -4036,19 +3995,21 @@ app.get('/api/giacenze/lotti', authMiddleware, requireRole('admin', 'magazzino')
 app.get('/api/giacenze/alerts', authMiddleware, async (req, res) => {
   try {
     const { rows: sottoSoglia } = await q(
-      `SELECT p.id, p.codice, p.nome, p.um, p.soglia_minima,
+      `SELECT p.id, p.codice, p.nome, p.um, p.punto_riordino,
               COALESCE(SUM(g.quantita),0) as totale_quantita
        FROM prodotti p
        LEFT JOIN giacenze g ON g.prodotto_id = p.id
-       WHERE p.soglia_minima IS NOT NULL
-       GROUP BY p.id, p.codice, p.nome, p.um, p.soglia_minima
-       HAVING COALESCE(SUM(g.quantita),0) < p.soglia_minima`
+       WHERE COALESCE(p.gestione_giacenza, TRUE) = TRUE
+         AND p.punto_riordino IS NOT NULL
+       GROUP BY p.id, p.codice, p.nome, p.um, p.punto_riordino
+       HAVING COALESCE(SUM(g.quantita),0) < p.punto_riordino`
     );
     const { rows: inScadenza } = await q(
       `SELECT g.id, g.lotto, g.scadenza, g.quantita, g.prodotto_id,
               p.codice, p.nome, p.um
        FROM giacenze g JOIN prodotti p ON p.id = g.prodotto_id
-       WHERE g.scadenza IS NOT NULL
+       WHERE COALESCE(p.gestione_giacenza, TRUE) = TRUE
+         AND g.scadenza IS NOT NULL
          AND g.scadenza <= NOW() + INTERVAL '30 days'
          AND g.quantita > 0
        ORDER BY g.scadenza ASC`
@@ -4072,6 +4033,12 @@ app.post('/api/giacenze/carico', authMiddleware, requireRole('admin', 'magazzino
     const lottoVal = String(lotto || '').trim();
     const scadenzaVal = scadenza || null;
     const utenteName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
+    const { rows: prodRows } = await client.query(
+      'SELECT gestione_giacenza FROM prodotti WHERE id=$1 LIMIT 1',
+      [prodotto_id]
+    );
+    if (!prodRows.length) { client.release(); return res.status(404).json({ error: 'Prodotto non trovato' }); }
+    if (!prodRows[0].gestione_giacenza) { client.release(); return res.status(400).json({ error: 'Il prodotto non è gestito a giacenza' }); }
 
     await client.query('BEGIN');
     // Find existing giacenza
@@ -4107,6 +4074,49 @@ app.post('/api/giacenze/carico', authMiddleware, requireRole('admin', 'magazzino
     await client.query('COMMIT');
     client.release();
     res.json({ ok: true, giacenza_id: giacenzaId });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    client.release();
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/giacenze/:id/scarico-manuale
+app.post('/api/giacenze/:id/scarico-manuale', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id = parseInt(req.params.id, 10);
+    const quantita = Number(req.body?.quantita);
+    const noteVal = String(req.body?.note || '').trim();
+    if (!Number.isFinite(quantita) || quantita <= 0) {
+      client.release();
+      return res.status(400).json({ error: 'quantita deve essere > 0' });
+    }
+    const { rows: existing } = await client.query('SELECT * FROM giacenze WHERE id=$1 LIMIT 1', [id]);
+    if (!existing.length) {
+      client.release();
+      return res.status(404).json({ error: 'Giacenza non trovata' });
+    }
+    const giac = existing[0];
+    const qtyBefore = Number(giac.quantita || 0);
+    if (quantita > qtyBefore) {
+      client.release();
+      return res.status(400).json({ error: 'Quantità insufficiente in giacenza' });
+    }
+    const qtyAfter = qtyBefore - quantita;
+    const utenteName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
+
+    await client.query('BEGIN');
+    await client.query('UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2', [qtyAfter, id]);
+    await client.query(
+      `INSERT INTO movimenti_giacenza
+        (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
+       VALUES ($1,$2,$3,'scarico_manuale',$4,$5,$6,$7,$8,$9)`,
+      [id, giac.prodotto_id, giac.lotto, -quantita, qtyBefore, qtyAfter, req.user.id || null, utenteName, noteVal]
+    );
+    await client.query('COMMIT');
+    client.release();
+    res.json({ ok: true });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     client.release();
@@ -4228,12 +4238,17 @@ app.get('/api/giacenze/movimenti', authMiddleware, requireRole('admin', 'magazzi
   }
 });
 
-// PATCH /api/prodotti/:id/soglia — imposta soglia minima
-app.patch('/api/prodotti/:id/soglia', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+// PATCH /api/prodotti/:id/punto-riordino
+app.patch('/api/prodotti/:id/punto-riordino', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    const soglia = req.body?.soglia_minima !== undefined ? (req.body.soglia_minima === null || req.body.soglia_minima === '' ? null : Number(req.body.soglia_minima)) : null;
-    await q('UPDATE prodotti SET soglia_minima=$1 WHERE id=$2', [soglia, id]);
+    const puntoRiordino = req.body?.punto_riordino !== undefined
+      ? (req.body.punto_riordino === null || req.body.punto_riordino === '' ? null : Number(req.body.punto_riordino))
+      : null;
+    if (puntoRiordino !== null && (!Number.isFinite(puntoRiordino) || puntoRiordino < 0)) {
+      return res.status(400).json({ error: 'Punto di riordino non valido' });
+    }
+    await q('UPDATE prodotti SET punto_riordino=$1 WHERE id=$2', [puntoRiordino, id]);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -4253,6 +4268,7 @@ app.get('/api/giacenze/rientro-tv', authMiddleware, requireRole('admin', 'magazz
        JOIN ordini o ON o.id = ol.ordine_id
        JOIN prodotti p ON p.id = ol.prodotto_id
        WHERE o.data = $1 AND ol.preparato = true AND ol.lotto != ''
+         AND COALESCE(p.gestione_giacenza, TRUE) = TRUE
          AND ($2 = '' OR COALESCE(NULLIF(o.giro_override,''), (SELECT giro FROM clienti WHERE id=o.cliente_id), '') = $2)
        GROUP BY ol.prodotto_id, p.nome, p.codice, p.um, ol.lotto
        ORDER BY p.nome, ol.lotto`,

@@ -25,7 +25,7 @@ function renderProdottiTable() {
 
   const tbody = document.getElementById('prodotti-table');
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">-</div><p>Nessun prodotto trovato</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">-</div><p>Nessun prodotto trovato</p></div></td></tr>';
     return;
   }
 
@@ -37,6 +37,8 @@ function renderProdottiTable() {
       <td style="font-family:'DM Mono',monospace;">${escapeHtml(p.um)}</td>
       <td style="font-size:12px;color:var(--text2);">${escapeHtml(p.packaging || '')}</td>
       <td><span class="badge ${p.pesoFisso ? 'badge-blue' : 'badge-orange'}">${p.pesoFisso ? 'Fisso' : 'Variabile'}</span></td>
+      <td><span class="badge ${p.gestioneGiacenza ? 'badge-green' : 'badge-gray'}">${p.gestioneGiacenza ? 'Gestito' : 'Escluso'}</span></td>
+      <td style="font-family:'DM Mono',monospace;">${p.puntoRiordino !== null ? escapeHtml(String(p.puntoRiordino)) : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
       <td>${p.hasSchedaTecnica ? `<button class="btn btn-outline btn-sm" onclick="downloadProdottoScheda(${p.id})">Apri</button>` : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
       <td style="font-family:'DM Mono',monospace;">${eur(getListinoBaseProdotto(p.id))}</td>
       <td>
@@ -53,10 +55,11 @@ function renderProdottiTable() {
 function openNewProdotto() {
   state.editingId = null;
   document.getElementById('modal-prodotto-title').textContent = 'Nuovo Prodotto';
-  ['pr-codice', 'pr-nome', 'pr-packaging', 'pr-note'].forEach(id => { document.getElementById(id).value = ''; });
+  ['pr-codice', 'pr-nome', 'pr-packaging', 'pr-note', 'pr-punto-riordino'].forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('pr-cat').value = 'FORMAGGI';
   document.getElementById('pr-um').value = 'kg';
   document.getElementById('pr-peso').value = 'F';
+  document.getElementById('pr-gestione-giacenza').value = '1';
   const fileInput = document.getElementById('pr-scheda-file');
   if (fileInput) fileInput.value = '';
   renderProdottiSchedaStatus(null);
@@ -73,6 +76,8 @@ function openEditProdotto(id) {
   document.getElementById('pr-cat').value = p.categoria;
   document.getElementById('pr-um').value = p.um;
   document.getElementById('pr-peso').value = p.pesoFisso ? 'F' : 'V';
+  document.getElementById('pr-gestione-giacenza').value = p.gestioneGiacenza ? '1' : '0';
+  document.getElementById('pr-punto-riordino').value = p.puntoRiordino ?? '';
   document.getElementById('pr-packaging').value = p.packaging;
   document.getElementById('pr-note').value = p.note || '';
   const fileInput = document.getElementById('pr-scheda-file');
@@ -97,8 +102,17 @@ async function saveProdotto() {
     um,
     packaging: document.getElementById('pr-packaging').value.trim(),
     peso_fisso: (document.getElementById('pr-peso').value === 'F'),
+    gestione_giacenza: document.getElementById('pr-gestione-giacenza').value === '1',
+    punto_riordino: (() => {
+      const raw = document.getElementById('pr-punto-riordino').value;
+      return raw === '' ? null : Number(raw);
+    })(),
     note: document.getElementById('pr-note').value.trim(),
   };
+  if (body.punto_riordino !== null && (!Number.isFinite(body.punto_riordino) || body.punto_riordino < 0)) {
+    showToast('Punto di riordino non valido', 'warning');
+    return;
+  }
   try {
     if (state.editingId) {
       await api('PUT', `/api/prodotti/${state.editingId}`, body);
@@ -109,6 +123,8 @@ async function saveProdotto() {
           ...body,
           id: state.editingId,
           peso_fisso: body.peso_fisso ? 1 : 0,
+          gestione_giacenza: body.gestione_giacenza ? 1 : 0,
+          punto_riordino: body.punto_riordino,
           has_scheda_tecnica: state.prodotti[idx].hasSchedaTecnica,
           scheda_tecnica_nome: state.prodotti[idx].schedaTecnicaNome,
           scheda_tecnica_mime: state.prodotti[idx].schedaTecnicaMime,
@@ -117,7 +133,13 @@ async function saveProdotto() {
       }
     } else {
       const saved = await api('POST', '/api/prodotti', body);
-      state.prodotti.push(normalizeProdotto({ ...body, id: saved.id, peso_fisso: body.peso_fisso ? 1 : 0 }));
+      state.prodotti.push(normalizeProdotto({
+        ...body,
+        id: saved.id,
+        peso_fisso: body.peso_fisso ? 1 : 0,
+        gestione_giacenza: body.gestione_giacenza ? 1 : 0,
+        punto_riordino: body.punto_riordino,
+      }));
     }
     closeModal('modal-prodotto');
     showToast(state.editingId ? 'Prodotto aggiornato' : 'Prodotto salvato', 'success');

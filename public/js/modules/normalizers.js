@@ -48,6 +48,8 @@
       um: p.um || '',
       packaging: p.packaging || '',
       pesoFisso: !!p.peso_fisso,
+      gestioneGiacenza: p.gestione_giacenza !== undefined ? !!p.gestione_giacenza : true,
+      puntoRiordino: (p.punto_riordino !== undefined && p.punto_riordino !== null) ? Number(p.punto_riordino) : null,
       note: p.note || '',
       schedaTecnicaNome: p.scheda_tecnica_nome || '',
       schedaTecnicaMime: p.scheda_tecnica_mime || '',

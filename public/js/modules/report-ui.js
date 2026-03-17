@@ -110,39 +110,6 @@ function renderMagazzinoPdfPreviewInline() {
   previewBox.innerHTML = src?.innerHTML || '<span style="color:var(--text3);">Nessuna anteprima disponibile.</span>';
 }
 
-function ensureReportScorteCard() {
-  const page = document.getElementById('page-report');
-  if (!page) return;
-  let card = document.getElementById('report-scorte-card');
-  if (!card) {
-    card = document.createElement('div');
-    card.id = 'report-scorte-card';
-    card.className = 'card';
-    card.style.marginBottom = '16px';
-    card.innerHTML = `
-      <div class="card-header">
-        <div class="card-title">Scorte magazzino in esaurimento</div>
-      </div>
-      <div id="report-scorte-list" style="padding:10px 16px;color:var(--text2);font-size:13px;"></div>
-    `;
-    const firstGrid = page.querySelector('.report-grid');
-    if (firstGrid) page.insertBefore(card, firstGrid);
-    else page.appendChild(card);
-  }
-  card.style.display = '';
-  const list = document.getElementById('report-scorte-list');
-  if (!list) return;
-  const active = (state.scorte || []).filter(s => s.stato === 'attiva');
-  if (!active.length) {
-    list.innerHTML = '<span style="color:var(--text3);">Nessuna scorta in esaurimento.</span>';
-    return;
-  }
-  list.innerHTML = active.map((s) => {
-    const qty = Number(s.quantita_rimanente || 0);
-    return `<div style="padding:8px 0;border-bottom:1px solid var(--border);"><b>${s.prodotto_nome}</b> - ${qty} ${s.unita_misura || ''}</div>`;
-  }).join('');
-}
-
 function reportFilterStorageKey() {
   return 'report_filters_' + (state.currentUser?.id || 'default');
 }
@@ -330,13 +297,6 @@ async function renderReport() {
   ensureReportExportButtons();
   populateReportAgentFilter();
   initReportDropdowns();
-  if (state.currentUser?.ruolo === 'direzione' || state.currentUser?.ruolo === 'admin') {
-    ensureReportScorteCard();
-  } else {
-    const scCard = document.getElementById('report-scorte-card');
-    if (scCard) scCard.style.display = 'none';
-  }
-
   if (state.currentUser?.ruolo === 'admin' || state.currentUser?.ruolo === 'direzione' || state.currentUser?.ruolo === 'amministrazione') {
     try {
       const logs = await api('GET', '/api/activity');

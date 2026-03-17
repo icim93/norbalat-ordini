@@ -1893,16 +1893,10 @@
             <tbody id="dash-orders-table"></tbody>
           </table></div>
         </div>
-        <div class="card" style="margin-top:14px;">
-          <div class="card-header">
-            <div class="card-title">Scorte in esaurimento</div>
-          </div>
-          <div id="dashboard-scorte-list" style="padding:10px 14px;font-size:13px;color:var(--text2);">Nessuna scorta segnalata.</div>
-        </div>
         <div class="card" style="margin-top:14px;" id="dashboard-giacenze-alerts-card">
           <div class="card-header">
             <div class="card-title">📦 Allerte giacenze</div>
-            <button class="btn btn-outline btn-sm" onclick="showMagazzinoTab('giacenze');goTo('magazzino')">Vai a Giacenze</button>
+            <button class="btn btn-outline btn-sm" onclick="goTo('giacenze')">Vai a Giacenze</button>
           </div>
           <div id="dashboard-giacenze-alerts" style="padding:10px 14px;font-size:13px;color:var(--text2);">Nessuna allerta.</div>
         </div>
@@ -2194,6 +2188,8 @@
                 <th>U.M.</th>
                 <th>Packaging</th>
                 <th>Peso</th>
+                <th>Magazzino</th>
+                <th>Punto riordino</th>
                 <th>Scheda tecnica</th>
                 <th>Prezzo base</th>
                 <th>Azioni</th>
@@ -2365,10 +2361,8 @@
 
         <!-- Tab bar -->
         <div class="tab-bar" id="magazzino-tab-bar">
-          <button class="tab-btn active" id="tab-btn-preparazione" onclick="showMagazzinoTab('preparazione')">Preparazione</button>
-          <button class="tab-btn" id="tab-btn-preparati" onclick="showMagazzinoTab('preparati')">✅ Preparati</button>
-          <button class="tab-btn" id="tab-btn-giacenze" onclick="showMagazzinoTab('giacenze')">📦 Giacenze</button>
-          <button class="tab-btn" id="tab-btn-rientro-tv" onclick="showMagazzinoTab('rientro-tv')">🚛 Rientro TV</button>
+          <button class="tab-btn active" id="tab-btn-preparazione" onclick="showPreparazioneTab('preparazione')">Preparazione</button>
+          <button class="tab-btn" id="tab-btn-preparati" onclick="showPreparazioneTab('preparati')">✅ Preparati</button>
         </div>
 
         <!-- Tab: Preparazione -->
@@ -2387,16 +2381,6 @@
           </div>
         </div>
 
-        <!-- Tab: Giacenze -->
-        <div id="magazzino-tab-giacenze" style="display:none;">
-          <!-- content rendered by renderGiacenze() -->
-        </div>
-
-        <!-- Tab: Rientro TV -->
-        <div id="magazzino-tab-rientro-tv" style="display:none;">
-          <!-- content rendered by renderRientroTV() -->
-        </div>
-
         <!-- Piano di carico (view per magazzino) — sempre visibile -->
         <div class="card" style="margin-top:20px;" id="piano-carico-magaz-card">
           <div class="card-header">
@@ -2405,14 +2389,46 @@
           </div>
           <div id="piano-carico-magaz-body" style="padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:20px;"></div>
         </div>
-        <div class="card" style="margin-top:20px;">
-          <div class="card-header">
-            <div class="card-title">Scorte semplificate magazzino</div>
-            <button class="btn btn-green btn-sm" onclick="openScortaModal()">+ Nuova scorta</button>
+      </div>
+
+      <!-- ─── PAGE: Giacenze ─── -->
+      <div class="page" id="page-giacenze">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Giacenze di Magazzino</div>
+            <div class="page-sub">Stock, lotti, movimenti e rientri</div>
           </div>
-          <div id="magazzino-scorte-list" style="padding:0 16px 16px;"></div>
         </div>
 
+        <div class="tab-bar" id="giacenze-tab-bar">
+          <button class="tab-btn active" id="tab-btn-giacenze" onclick="showGiacenzeTab('giacenze')">📦 Giacenze</button>
+        </div>
+
+        <div id="magazzino-tab-giacenze">
+          <!-- content rendered by renderGiacenze() -->
+        </div>
+      </div>
+
+      <!-- ─── PAGE: Tentata Vendita ─── -->
+      <div class="page" id="page-tentata">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Tentata Vendita</div>
+            <div class="page-sub">Carichi autisti e rientri merce</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header">
+            <div>
+              <div class="card-title">🚚 Carichi predefiniti autisti</div>
+              <div style="font-size:13px;color:var(--text2);">Configurazione prodotti per tentata vendita</div>
+            </div>
+          </div>
+          <div id="tentata-list" style="padding:0 16px 12px;"></div>
+        </div>
+
+        <div id="tentata-rientro-container"></div>
       </div>
 
       <!-- ─── PAGE: Report ─── -->
@@ -2482,7 +2498,7 @@
       <div class="page" id="page-impostazioni">
         <div class="page-header">
           <div class="page-title">Impostazioni</div>
-          <div class="page-sub">Calendario giri, tentata vendita e configurazioni</div>
+          <div class="page-sub">Calendario giri e configurazioni</div>
         </div>
         <div style="max-width:900px;">
           <div class="card" style="margin-bottom:24px;">
@@ -2500,13 +2516,6 @@
                 <div style="font-size:13px;color:var(--text2);">Gli ordini contrassegnati con STEF vengono gestiti tramite corriere esterno. Seleziona ✅ STEF al momento della creazione dell'ordine.</div>
               </div>
             </div>
-          </div>
-          <div class="card" style="margin-bottom:24px;">
-            <div class="card-header">
-              <div class="card-title">🚚 Tentata Vendita</div>
-              <div><button class="btn btn-green btn-sm" onclick="openNuovaTentata()">+ Nuova</button></div>
-            </div>
-            <div id="tentata-list" style="padding:0 0 8px;"></div>
           </div>
           <div class="card" style="margin-bottom:24px;">
             <div class="card-header">
@@ -3133,6 +3142,17 @@
             <option value="V">Variabile</option>
           </select>
         </div>
+        <div class="field">
+          <label>Gestione giacenza</label>
+          <select id="pr-gestione-giacenza">
+            <option value="1">Sì</option>
+            <option value="0">No</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Punto di riordino</label>
+          <input type="number" id="pr-punto-riordino" min="0" step="0.01" placeholder="es. 10">
+        </div>
         <div class="field form-full">
           <label>Packaging</label>
           <input type="text" id="pr-packaging" placeholder="es. 1pz=1,5kg circa">
@@ -3614,48 +3634,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="modal-scorta">
-  <div class="modal" style="max-width:560px;">
-    <div class="modal-header">
-      <div class="modal-title" id="modal-scorta-title">Nuova scorta</div>
-      <button class="modal-close" onclick="closeModal('modal-scorta')">x</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="scorta-id">
-      <div class="form-row">
-        <div class="field form-full">
-          <label>Prodotto</label>
-          <select id="scorta-prodotto" onchange="fillScortaProductName()"></select>
-        </div>
-        <div class="field form-full">
-          <label>Nome prodotto *</label>
-          <input type="text" id="scorta-nome" placeholder="Es. Toscanella">
-        </div>
-        <div class="field">
-          <label>Quantità rimanente *</label>
-          <input type="number" step="0.01" min="0" id="scorta-qta">
-        </div>
-        <div class="field">
-          <label>Unità misura</label>
-          <input type="text" id="scorta-um" placeholder="ct, kg, pz...">
-        </div>
-        <div class="field form-full">
-          <label>Kg stimati (opzionale)</label>
-          <input type="number" step="0.01" min="0" id="scorta-kg">
-        </div>
-        <div class="field form-full">
-          <label>Note</label>
-          <textarea id="scorta-note" placeholder="Es. 1 ct = 8 forme, 26.5kg circa"></textarea>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('modal-scorta')">Annulla</button>
-      <button class="btn btn-green" onclick="saveScorta()">Salva</button>
-    </div>
-  </div>
-</div>
-
 <!-- Modal: Giacenza Carico -->
 <div class="modal-overlay" id="modal-giacenza-carico">
   <div class="modal" style="max-width:520px;">
@@ -3829,13 +3807,12 @@ let state = {
   docCurrentFolderId: null,
   docCurrentFiles: [],
   docCanManage: false,
-  scorte: [],
   giacenze: [],
   giacenzeLotti: {},
   giacenzeAlerts: { sotto_soglia: [], in_scadenza: [] },
-  magazzinoActiveTab: 'preparazione',
+  preparazioneActiveTab: 'preparazione',
+  giacenzeActiveTab: 'giacenze',
   magazzinoHighlightOrderId: null,
-  scorteAlertSignature: '',
   magazzinoUndoStack: [],
 };
 window.state = state;
@@ -3903,7 +3880,7 @@ async function loadAllData() {
     if (!state.pianoData) state.pianoData = today();
     const canSeePiano = ['admin', 'autista', 'magazzino'].includes(state.currentUser?.ruolo);
     const canSeeRese = ['admin', 'direzione'].includes(state.currentUser?.ruolo);
-    const [utenti, clienti, prodotti, listini, rese, ordini, camions, giri, scorte] = await Promise.all([
+    const [utenti, clienti, prodotti, listini, rese, ordini, camions, giri] = await Promise.all([
       api('GET', '/api/utenti'),
       api('GET', '/api/clienti'),
       api('GET', '/api/prodotti'),
@@ -3912,7 +3889,6 @@ async function loadAllData() {
       api('GET', '/api/ordini'),
       canSeePiano ? api('GET', `/api/camions?data=${state.pianoData}`) : Promise.resolve([]),
       api('GET', '/api/giri'),
-      api('GET', '/api/scorte').catch(() => []),
     ]);
     // Normalizza campi: il backend usa snake_case, il frontend usa camelCase
     state.utenti   = (utenti   ||[]).map(normalizeUtente);
@@ -3923,7 +3899,6 @@ async function loadAllData() {
     state.ordini   = (ordini   ||[]).map(normalizeOrdine);
     state.camions  = (camions  ||[]).map(normalizeCamion);
     state.giriCalendario = (giri||[]).map(g => ({...g, giorni: g.giorni||[]}));
-    state.scorte = (scorte || []);
     // Giacenze — caricate separatamente per non bloccare il caricamento principale
     state.giacenze = await api('GET', '/api/giacenze').catch(() => []);
     // Computa mappa lotti per prodotto
@@ -3934,12 +3909,6 @@ async function loadAllData() {
     }
     // Alerts giacenze
     state.giacenzeAlerts = await api('GET', '/api/giacenze/alerts').catch(() => ({ sotto_soglia: [], in_scadenza: [] }));
-    const activeScorte = state.scorte.filter(s => s.stato === 'attiva');
-    const sig = activeScorte.map(s => s.id).sort((a,b) => a-b).join(',');
-    if (['admin', 'direzione'].includes(state.currentUser?.ruolo) && activeScorte.length && sig !== state.scorteAlertSignature) {
-      state.scorteAlertSignature = sig;
-      showToast(`Attenzione: ${activeScorte.length} scorta/e in esaurimento`, 'warning');
-    }
     if (typeof loadCrmSummary === 'function') await loadCrmSummary();
     if (typeof refreshNavBadges === 'function') refreshNavBadges();
   } catch(e) {
@@ -4899,8 +4868,9 @@ function renderMagazzino() {
     let msg = isOggi ? 'Tutti gli ordini di oggi sono stati preparati!' : `Nessun ordine per il ${formatDate(filterData)}`;
     if (filterGiro) msg = `Nessun ordine per il giro <b>${filterGiro}</b> - ${isOggi ? 'oggi' : formatDate(filterData)}`;
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><p>${msg}</p></div>`;
-    renderScortePanels();
+    renderGiacenzeAlerts();
     renderOrdiniPreparati(filterData, filterGiro);
+    showPreparazioneTab(state.preparazioneActiveTab || 'preparazione');
     return;
   }
 
@@ -5020,8 +4990,9 @@ function renderMagazzino() {
     </div>`;
   }).join('');
 
-  renderScortePanels();
+  renderGiacenzeAlerts();
   renderOrdiniPreparati(filterData, filterGiro);
+  showPreparazioneTab(state.preparazioneActiveTab || 'preparazione');
   if (state.magazzinoHighlightOrderId) {
     setTimeout(() => { state.magazzinoHighlightOrderId = null; }, 1400);
   }
@@ -5370,123 +5341,6 @@ async function undoMagazzinoLastAction() {
   showToast('Ultima modifica annullata', 'success');
 }
 
-function renderScortePanels() {
-  // Render giacenze alerts sul dashboard
-  if (typeof renderGiacenzeAlerts === 'function') renderGiacenzeAlerts();
-
-  const active = (state.scorte || []).filter(s => s.stato === 'attiva');
-  const dash = document.getElementById('dashboard-scorte-list');
-  if (dash) {
-    if (!active.length) {
-      dash.innerHTML = '<span style="color:var(--text3);">Nessuna scorta in esaurimento.</span>';
-    } else {
-      dash.innerHTML = active.map(s => {
-        const qty = Number(s.quantita_rimanente || 0);
-        const um = s.unita_misura || '';
-        return `<div style="padding:6px 0;border-bottom:1px solid var(--border);"><b>${s.prodotto_nome}</b> - ${qty} ${um}</div>`;
-      }).join('');
-    }
-  }
-
-  const mag = document.getElementById('magazzino-scorte-list');
-  if (mag) {
-    if (!active.length) {
-      mag.innerHTML = '<div style="padding:10px 0;color:var(--text3);">Nessuna scorta in esaurimento.</div>';
-      return;
-    }
-    mag.innerHTML = active.map(s => {
-      const qty = Number(s.quantita_rimanente || 0);
-      const kg = (s.kg_stimati !== null && s.kg_stimati !== undefined) ? ` - ${Number(s.kg_stimati)} kg stimati` : '';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
-        <div style="flex:1;">
-          <div style="font-weight:600;font-size:13px;">${s.prodotto_nome}</div>
-          <div style="font-size:12px;color:var(--text2);">Rimanenza: <b>${qty} ${s.unita_misura || ''}</b>${kg}</div>
-          ${s.note ? `<div style="font-size:11px;color:var(--text3);">${s.note}</div>` : ''}
-        </div>
-        <button class="btn btn-outline btn-sm" onclick="openScortaModal(${s.id})">Modifica</button>
-        <button class="btn btn-green btn-sm" onclick="ripristinaScorta(${s.id})">Scorta ripristinata</button>
-      </div>`;
-    }).join('');
-  }
-}
-
-function fillScortaProductName() {
-  const sel = document.getElementById('scorta-prodotto');
-  const name = document.getElementById('scorta-nome');
-  if (!sel || !name) return;
-  const id = parseInt(sel.value, 10);
-  if (!id) return;
-  const p = getProdotto(id);
-  if (!p?.id) return;
-  if (!name.value || !name.value.trim()) name.value = p.nome;
-}
-
-function openScortaModal(id = null) {
-  const sel = document.getElementById('scorta-prodotto');
-  const prodotti = [...state.prodotti].sort((a, b) => a.nome.localeCompare(b.nome));
-  if (sel) {
-    sel.innerHTML = '<option value="">Prodotto libero</option>' + prodotti.map(p => `<option value="${p.id}">[${p.codice}] ${p.nome}</option>`).join('');
-  }
-  document.getElementById('scorta-id').value = '';
-  document.getElementById('scorta-nome').value = '';
-  document.getElementById('scorta-qta').value = '';
-  document.getElementById('scorta-um').value = '';
-  document.getElementById('scorta-kg').value = '';
-  document.getElementById('scorta-note').value = '';
-  document.getElementById('modal-scorta-title').textContent = 'Nuova scorta';
-
-  if (id) {
-    const s = (state.scorte || []).find(x => x.id === Number(id));
-    if (s) {
-      document.getElementById('scorta-id').value = String(s.id);
-      if (sel) sel.value = s.prodotto_id || '';
-      document.getElementById('scorta-nome').value = s.prodotto_nome || '';
-      document.getElementById('scorta-qta').value = s.quantita_rimanente ?? '';
-      document.getElementById('scorta-um').value = s.unita_misura || '';
-      document.getElementById('scorta-kg').value = s.kg_stimati ?? '';
-      document.getElementById('scorta-note').value = s.note || '';
-      document.getElementById('modal-scorta-title').textContent = `Modifica scorta #${s.id}`;
-    }
-  }
-  openModal('modal-scorta');
-}
-
-async function saveScorta() {
-  const id = parseInt(document.getElementById('scorta-id').value || '0', 10) || null;
-  const prodottoId = parseInt(document.getElementById('scorta-prodotto').value || '0', 10) || null;
-  const payload = {
-    prodotto_id: prodottoId,
-    prodotto_nome: (document.getElementById('scorta-nome').value || '').trim(),
-    quantita_rimanente: Number(document.getElementById('scorta-qta').value || 0),
-    unita_misura: (document.getElementById('scorta-um').value || '').trim(),
-    kg_stimati: document.getElementById('scorta-kg').value ? Number(document.getElementById('scorta-kg').value) : null,
-    note: (document.getElementById('scorta-note').value || '').trim(),
-  };
-  if (!payload.prodotto_nome) { showToast('Nome prodotto obbligatorio', 'warning'); return; }
-  try {
-    if (id) await api('PUT', `/api/scorte/${id}`, payload);
-    else await api('POST', '/api/scorte', payload);
-    state.scorte = await api('GET', '/api/scorte');
-    closeModal('modal-scorta');
-    renderScortePanels();
-    showToast('Scorta salvata', 'success');
-  } catch (e) {
-    showToast(e.message || 'Errore salvataggio scorta', 'warning');
-  }
-}
-
-async function ripristinaScorta(id) {
-  if (!await customConfirm('Confermi che la scorta è stata ripristinata?', 'Ripristina', 'Scorte')) return;
-  try {
-    await api('PATCH', `/api/scorte/${id}/ripristina`, {});
-    state.scorte = await api('GET', '/api/scorte');
-    renderScortePanels();
-    showToast('Scorta marcata come ripristinata', 'success');
-  } catch (e) {
-    showToast(e.message || 'Errore aggiornamento scorta', 'warning');
-  }
-}
-
 function summarizeMissingForAlert(missing = []) {
   const rows = [];
   for (const m of missing) {
@@ -5663,8 +5517,13 @@ function renderImpostazioni() {
         <div style="display:flex;gap:12px;">${checkboxes}</div>
       </div>`;
   }).join('');
+  renderEmailNotificationSettings();
+  if (!state.emailNotificationsLoaded) {
+    loadEmailNotificationSettings().catch(() => {});
+  }
+}
 
-  // Carichi tentata vendita
+function renderTentataConfigList() {
   const tEl = document.getElementById('tentata-list');
   if (!tEl) return;
   const autisti = state.utenti.filter(u => u.ruolo === 'autista');
@@ -5685,14 +5544,36 @@ function renderImpostazioni() {
         ${lineeHtml || '<div style="font-size:13px;color:var(--text3);margin-bottom:8px;">Nessun prodotto nel carico predefinito</div>'}
         <select onchange="addCaricoTentataLine(${a.id},parseInt(this.value));this.value=''" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:5px;margin-top:4px;">
           <option value="">+ Aggiungi prodotto...</option>
-          ${state.prodotti.map(p => `<option value="${p.id}">[${p.codice}] ${p.nome}</option>`).join('')}
+          ${state.prodotti.filter(p => p.gestioneGiacenza).map(p => `<option value="${p.id}">[${p.codice}] ${p.nome}</option>`).join('')}
         </select>
       </div>`;
   }).join('');
+}
 
-  renderEmailNotificationSettings();
-  if (!state.emailNotificationsLoaded) {
-    loadEmailNotificationSettings().catch(() => {});
+function renderTentataPage() {
+  const rientroContainer = document.getElementById('tentata-rientro-container');
+  const list = document.getElementById('tentata-list');
+  if (list) {
+    if (state.currentUser?.ruolo === 'autista') {
+      const carico = state.carichiTentataVendita.find(c => c.userId === state.currentUser.id) || { linee: [] };
+      list.innerHTML = `
+        <div style="padding:8px 0 12px;">
+          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">Qui trovi il tuo carico predefinito e puoi registrare una nuova tentata vendita.</div>
+          <button class="btn btn-green" onclick="openTentataVendita()">+ Nuova tentata vendita</button>
+        </div>
+        ${(carico.linee || []).length ? carico.linee.map(l => {
+          const p = getProdotto(l.prodId);
+          return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
+            <span style="flex:1;">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</span>
+            <span style="font-size:12px;color:var(--text2);">${Number(l.qty)} pz</span>
+          </div>`;
+        }).join('') : '<div style="padding:8px 0;color:var(--text3);font-size:13px;">Nessun carico predefinito configurato.</div>'}
+      `;
+      if (rientroContainer) rientroContainer.innerHTML = '';
+    } else {
+      renderTentataConfigList();
+      renderRientroTV();
+    }
   }
 }
 
@@ -5709,12 +5590,12 @@ function addCaricoTentataLine(userId, prodId) {
   if (!carico) { carico = { userId, linee: [] }; state.carichiTentataVendita.push(carico); }
   const existing = carico.linee.find(l => l.prodId === prodId);
   if (existing) { existing.qty++; } else { carico.linee.push({ prodId, qty: 1 }); }
-  renderImpostazioni();
+  renderTentataConfigList();
 }
 
 function removeCaricoTentataLine(userId, li) {
   const carico = state.carichiTentataVendita.find(c => c.userId === userId);
-  if (carico) { carico.linee.splice(li, 1); renderImpostazioni(); }
+  if (carico) { carico.linee.splice(li, 1); renderTentataConfigList(); }
 }
 
 function updateCaricoTentata(userId, li, field, val) {
@@ -6532,12 +6413,12 @@ async function importClientiExcel(input) {
 }
 
 // ═══════════════════════════════════════════════
-// GIACENZE — TAB SYSTEM
+// PREPARAZIONE ORDINI — TAB SYSTEM
 // ═══════════════════════════════════════════════
 
-function showMagazzinoTab(tabName) {
-  state.magazzinoActiveTab = tabName;
-  const tabs = ['preparazione', 'preparati', 'giacenze', 'rientro-tv'];
+function showPreparazioneTab(tabName) {
+  state.preparazioneActiveTab = tabName;
+  const tabs = ['preparazione', 'preparati'];
   tabs.forEach(t => {
     const btn = document.getElementById(`tab-btn-${t}`);
     const pane = document.getElementById(`magazzino-tab-${t}`);
@@ -6548,11 +6429,23 @@ function showMagazzinoTab(tabName) {
     const filterData = document.getElementById('filter-magazzino-data')?.value || today();
     const filterGiro = document.getElementById('filter-magazzino-giro')?.value || '';
     renderOrdiniPreparati(filterData, filterGiro);
-  } else if (tabName === 'giacenze') {
-    renderGiacenze();
-  } else if (tabName === 'rientro-tv') {
-    renderRientroTV();
   }
+}
+
+function showGiacenzeTab(tabName) {
+  state.giacenzeActiveTab = tabName;
+  const tabs = ['giacenze'];
+  tabs.forEach(t => {
+    const btn = document.getElementById(`tab-btn-${t}`);
+    const pane = document.getElementById(`magazzino-tab-${t}`);
+    if (btn) btn.classList.toggle('active', t === tabName);
+    if (pane) pane.style.display = t === tabName ? '' : 'none';
+  });
+  if (tabName === 'giacenze') renderGiacenze();
+}
+
+function renderGiacenzePage() {
+  showGiacenzeTab(state.giacenzeActiveTab || 'giacenze');
 }
 
 // ═══════════════════════════════════════════════
@@ -6612,9 +6505,9 @@ function renderGiacenze() {
 
   const cards = Object.values(byProd).sort((a,b) => (a.prodotto.nome||'').localeCompare(b.prodotto.nome||'')).map(({ prodotto: g, lotti }) => {
     const totale = lotti.reduce((s, l) => s + Number(l.quantita || 0), 0);
-    const soglia = g.soglia_minima !== null && g.soglia_minima !== undefined ? Number(g.soglia_minima) : null;
-    const sogliaHtml = soglia !== null
-      ? `<span style="font-size:12px;color:var(--text2);">Soglia: ${soglia} ${g.um}</span>`
+    const puntoRiordino = g.punto_riordino !== null && g.punto_riordino !== undefined ? Number(g.punto_riordino) : null;
+    const puntoRiordinoHtml = puntoRiordino !== null
+      ? `<span style="font-size:12px;color:var(--text2);">Riordino: ${puntoRiordino} ${g.um}</span>`
       : '';
 
     const lottiHtml = lotti.map(l => {
@@ -6631,6 +6524,7 @@ function renderGiacenze() {
           ${l.note ? `<span style="font-size:11px;color:var(--text3);">${escapeHtml(l.note)}</span>` : ''}
           <div style="margin-left:auto;display:flex;gap:6px;">
             ${isAdmin ? `
+              <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openScaricoManuale(${l.id})">⬇️ Scarico</button>
               <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openGiacenzaRettifica(${l.id})">📊 Rettifica</button>
               <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openGiacenzaModifica(${l.id})">✏️</button>
               ${state.currentUser?.ruolo === 'admin' ? `<button class="btn btn-sm" style="font-size:11px;background:var(--danger-light);color:var(--danger);" onclick="deleteGiacenza(${l.id})">🗑</button>` : ''}
@@ -6648,12 +6542,12 @@ function renderGiacenze() {
             <span style="color:var(--text3);font-size:12px;">${g.categoria}</span>
           </div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            ${badgeForTotale(Number(totale).toFixed(2), soglia)} ${g.um}
-            ${sogliaHtml}
+            ${badgeForTotale(Number(totale).toFixed(2), puntoRiordino)} ${g.um}
+            ${puntoRiordinoHtml}
             ${isAdmin ? `
               <button class="btn btn-sm" style="font-size:11px;background:var(--success-light);color:var(--success);" onclick="event.stopPropagation();openGiacenzaCarico(${g.prodotto_id})">+ Carico</button>
               <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="event.stopPropagation();openMovimentiModal(${g.prodotto_id})">📋</button>
-              <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="event.stopPropagation();openSogliaModal(${g.prodotto_id}, ${soglia !== null ? soglia : 'null'})">⚙️ Soglia</button>
+              <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="event.stopPropagation();openPuntoRiordinoModal(${g.prodotto_id}, ${puntoRiordino !== null ? puntoRiordino : 'null'})">⚙️ Riordino</button>
             ` : ''}
           </div>
         </div>
@@ -6672,7 +6566,10 @@ function renderGiacenze() {
 
 function openGiacenzaCarico(prodottoId) {
   const sel = document.getElementById('giacenza-carico-prodotto');
-  sel.innerHTML = state.prodotti.map(p => `<option value="${p.id}" ${p.id === prodottoId ? 'selected' : ''}>[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</option>`).join('');
+  sel.innerHTML = state.prodotti
+    .filter(p => p.gestioneGiacenza)
+    .map(p => `<option value="${p.id}" ${p.id === prodottoId ? 'selected' : ''}>[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</option>`)
+    .join('');
   document.getElementById('giacenza-carico-lotto').value = '';
   document.getElementById('giacenza-carico-qty').value = '';
   document.getElementById('giacenza-carico-scadenza').value = '';
@@ -6805,26 +6702,48 @@ async function openMovimentiModal(prodottoId) {
   }
 }
 
-function openSogliaModal(prodottoId, sogliaAttuale) {
+function openPuntoRiordinoModal(prodottoId, puntoRiordinoAttuale) {
   const p = getProdotto(prodottoId);
-  const nuova = prompt(`Soglia minima per ${p?.nome || 'prodotto'} (lascia vuoto per rimuovere):`, sogliaAttuale !== null && sogliaAttuale !== undefined ? sogliaAttuale : '');
+  const nuova = prompt(`Punto di riordino per ${p?.nome || 'prodotto'} (lascia vuoto per rimuovere):`, puntoRiordinoAttuale !== null && puntoRiordinoAttuale !== undefined ? puntoRiordinoAttuale : '');
   if (nuova === null) return; // cancelled
   const val = nuova.trim() === '' ? null : parseFloat(nuova);
-  api('PATCH', `/api/prodotti/${prodottoId}/soglia`, { soglia_minima: val })
+  api('PATCH', `/api/prodotti/${prodottoId}/punto-riordino`, { punto_riordino: val })
     .then(async () => {
+      const prodotto = state.prodotti.find(x => x.id === prodottoId);
+      if (prodotto) prodotto.puntoRiordino = val;
       await reloadGiacenze();
       renderGiacenze();
-      showToast('Soglia aggiornata ✅', 'success');
+      renderGiacenzeAlerts();
+      showToast('Punto di riordino aggiornato ✅', 'success');
     })
     .catch(e => showToast(e.message, 'warning'));
 }
 
+async function openScaricoManuale(giacenzaId) {
+  const g = state.giacenze.find(x => x.id === giacenzaId);
+  if (!g) return;
+  const qty = prompt(`Scarico manuale per lotto ${g.lotto || '—'} di ${g.nome || 'prodotto'}.\nQuantità disponibile: ${Number(g.quantita)} ${g.um}\nInserisci la quantità da scaricare:`, '');
+  if (qty === null) return;
+  const quantita = parseFloat(String(qty).replace(',', '.'));
+  if (!Number.isFinite(quantita) || quantita <= 0) { showToast('Quantità non valida', 'warning'); return; }
+  const note = prompt('Causale / note scarico manuale:', '') || '';
+  try {
+    await api('POST', `/api/giacenze/${giacenzaId}/scarico-manuale`, { quantita, note });
+    await reloadGiacenze();
+    renderGiacenze();
+    renderGiacenzeAlerts();
+    showToast('Scarico manuale registrato ✅', 'success');
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
+}
+
 // ═══════════════════════════════════════════════
-// GIACENZE — RIENTRO TV TAB
+// TENTATA VENDITA — RIENTRO MERCE
 // ═══════════════════════════════════════════════
 
 function renderRientroTV() {
-  const container = document.getElementById('magazzino-tab-rientro-tv');
+  const container = document.getElementById('tentata-rientro-container');
   if (!container) return;
 
   const ieri = new Date(); ieri.setDate(ieri.getDate() - 1);
@@ -6965,12 +6884,12 @@ function renderGiacenzeAlerts() {
   let html = '';
   if (sotto_soglia?.length) {
     html += `<div style="margin-bottom:10px;">
-      <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--danger);">⚠️ Prodotti sotto soglia minima</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--danger);">⚠️ Prodotti sotto punto di riordino</div>
       ${sotto_soglia.map(p => `
         <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;border-bottom:1px solid var(--border);">
           <span style="flex:1;">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</span>
           <span style="color:var(--danger);font-weight:700;">${Number(p.totale_quantita).toFixed(2)} ${p.um}</span>
-          <span style="color:var(--text3);font-size:11px;">Soglia: ${p.soglia_minima} ${p.um}</span>
+          <span style="color:var(--text3);font-size:11px;">Riordino: ${p.punto_riordino} ${p.um}</span>
         </div>`).join('')}
     </div>`;
   }

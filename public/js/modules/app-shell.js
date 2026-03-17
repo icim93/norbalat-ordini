@@ -19,7 +19,9 @@
       {
         section: 'Magazzino',
         items: [
-          { page: 'magazzino', icon: '📦', label: 'Magazzino' },
+          { page: 'magazzino', icon: '📋', label: 'Preparazione' },
+          { page: 'giacenze', icon: '📦', label: 'Giacenze' },
+          { page: 'tentata', icon: '🚚', label: 'Tentata Vendita' },
           { page: 'piano', icon: '🚛', label: 'Piano Carico' },
           { page: 'autista', icon: '🚚', label: 'Vista Autista' },
         ],
@@ -65,13 +67,16 @@
     ],
     autista: [
       { page: 'autista', icon: '🚚', label: 'Il mio giro' },
+      { page: 'tentata', icon: '🛒', label: 'Tentata Vendita' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'piano', icon: '🚛', label: 'Piano Carico' },
       { page: 'ordini', icon: '📋', label: 'Tutti gli ordini' },
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
     magazzino: [
-      { page: 'magazzino', icon: '📦', label: 'Da preparare' },
+      { page: 'magazzino', icon: '📋', label: 'Da preparare' },
+      { page: 'giacenze', icon: '📦', label: 'Giacenze' },
+      { page: 'tentata', icon: '🚚', label: 'Tentata Vendita' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'piano', icon: '🚛', label: 'Piano Carico' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
@@ -113,7 +118,6 @@
   function getNavBadgeValue(page) {
     const ordini = window.state.ordini || [];
     const clienti = window.state.clienti || [];
-    const scorte = window.state.scorte || [];
     const crmSummary = window.state.crmSummary || {};
     if (page === 'ordini') {
       return ordini.filter(o => o.stato === 'attesa' || o.stato === 'preparazione').length;
@@ -122,15 +126,16 @@
       const today = typeof window.today === 'function' ? window.today() : '';
       return ordini.filter(o => o.data === today && o.stato !== 'consegnato' && o.stato !== 'annullato').length;
     }
+    if (page === 'giacenze') {
+      const alerts = window.state.giacenzeAlerts || {};
+      return (alerts.sotto_soglia?.length || 0) + (alerts.in_scadenza?.length || 0);
+    }
     if (page === 'clienti') {
       if (typeof window.canApproveOnboarding === 'function' && window.canApproveOnboarding()) {
         return clienti.filter(c => ['bozza', 'in_attesa', 'in_verifica', 'sospeso'].includes(c.onboardingStato)).length;
       }
       const today = typeof window.today === 'function' ? window.today() : '';
       return Object.values(crmSummary).filter(c => c?.followup_date && String(c.followup_date).slice(0, 10) <= today).length;
-    }
-    if (page === 'report') {
-      return scorte.filter(s => s.stato === 'attiva').length;
     }
     if (page === 'documenti') {
       return Array.isArray(window.state.docCurrentFiles) ? window.state.docCurrentFiles.length : 0;
@@ -346,8 +351,6 @@
     window.state.docCurrentFolderId = null;
     window.state.docCurrentFiles = [];
     window.state.docCanManage = false;
-    window.state.scorte = [];
-    window.state.scorteAlertSignature = '';
     window.state.magazzinoHighlightOrderId = null;
     window.state.magazzinoUndoStack = [];
     document.getElementById('screen-app').style.display = 'none';
@@ -446,6 +449,8 @@
       if (dtInput && !dtInput.value) dtInput.value = window.today();
       window.renderMagazzino();
     }
+    if (page === 'giacenze') window.renderGiacenzePage();
+    if (page === 'tentata') window.renderTentataPage();
     if (page === 'piano') window.renderPianoPage();
     if (page === 'report') window.renderReport();
     if (page === 'impostazioni') window.renderImpostazioni();
