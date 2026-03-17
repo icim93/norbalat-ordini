@@ -3550,20 +3550,7 @@
       <div class="field">
         <label>Prodotti nel carico</label>
         <div id="tentata-lines-container" class="order-lines"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
-          <div style="flex:1;min-width:220px;">
-            <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:4px;">Ricerca prodotto</label>
-            <input type="text" id="tentata-add-search" placeholder="Cerca codice o nome..." style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;" oninput="setTentataModalSearch(this.value)">
-            <div id="tentata-add-results" style="margin-top:6px;max-height:140px;overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface);"></div>
-          </div>
-          <div style="flex:1;min-width:220px;">
-            <label style="display:block;font-size:11px;color:var(--text3);margin-bottom:4px;">Menu a tendina</label>
-            <select id="tentata-add-select" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;" onchange="if(this.value){addTentataLine(parseInt(this.value));this.value='';}">
-              <option value="">+ Aggiungi prodotto...</option>
-            </select>
-          </div>
-          <button class="btn btn-outline btn-sm" onclick="addTentataLine()">Aggiungi da ricerca</button>
-        </div>
+        <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="addTentataLine()">+ Aggiungi prodotto</button>
       </div>
       <div class="field">
         <label>Note</label>
@@ -5888,18 +5875,21 @@ async function saveTentataConfig() {
 let tentataLines = [];
 let tentataTemplateId = null;
 
+function createEmptyTentataLine() {
+  return { prodId: null, qty: 1 };
+}
+
 function openTentataVendita() {
   const userId = state.currentUser.id;
   const activeTemplate = getTentataActiveTemplate(userId, today());
   const config = getTentataConfigForUser(userId);
   tentataTemplateId = activeTemplate?.id || config.templates?.[0]?.id || null;
   tentataLines = activeTemplate ? activeTemplate.linee.map(l => ({ ...l })) : [];
+  if (!tentataLines.length) tentataLines = [createEmptyTentataLine()];
   acState.tentata = { value: null, query: '', focusIdx: -1 };
   document.getElementById('ac-tentata-input').value = '';
   document.getElementById('tentata-cliente').value = '';
   document.getElementById('tentata-note').value = '';
-  state.tentataModalSearch = '';
-  document.getElementById('tentata-add-search').value = '';
   const sel = document.getElementById('tentata-template-select');
   if (sel) {
     sel.innerHTML = (config.templates || []).map(tpl => {
@@ -5908,7 +5898,6 @@ function openTentataVendita() {
     }).join('');
   }
   renderTentataLines();
-  renderTentataProductPicker();
   openModal('modal-tentata');
 }
 
@@ -5916,63 +5905,151 @@ function renderTentataLines() {
   const container = document.getElementById('tentata-lines-container');
   container.innerHTML = tentataLines.map((l, i) => {
     const p = getProdotto(l.prodId);
-    if (!p) return '';
-    return `<div class="order-line">
-      <div style="flex:1;font-size:13px;">[${p.codice}] ${p.nome}</div>
-      <input type="number" class="qty-input" value="${l.qty}" min="1" onchange="tentataLines[${i}].qty=parseInt(this.value)||1" placeholder="Qtà">
-      <button class="line-delete" onclick="tentataLines.splice(${i},1);renderTentataLines();renderTentataProductPicker()">✕</button>
+    return `<div class="order-line" id="tentata-line-${i}">
+      <div class="order-line-header">
+        <div class="ac-wrap order-line-search">
+          <input type="text" class="ac-input${p ? ' has-value' : ''}"
+            id="ac-tentata-prod-input-${i}"
+            value="${p ? '[' + p.codice + '] ' + p.nome : ''}"
+            placeholder="Cerca codice o nome prodotto..."
+            autocomplete="off"
+            oninput="acTentataProdFilter(${i})"
+            onfocus="acTentataProdOpen(${i})"
+            onkeydown="acTentataProdKey(event,${i})"
+            style="width:100%;">
+          <div class="ac-dropdown" id="ac-tentata-prod-dd-${i}"></div>
+        </div>
+        <button class="line-delete order-line-delete-btn" onclick="removeTentataLine(${i})" style="border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:16px;color:var(--text3);display:flex;align-items:center;justify-content:center;" title="Rimuovi">x</button>
+      </div>
+      <div class="order-line-row">
+        <input type="number" class="qty-input" value="${l.qty || 1}" min="1" onchange="tentataLines[${i}].qty=parseFloat(this.value)||1" placeholder="Quantita" style="width:100%;">
+      </div>
+      ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">${escapeHtml(p.packaging)}</div>` : ''}
+      ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">${escapeHtml(p.note)}</div>` : ''}
     </div>`;
   }).join('') || '<div style="padding:8px;font-size:13px;color:var(--text3);">Nessun prodotto</div>';
 }
 
-function getTentataModalFilteredProducts() {
-  const q = String(state.tentataModalSearch || '').trim().toLowerCase();
-  return state.prodotti
-    .filter(p => !tentataLines.some(line => line.prodId === p.id))
-    .filter(p => !q || p.codice.toLowerCase().includes(q) || p.nome.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q))
-    .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'it', { sensitivity: 'base' }))
-    .slice(0, q ? 50 : 200);
-}
-
-function setTentataModalSearch(value) {
-  state.tentataModalSearch = String(value || '');
-  renderTentataProductPicker();
-}
-
-function renderTentataProductPicker() {
-  const sel = document.getElementById('tentata-add-select');
-  const list = document.getElementById('tentata-add-results');
-  if (!sel) return;
-  const products = getTentataModalFilteredProducts();
-  sel.innerHTML = `<option value="">+ Aggiungi prodotto...</option>${products.map(p => `<option value="${p.id}">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</option>`).join('')}`;
-  if (list) {
-    list.innerHTML = products.length
-      ? products.slice(0, 8).map(p => `<button type="button" style="display:block;width:100%;text-align:left;padding:8px 10px;border:none;background:transparent;border-bottom:1px solid var(--border);cursor:pointer;" onclick="addTentataLine(${p.id})">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</button>`).join('')
-      : '<div style="padding:8px 10px;font-size:12px;color:var(--text3);">Nessun prodotto trovato</div>';
-  }
-}
-
 function addTentataLine(prodId = null) {
-  const targetId = prodId || getTentataModalFilteredProducts()[0]?.id || null;
-  if (!targetId) {
-    showToast('Nessun prodotto disponibile da aggiungere', 'warning');
-    return;
+  if (prodId) {
+    const existing = tentataLines.find(line => line.prodId === prodId);
+    if (existing) existing.qty++;
+    else tentataLines.push({ prodId, qty: 1 });
+  } else {
+    tentataLines.push(createEmptyTentataLine());
   }
-  const existing = tentataLines.find(line => line.prodId === targetId);
-  if (existing) existing.qty++;
-  else tentataLines.push({ prodId: targetId, qty: 1 });
   renderTentataLines();
-  renderTentataProductPicker();
+  if (!prodId) setTimeout(() => document.getElementById(`ac-tentata-prod-input-${tentataLines.length - 1}`)?.focus(), 50);
 }
 
 function changeTentataTemplate(templateId) {
   const activeTemplate = getTentataTemplate(state.currentUser.id, templateId);
   tentataTemplateId = activeTemplate?.id || null;
   tentataLines = activeTemplate ? activeTemplate.linee.map(line => ({ ...line })) : [];
-  state.tentataModalSearch = '';
-  document.getElementById('tentata-add-search').value = '';
+  if (!tentataLines.length) tentataLines = [createEmptyTentataLine()];
   renderTentataLines();
-  renderTentataProductPicker();
+}
+
+function removeTentataLine(i) {
+  tentataLines.splice(i, 1);
+  if (!tentataLines.length) tentataLines = [createEmptyTentataLine()];
+  renderTentataLines();
+}
+
+function acTentataProdRender(i, q) {
+  const dd = document.getElementById(`ac-tentata-prod-dd-${i}`);
+  if (!dd) return;
+  const giaScelti = tentataLines.filter((l, idx) => idx !== i && l.prodId).map(l => l.prodId);
+  let html = '';
+  let total = 0;
+  const clienteId = parseInt(document.getElementById('tentata-cliente')?.value || 0) || null;
+  if (!q && clienteId && typeof getClienteStoricoProdotti === 'function') {
+    const storico = getClienteStoricoProdotti(clienteId, giaScelti);
+    if (storico.length) {
+      html += `<div class="ac-group-label" style="background:linear-gradient(90deg,#e8f5e9,var(--surface2));color:var(--accent);">Prodotti abituali</div>`;
+      storico.forEach(({ prodotto: p, count }) => {
+        if (!p?.id) return;
+        html += `<div class="ac-item" data-id="${p.id}" onmousedown="acTentataProdSelect(${i},${p.id})">
+          <span><span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">[${p.codice}]</span> ${p.nome} <span class="ac-freq">x${count}</span></span>
+          <span class="ac-sub">${p.categoria} · ${p.um}${p.packaging ? ' · ' + p.packaging : ''}</span>
+        </div>`;
+        total++;
+      });
+    }
+  }
+  const cats = ['FORMAGGI', 'RICOTTA', 'CAGLIATA', 'PANNA UHT', 'ALTRO'];
+  cats.forEach(cat => {
+    let gruppo = state.prodotti.filter(p => p.categoria === cat && !giaScelti.includes(p.id));
+    if (q) {
+      gruppo = gruppo.filter(p => p.codice.toLowerCase().includes(q) || p.nome.toLowerCase().includes(q));
+    }
+    if (!gruppo.length) return;
+    html += `<div class="ac-group-label">${cat}</div>`;
+    gruppo.forEach(p => {
+      html += `<div class="ac-item" data-id="${p.id}" onmousedown="acTentataProdSelect(${i},${p.id})">
+        <span><span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);">[${p.codice}]</span> ${typeof acHighlight === 'function' ? acHighlight(p.nome, q) : escapeHtml(p.nome)}</span>
+        <span class="ac-sub">${p.categoria} · ${p.um}${p.packaging ? ' · ' + p.packaging : ''}</span>
+      </div>`;
+      total++;
+    });
+  });
+  dd.innerHTML = total ? html : '<div class="ac-empty">Nessun prodotto trovato</div>';
+}
+
+function acTentataProdFilter(i) {
+  const inp = document.getElementById(`ac-tentata-prod-input-${i}`);
+  const dd = document.getElementById(`ac-tentata-prod-dd-${i}`);
+  if (!inp || !dd) return;
+  const q = inp.value.trim().toLowerCase();
+  tentataLines[i].prodId = null;
+  inp.classList.remove('has-value');
+  acTentataProdRender(i, q);
+  dd.classList.add('open');
+}
+
+function acTentataProdOpen(i) {
+  const inp = document.getElementById(`ac-tentata-prod-input-${i}`);
+  const dd = document.getElementById(`ac-tentata-prod-dd-${i}`);
+  if (!inp || !dd) return;
+  acTentataProdRender(i, inp.value.trim().toLowerCase());
+  dd.classList.add('open');
+}
+
+function acTentataProdSelect(i, prodId) {
+  tentataLines[i].prodId = prodId;
+  const p = getProdotto(prodId);
+  const inp = document.getElementById(`ac-tentata-prod-input-${i}`);
+  if (inp) {
+    inp.value = `[${p.codice}] ${p.nome}`;
+    inp.classList.add('has-value');
+  }
+  document.getElementById(`ac-tentata-prod-dd-${i}`)?.classList.remove('open');
+  renderTentataLines();
+}
+
+function acTentataProdKey(e, i) {
+  const dd = document.getElementById(`ac-tentata-prod-dd-${i}`);
+  const items = dd?.querySelectorAll('.ac-item') || [];
+  let idx = parseInt(dd?.dataset.focus || '-1', 10);
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    idx = Math.min(idx + 1, items.length - 1);
+    dd.dataset.focus = idx;
+    items.forEach((el, j) => el.classList.toggle('focused', j === idx));
+    items[idx]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    idx = Math.max(idx - 1, 0);
+    dd.dataset.focus = idx;
+    items.forEach((el, j) => el.classList.toggle('focused', j === idx));
+    items[idx]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter' && idx >= 0) {
+    e.preventDefault();
+    const id = parseInt(items[idx].dataset.id, 10);
+    acTentataProdSelect(i, id);
+  } else if (e.key === 'Escape') {
+    dd?.classList.remove('open');
+  }
 }
 
 async function saveTentataVendita() {
@@ -6007,6 +6084,18 @@ async function saveTentataVendita() {
 
 // Aggiungo tentata all'acState e al sistema AC
 acState.tentata = { value: null, query: '', focusIdx: -1 };
+
+if (!window._tentataProdDdListenerSet) {
+  window._tentataProdDdListenerSet = true;
+  document.addEventListener('click', function(e) {
+    tentataLines.forEach((_, i) => {
+      const wrap = document.getElementById(`tentata-line-${i}`);
+      if (wrap && !wrap.contains(e.target)) {
+        document.getElementById(`ac-tentata-prod-dd-${i}`)?.classList.remove('open');
+      }
+    });
+  });
+}
 
 // ═══════════════════════════════════════════════
 // PDF RIEPILOGATIVO GIORNALIERO
