@@ -58,6 +58,7 @@
       },
     ],
     amministrazione: [
+      { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'clienti', icon: '🏢', label: 'Clienti' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
@@ -66,6 +67,7 @@
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
     autista: [
+      { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'autista', icon: '🚚', label: 'Il mio giro' },
       { page: 'tentata', icon: '🛒', label: 'Tentata Vendita' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
@@ -74,6 +76,7 @@
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
     magazzino: [
+      { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'magazzino', icon: '📋', label: 'Da preparare' },
       { page: 'giacenze', icon: '📦', label: 'Giacenze' },
       { page: 'tentata', icon: '🚚', label: 'Tentata Vendita' },
@@ -84,6 +87,7 @@
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
     direzione: [
+      { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
       { page: 'rese', icon: '♻️', label: 'Gestione Rese' },
@@ -280,7 +284,7 @@
     const roleLabels = { admin: 'Admin', amministrazione: 'Amministrazione', autista: 'Autista', magazzino: 'Magazzino', direzione: 'Direzione' };
     document.getElementById('topbar-role').textContent = roleLabels[window.state.currentUser.ruolo];
     setupNav();
-    const defaultPages = { admin: 'dashboard', amministrazione: 'clienti', autista: 'autista', magazzino: 'magazzino', direzione: 'report' };
+    const defaultPages = { admin: 'dashboard', amministrazione: 'dashboard', autista: 'dashboard', magazzino: 'dashboard', direzione: 'dashboard' };
     goTo(defaultPages[window.state.currentUser.ruolo] || 'dashboard');
     window.startDevMonitor();
   }

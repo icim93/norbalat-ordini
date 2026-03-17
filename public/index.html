@@ -1857,27 +1857,29 @@
 
         <div class="stats-grid">
           <div class="stat-card green">
-            <div class="stat-label">Ordini oggi</div>
+            <div class="stat-label" id="stat-label-1">Ordini oggi</div>
             <div class="stat-value" id="stat-oggi">0</div>
           </div>
           <div class="stat-card orange">
-            <div class="stat-label">In attesa</div>
+            <div class="stat-label" id="stat-label-2">In attesa</div>
             <div class="stat-value" id="stat-attesa">0</div>
           </div>
           <div class="stat-card blue">
-            <div class="stat-label">Consegnati</div>
+            <div class="stat-label" id="stat-label-3">Consegnati</div>
             <div class="stat-value" id="stat-consegnati">0</div>
           </div>
           <div class="stat-card red">
-            <div class="stat-label">Da preparare</div>
+            <div class="stat-label" id="stat-label-4">Da preparare</div>
             <div class="stat-value" id="stat-preparare">0</div>
           </div>
         </div>
 
+        <div id="dashboard-focus-panels" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:14px;"></div>
+
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Ultimi Ordini</div>
-            <button class="btn btn-green" onclick="openNewOrder()">+ Nuovo Ordine</button>
+            <div class="card-title" id="dashboard-recent-title">Ultimi Ordini</div>
+            <button class="btn btn-green" id="dashboard-recent-action" onclick="openNewOrder()">+ Nuovo Ordine</button>
           </div>
           <div class="table-scroll-wrap"><table>
             <thead>
@@ -2194,6 +2196,7 @@
                 <th>Peso</th>
                 <th>Magazzino</th>
                 <th>Punto riordino</th>
+                <th>Assortimento</th>
                 <th>Scheda tecnica</th>
                 <th>Prezzo base</th>
                 <th>Azioni</th>
@@ -3158,6 +3161,14 @@
           <label>Punto di riordino</label>
           <input type="number" id="pr-punto-riordino" min="0" step="0.01" placeholder="es. 10">
         </div>
+        <div class="field">
+          <label>Assortimento</label>
+          <select id="pr-assortimento-stato">
+            <option value="attivo">Attivo</option>
+            <option value="fuori_assortimento">Fuori assortimento</option>
+            <option value="su_ordinazione">Su ordinazione</option>
+          </select>
+        </div>
         <div class="field form-full">
           <label>Packaging</label>
           <input type="text" id="pr-packaging" placeholder="es. 1pz=1,5kg circa">
@@ -3885,7 +3896,7 @@ async function loadAllData() {
     if (!state.pianoData) state.pianoData = today();
     const canSeePiano = ['admin', 'autista', 'magazzino'].includes(state.currentUser?.ruolo);
     const canSeeRese = ['admin', 'direzione'].includes(state.currentUser?.ruolo);
-    const [utenti, clienti, prodotti, listini, rese, ordini, camions, giri] = await Promise.all([
+    const [utenti, clienti, prodotti, listini, rese, ordini, camions, giri, tentataConfig] = await Promise.all([
       api('GET', '/api/utenti'),
       api('GET', '/api/clienti'),
       api('GET', '/api/prodotti'),
@@ -3894,6 +3905,7 @@ async function loadAllData() {
       api('GET', '/api/ordini'),
       canSeePiano ? api('GET', `/api/camions?data=${state.pianoData}`) : Promise.resolve([]),
       api('GET', '/api/giri'),
+      api('GET', '/api/impostazioni/tentata-vendita').catch(() => ({ carichi: [] })),
     ]);
     // Normalizza campi: il backend usa snake_case, il frontend usa camelCase
     state.utenti   = (utenti   ||[]).map(normalizeUtente);
@@ -3904,6 +3916,13 @@ async function loadAllData() {
     state.ordini   = (ordini   ||[]).map(normalizeOrdine);
     state.camions  = (camions  ||[]).map(normalizeCamion);
     state.giriCalendario = (giri||[]).map(g => ({...g, giorni: g.giorni||[]}));
+    state.carichiTentataVendita = Array.isArray(tentataConfig?.carichi) ? tentataConfig.carichi.map(entry => ({
+      userId: Number(entry.userId),
+      linee: Array.isArray(entry.linee) ? entry.linee.map(line => ({
+        prodId: Number(line.prodId),
+        qty: Number(line.qty || 0),
+      })).filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0) : [],
+    })).filter(entry => Number.isFinite(entry.userId)) : [];
     // Giacenze — caricate separatamente per non bloccare il caricamento principale
     state.giacenze = await api('GET', '/api/giacenze').catch(() => []);
     // Computa mappa lotti per prodotto
@@ -4582,7 +4601,7 @@ function renderPianoBody(isEditor, isConferma) {
             const cliente = getCliente(o.clienteId);
             const count = assignmentStats[o.id] || 0;
             const giro = getOrdineGiroEffettivo(o);
-            const quantita = Array.isArray(o.linee) ? o.linee.reduce((sum, line) => sum + (Number(line.quantita) || 0), 0) : 0;
+            const quantita = Array.isArray(o.linee) ? o.linee.reduce((sum, line) => sum + (Number(line.qty) || 0), 0) : 0;
             return `<div class="piano-order-tag ${count ? 'is-assigned' : ''}" draggable="true"
               ondragstart="onPianoOrderDragStart(event,${o.id})" ondragend="onPianoOrderDragEnd(event)">
               <div style="font-weight:800;font-size:13px;">#${o.id} ${escapePianoHtml(cliente?.nome || 'Cliente')}</div>
@@ -5532,7 +5551,7 @@ function renderTentataConfigList() {
   const tEl = document.getElementById('tentata-list');
   if (!tEl) return;
   const autisti = state.utenti.filter(u => u.ruolo === 'autista');
-  tEl.innerHTML = autisti.map(a => {
+  const cards = autisti.map(a => {
     const carico = state.carichiTentataVendita.find(c => c.userId === a.id) || { userId: a.id, linee: [] };
     const lineeHtml = carico.linee.map((l, li) => {
       const p = getProdotto(l.prodId);
@@ -5553,6 +5572,12 @@ function renderTentataConfigList() {
         </select>
       </div>`;
   }).join('');
+  tEl.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin:8px 0 14px;">
+      <button class="btn btn-green" onclick="saveTentataConfig()">💾 Salva carichi</button>
+    </div>
+    ${cards}
+  `;
 }
 
 function renderTentataPage() {
@@ -5606,6 +5631,25 @@ function removeCaricoTentataLine(userId, li) {
 function updateCaricoTentata(userId, li, field, val) {
   const carico = state.carichiTentataVendita.find(c => c.userId === userId);
   if (carico) carico.linee[li][field] = val;
+}
+
+async function saveTentataConfig() {
+  try {
+    const payload = {
+      carichi: (state.carichiTentataVendita || []).map(entry => ({
+        userId: entry.userId,
+        linee: (entry.linee || [])
+          .map(line => ({ prodId: line.prodId, qty: Number(line.qty || 0) }))
+          .filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0),
+      })),
+    };
+    const saved = await api('PUT', '/api/impostazioni/tentata-vendita', payload);
+    state.carichiTentataVendita = saved.carichi || [];
+    renderTentataConfigList();
+    showToast('Carichi tentata vendita salvati', 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore salvataggio tentata vendita', 'warning');
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -6627,92 +6671,271 @@ async function reloadGiacenze() {
 function renderGiacenze() {
   const container = document.getElementById('magazzino-tab-giacenze');
   if (!container) return;
-
   const isAdmin = ['admin', 'magazzino'].includes(state.currentUser?.ruolo);
+  const today30 = new Date();
+  today30.setDate(today30.getDate() + 30);
+  const query = (document.getElementById('giacenze-search-input')?.value || '').trim().toLowerCase();
+  const filter = document.getElementById('giacenze-filter-select')?.value || '';
+  const byProd = new Map();
 
-  // Group by prodotto_id
-  const byProd = {};
   for (const g of state.giacenze) {
-    if (!byProd[g.prodotto_id]) byProd[g.prodotto_id] = { prodotto: g, lotti: [] };
-    byProd[g.prodotto_id].lotti.push(g);
+    if (!byProd.has(g.prodotto_id)) byProd.set(g.prodotto_id, { prodotto: g, lotti: [] });
+    byProd.get(g.prodotto_id).lotti.push(g);
   }
 
-  const today30 = new Date(); today30.setDate(today30.getDate() + 30);
+  const cardsData = [...byProd.values()].map(({ prodotto: g, lotti }) => {
+    const prodotto = state.prodotti.find(p => p.id === g.prodotto_id) || null;
+    const totale = lotti.reduce((s, l) => s + Number(l.quantita || 0), 0);
+    const puntoRiordino = g.punto_riordino !== null && g.punto_riordino !== undefined ? Number(g.punto_riordino) : null;
+    const assortimentoStato = g.assortimento_stato || prodotto?.assortimentoStato || 'attivo';
+    const sottoSoglia = assortimentoStato === 'attivo' && puntoRiordino !== null && puntoRiordino > 0 && totale < puntoRiordino;
+    const lottiInScadenza = lotti.filter(l => l.scadenza && new Date(String(l.scadenza).substring(0, 10)) <= today30 && Number(l.quantita || 0) > 0);
+    const ultimoRiordinoAt = g.ultimo_riordino_at || prodotto?.ultimoRiordinoAt || null;
+    const ultimoRiordinoQta = g.ultimo_riordino_qta ?? prodotto?.ultimoRiordinoQta ?? null;
+    const ultimoRiordinoUtenteNome = g.ultimo_riordino_utente_nome || prodotto?.ultimoRiordinoUtenteNome || '';
+    return {
+      prodotto: g,
+      prodottoAnagrafica: prodotto,
+      lotti: [...lotti].sort((a, b) => String(a.scadenza || '9999-99-99').localeCompare(String(b.scadenza || '9999-99-99'))),
+      totale,
+      puntoRiordino,
+      assortimentoStato,
+      sottoSoglia,
+      lottiInScadenza,
+      ultimoRiordinoAt,
+      ultimoRiordinoQta,
+      ultimoRiordinoUtenteNome,
+    };
+  }).filter(card => {
+    const textHaystack = [
+      card.prodotto.codice,
+      card.prodotto.nome,
+      card.prodotto.categoria,
+      ...(card.lotti || []).map(l => l.lotto || ''),
+    ].join(' ').toLowerCase();
+    if (query && !textHaystack.includes(query)) return false;
+    if (filter === 'sotto_soglia' && !card.sottoSoglia) return false;
+    if (filter === 'in_scadenza' && !card.lottiInScadenza.length) return false;
+    if (filter === 'riordinati' && !card.ultimoRiordinoAt) return false;
+    if (filter === 'fuori_assortimento' && card.assortimentoStato !== 'fuori_assortimento') return false;
+    if (filter === 'su_ordinazione' && card.assortimentoStato !== 'su_ordinazione') return false;
+    if (filter === 'attivi' && card.assortimentoStato !== 'attivo') return false;
+    return true;
+  }).sort((a, b) => {
+    if (Number(b.sottoSoglia) !== Number(a.sottoSoglia)) return Number(b.sottoSoglia) - Number(a.sottoSoglia);
+    if ((b.lottiInScadenza?.length || 0) !== (a.lottiInScadenza?.length || 0)) return (b.lottiInScadenza?.length || 0) - (a.lottiInScadenza?.length || 0);
+    return (a.prodotto.nome || '').localeCompare(b.prodotto.nome || '', 'it', { sensitivity: 'base' });
+  });
 
-  function badgeForTotale(totale, soglia) {
-    if (!soglia) return `<span style="background:var(--accent-light);color:var(--accent);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">${totale}</span>`;
-    if (totale < soglia) return `<span style="background:var(--danger-light);color:var(--danger);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">⚠ ${totale}</span>`;
-    if (totale < soglia * 1.2) return `<span style="background:var(--orange-light);color:var(--orange);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">⚠ ${totale}</span>`;
-    return `<span style="background:var(--success-light);color:var(--success);border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700;">${totale}</span>`;
-  }
+  const totals = {
+    prodotti: cardsData.length,
+    sottoSoglia: cardsData.filter(c => c.sottoSoglia).length,
+    inScadenza: cardsData.filter(c => c.lottiInScadenza.length).length,
+    riordinati: cardsData.filter(c => c.ultimoRiordinoAt).length,
+  };
+
+  const assortimentoBadge = (stato) => {
+    if (stato === 'fuori_assortimento') return '<span class="badge badge-gray">Fuori assortimento</span>';
+    if (stato === 'su_ordinazione') return '<span class="badge badge-blue">Su ordinazione</span>';
+    return '<span class="badge badge-green">Attivo</span>';
+  };
 
   const topBar = `
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
-      <button class="btn btn-green btn-sm" onclick="openGiacenzaCarico(null)">+ Carico generico</button>
-      <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-giacenze-file')?.click()">📥 Importa Excel</button>
-      <button class="btn btn-outline btn-sm" onclick="openMovimentiModal(null)">📋 Storico movimenti</button>
+    <div class="card" style="margin-bottom:16px;">
+      <div style="padding:16px;display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-green btn-sm" onclick="openGiacenzaCarico(null)">+ Carico generico</button>
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-giacenze-file')?.click()">📥 Importa Excel</button>
+            <button class="btn btn-outline btn-sm" onclick="openMovimentiModal(null)">📋 Storico movimenti</button>
+            <button class="btn btn-outline btn-sm" onclick="printGiacenzeInventario()">🖨️ Stampa inventario</button>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <div class="status-pill"><span>Prodotti</span><strong>${totals.prodotti}</strong></div>
+            <div class="status-pill warn"><span>Sotto soglia</span><strong>${totals.sottoSoglia}</strong></div>
+            <div class="status-pill alert"><span>In scadenza</span><strong>${totals.inScadenza}</strong></div>
+            <div class="status-pill info"><span>Riordinati</span><strong>${totals.riordinati}</strong></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+          <div class="toolbar-field grow" style="min-width:240px;">
+            <label class="toolbar-label">Cerca</label>
+            <input type="text" class="search-input" id="giacenze-search-input" value="${escapeHtml(query)}" placeholder="Prodotto, codice, lotto..." oninput="renderGiacenze()">
+          </div>
+          <div class="toolbar-field" style="min-width:220px;">
+            <label class="toolbar-label">Filtri</label>
+            <select class="toolbar-select" id="giacenze-filter-select" onchange="renderGiacenze()">
+              <option value="" ${filter === '' ? 'selected' : ''}>Tutti</option>
+              <option value="sotto_soglia" ${filter === 'sotto_soglia' ? 'selected' : ''}>Sotto soglia</option>
+              <option value="in_scadenza" ${filter === 'in_scadenza' ? 'selected' : ''}>In scadenza</option>
+              <option value="riordinati" ${filter === 'riordinati' ? 'selected' : ''}>Già riordinati</option>
+              <option value="attivi" ${filter === 'attivi' ? 'selected' : ''}>Solo attivi</option>
+              <option value="fuori_assortimento" ${filter === 'fuori_assortimento' ? 'selected' : ''}>Fuori assortimento</option>
+              <option value="su_ordinazione" ${filter === 'su_ordinazione' ? 'selected' : ''}>Su ordinazione</option>
+            </select>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="resetGiacenzeFilters()">Reset</button>
+        </div>
+      </div>
     </div>`;
 
-  if (!Object.keys(byProd).length) {
-    container.innerHTML = topBar + `<div class="empty-state"><div class="empty-icon">📦</div><p>Nessuna giacenza registrata.<br>Usa "+ Carico generico" per aggiungere.</p></div>`;
+  if (!cardsData.length) {
+    container.innerHTML = topBar + `<div class="empty-state"><div class="empty-icon">📦</div><p>Nessuna giacenza trovata con i filtri attuali.</p></div>`;
     return;
   }
 
-  const cards = Object.values(byProd).sort((a,b) => (a.prodotto.nome||'').localeCompare(b.prodotto.nome||'')).map(({ prodotto: g, lotti }) => {
-    const totale = lotti.reduce((s, l) => s + Number(l.quantita || 0), 0);
-    const puntoRiordino = g.punto_riordino !== null && g.punto_riordino !== undefined ? Number(g.punto_riordino) : null;
-    const puntoRiordinoHtml = puntoRiordino !== null
-      ? `<span style="font-size:12px;color:var(--text2);">Riordino: ${puntoRiordino} ${g.um}</span>`
-      : '';
-
-    const lottiHtml = lotti.map(l => {
+  const cards = cardsData.map(card => {
+    const g = card.prodotto;
+    const puntoRiordinoHtml = card.puntoRiordino !== null
+      ? `<span style="font-size:12px;color:var(--text2);">Punto riordino: ${card.puntoRiordino} ${g.um}</span>`
+      : '<span style="font-size:12px;color:var(--text3);">Punto riordino non impostato</span>';
+    const riordinoInfo = card.ultimoRiordinoAt
+      ? `<div style="font-size:12px;color:var(--accent);font-weight:600;">Riordinato il ${formatDate(card.ultimoRiordinoAt)} da ${escapeHtml(card.ultimoRiordinoUtenteNome || 'utente')} · qty ${Number(card.ultimoRiordinoQta || 0).toFixed(2)} ${g.um}</div>`
+      : `<div style="font-size:12px;color:var(--text3);">Nessun riordino registrato</div>`;
+    const totalBadgeStyle = card.sottoSoglia
+      ? 'background:var(--danger-light);color:var(--danger);'
+      : card.lottiInScadenza.length
+        ? 'background:var(--orange-light);color:var(--orange);'
+        : 'background:var(--success-light);color:var(--success);';
+    const lottiHtml = card.lotti.map(l => {
       const scad = l.scadenza ? l.scadenza.substring(0, 10) : null;
       const isExpiring = scad && new Date(scad) <= today30;
-      const scadHtml = scad
-        ? `<span style="font-size:11px;${isExpiring ? 'color:var(--danger);font-weight:700;' : 'color:var(--text3);'}">Sc: ${scad}</span>`
-        : '';
       return `
-        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
-          <span style="font-size:13px;font-weight:600;font-family:'DM Mono',monospace;">${escapeHtml(l.lotto || '—')}</span>
-          <span style="font-size:13px;color:var(--text1);">${Number(l.quantita)} ${g.um}</span>
-          ${scadHtml}
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+          <span style="font-size:13px;font-weight:700;font-family:'DM Mono',monospace;">${escapeHtml(l.lotto || '—')}</span>
+          <span style="font-size:13px;color:var(--text1);">${Number(l.quantita).toFixed(2)} ${g.um}</span>
+          ${scad ? `<span style="font-size:11px;${isExpiring ? 'color:var(--danger);font-weight:700;' : 'color:var(--text3);'}">Sc: ${scad}</span>` : '<span style="font-size:11px;color:var(--text3);">Scadenza n.d.</span>'}
           ${l.note ? `<span style="font-size:11px;color:var(--text3);">${escapeHtml(l.note)}</span>` : ''}
-          <div style="margin-left:auto;display:flex;gap:6px;">
+          <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;">
             ${isAdmin ? `
               <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openScaricoManuale(${l.id})">⬇️ Scarico</button>
               <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openGiacenzaRettifica(${l.id})">📊 Rettifica</button>
-              <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openGiacenzaModifica(${l.id})">✏️</button>
-              ${state.currentUser?.ruolo === 'admin' ? `<button class="btn btn-sm" style="font-size:11px;background:var(--danger-light);color:var(--danger);" onclick="deleteGiacenza(${l.id})">🗑</button>` : ''}
+              <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openGiacenzaModifica(${l.id})">✏️ Modifica</button>
+              ${state.currentUser?.ruolo === 'admin' ? `<button class="btn btn-sm" style="font-size:11px;background:var(--danger-light);color:var(--danger);" onclick="deleteGiacenza(${l.id})">🗑 Elimina</button>` : ''}
             ` : ''}
           </div>
         </div>`;
     }).join('');
 
     return `
-      <div class="card" style="margin-bottom:12px;">
-        <div class="card-header" style="cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);">[${escapeHtml(g.codice)}]</span>
-            <span style="font-weight:700;">${escapeHtml(g.nome)}</span>
-            <span style="color:var(--text3);font-size:12px;">${g.categoria}</span>
+      <div class="card" style="margin-bottom:12px;border:${card.sottoSoglia ? '1.5px solid var(--danger)' : '1.5px solid var(--border)'};">
+        <div class="card-header" style="align-items:flex-start;gap:14px;">
+          <div style="display:flex;flex-direction:column;gap:8px;min-width:260px;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text2);">[${escapeHtml(g.codice)}]</span>
+              <span style="font-weight:800;">${escapeHtml(g.nome)}</span>
+              <span style="color:var(--text3);font-size:12px;">${escapeHtml(g.categoria)}</span>
+              ${assortimentoBadge(card.assortimentoStato)}
+              ${card.prodottoAnagrafica?.autoAnagrafato ? '<span class="badge badge-orange">Da verificare</span>' : ''}
+              ${card.sottoSoglia ? '<span class="badge badge-red">Sotto soglia</span>' : ''}
+              ${card.lottiInScadenza.length ? `<span class="badge badge-orange">${card.lottiInScadenza.length} in scadenza</span>` : ''}
+            </div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;">
+              <span style="${totalBadgeStyle}border-radius:20px;padding:4px 10px;font-size:12px;font-weight:800;">Disponibile: ${Number(card.totale).toFixed(2)} ${g.um}</span>
+              ${puntoRiordinoHtml}
+            </div>
+            ${riordinoInfo}
           </div>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            ${badgeForTotale(Number(totale).toFixed(2), puntoRiordino)} ${g.um}
-            ${puntoRiordinoHtml}
-            ${isAdmin ? `
-              <button class="btn btn-sm" style="font-size:11px;background:var(--success-light);color:var(--success);" onclick="event.stopPropagation();openGiacenzaCarico(${g.prodotto_id})">+ Carico</button>
-              <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="event.stopPropagation();openMovimentiModal(${g.prodotto_id})">📋</button>
-              <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="event.stopPropagation();openPuntoRiordinoModal(${g.prodotto_id}, ${puntoRiordino !== null ? puntoRiordino : 'null'})">⚙️ Riordino</button>
-            ` : ''}
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;">
+            ${isAdmin ? `<button class="btn btn-sm" style="font-size:11px;background:var(--success-light);color:var(--success);" onclick="openGiacenzaCarico(${g.prodotto_id})">+ Carico</button>` : ''}
+            ${isAdmin ? `<button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="markProdottoRiordinato(${g.prodotto_id})">🛒 Ordinato</button>` : ''}
+            ${isAdmin ? `<button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openPuntoRiordinoModal(${g.prodotto_id}, ${card.puntoRiordino !== null ? card.puntoRiordino : 'null'})">⚙️ Riordino</button>` : ''}
+            <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openMovimentiModal(${g.prodotto_id})">📋 Movimenti</button>
           </div>
         </div>
-        <div style="padding:0 16px 8px;">
-          ${lottiHtml || '<div style="padding:8px 0;color:var(--text3);font-size:13px;">Nessun lotto</div>'}
+        <div style="padding:0 16px 10px;">
+          ${lottiHtml}
         </div>
       </div>`;
   }).join('');
 
   container.innerHTML = topBar + cards;
+}
+
+function resetGiacenzeFilters() {
+  const search = document.getElementById('giacenze-search-input');
+  const filter = document.getElementById('giacenze-filter-select');
+  if (search) search.value = '';
+  if (filter) filter.value = '';
+  renderGiacenze();
+}
+
+async function markProdottoRiordinato(prodottoId) {
+  const prodotto = getProdotto(prodottoId);
+  const raw = prompt(`Quantità ordinata per ${prodotto?.nome || 'prodotto'}:`, '');
+  if (raw === null) return;
+  const quantita = parseFloat(String(raw).replace(',', '.'));
+  if (!Number.isFinite(quantita) || quantita <= 0) {
+    showToast('Quantità ordinata non valida', 'warning');
+    return;
+  }
+  try {
+    await api('POST', `/api/prodotti/${prodottoId}/riordino`, { quantita });
+    await reloadGiacenze();
+    renderGiacenze();
+    renderGiacenzeAlerts();
+    showToast('Riordino registrato', 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore registrazione riordino', 'warning');
+  }
+}
+
+function printGiacenzeInventario() {
+  const search = (document.getElementById('giacenze-search-input')?.value || '').trim().toLowerCase();
+  const filter = document.getElementById('giacenze-filter-select')?.value || '';
+  const rows = [...(state.giacenze || [])].filter(g => {
+    const prodotto = state.prodotti.find(p => p.id === g.prodotto_id);
+    const terms = [g.codice, g.nome, g.categoria, g.lotto, prodotto?.assortimentoStato || ''].join(' ').toLowerCase();
+    if (search && !terms.includes(search)) return false;
+    if (filter === 'fuori_assortimento' && (prodotto?.assortimentoStato || g.assortimento_stato) !== 'fuori_assortimento') return false;
+    if (filter === 'su_ordinazione' && (prodotto?.assortimentoStato || g.assortimento_stato) !== 'su_ordinazione') return false;
+    return true;
+  }).sort((a, b) => {
+    const nomeDiff = String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' });
+    if (nomeDiff !== 0) return nomeDiff;
+    return String(a.lotto || '').localeCompare(String(b.lotto || ''), 'it', { sensitivity: 'base' });
+  });
+  const popup = window.open('', '_blank', 'width=1100,height=780');
+  if (!popup) {
+    showToast('Popup bloccato dal browser', 'warning');
+    return;
+  }
+  popup.document.write(`<!doctype html>
+    <html lang="it"><head><meta charset="utf-8"><title>Inventario Giacenze</title>
+    <style>
+      body{font-family:Arial,sans-serif;padding:24px;color:#111}
+      h1{margin:0 0 4px;font-size:22px}
+      .meta{margin-bottom:18px;color:#555;font-size:12px}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th,td{border:1px solid #d0d7de;padding:6px 8px;text-align:left}
+      th{background:#f3f4f6}
+      .right{text-align:right}
+    </style></head><body>
+    <h1>Inventario giacenze</h1>
+    <div class="meta">Stampa del ${new Date().toLocaleString('it-IT')} · filtro: ${filter || 'tutti'} · ricerca: ${search || 'nessuna'}</div>
+    <table>
+      <thead><tr><th>Codice</th><th>Prodotto</th><th>Lotto</th><th>Scadenza</th><th class="right">Quantità</th><th>U.M.</th><th>Assortimento</th><th>Note</th></tr></thead>
+      <tbody>
+        ${rows.map(g => {
+          const prodotto = state.prodotti.find(p => p.id === g.prodotto_id);
+          const assortimento = prodotto?.assortimentoStato || g.assortimento_stato || 'attivo';
+          return `<tr>
+            <td>${escapeHtml(g.codice || '')}</td>
+            <td>${escapeHtml(g.nome || '')}</td>
+            <td>${escapeHtml(g.lotto || '')}</td>
+            <td>${g.scadenza ? escapeHtml(String(g.scadenza).substring(0, 10)) : ''}</td>
+            <td class="right">${Number(g.quantita || 0).toFixed(2)}</td>
+            <td>${escapeHtml(g.um || '')}</td>
+            <td>${escapeHtml(assortimento.replaceAll('_', ' '))}</td>
+            <td>${escapeHtml(g.note || '')}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </body></html>`);
+  popup.document.close();
+  popup.focus();
+  popup.print();
 }
 
 // ═══════════════════════════════════════════════
@@ -7027,7 +7250,7 @@ function renderGiacenzeAlerts() {
   const container = document.getElementById('dashboard-giacenze-alerts');
   if (!container) return;
   const { sotto_soglia, in_scadenza } = state.giacenzeAlerts || {};
-  const roles = ['admin', 'direzione', 'magazzino'];
+  const roles = ['admin', 'direzione', 'magazzino', 'amministrazione'];
   if (!roles.includes(state.currentUser?.ruolo)) { container.style.display = 'none'; return; }
 
   if ((!sotto_soglia?.length) && (!in_scadenza?.length)) {
@@ -7041,10 +7264,12 @@ function renderGiacenzeAlerts() {
     html += `<div style="margin-bottom:10px;">
       <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--danger);">⚠️ Prodotti sotto punto di riordino</div>
       ${sotto_soglia.map(p => `
-        <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;border-bottom:1px solid var(--border);">
-          <span style="flex:1;">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</span>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+          <span style="flex:1;min-width:220px;">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</span>
           <span style="color:var(--danger);font-weight:700;">${Number(p.totale_quantita).toFixed(2)} ${p.um}</span>
           <span style="color:var(--text3);font-size:11px;">Riordino: ${p.punto_riordino} ${p.um}</span>
+          ${p.ultimo_riordino_at ? `<span style="font-size:11px;color:var(--accent);">Riord. ${formatDate(p.ultimo_riordino_at)} · ${escapeHtml(p.ultimo_riordino_utente_nome || '')} · ${Number(p.ultimo_riordino_qta || 0).toFixed(2)} ${p.um}</span>` : ''}
+          ${['admin', 'magazzino'].includes(state.currentUser?.ruolo) ? `<button class="btn btn-outline btn-sm" onclick="markProdottoRiordinato(${p.id})">Ordinato</button>` : ''}
         </div>`).join('')}
     </div>`;
   }
@@ -7052,11 +7277,13 @@ function renderGiacenzeAlerts() {
     html += `<div>
       <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--orange);">📅 Lotti in scadenza (30 giorni)</div>
       ${in_scadenza.map(g => `
-        <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;border-bottom:1px solid var(--border);">
-          <span style="flex:1;">[${escapeHtml(g.codice)}] ${escapeHtml(g.nome)}</span>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+          <span style="flex:1;min-width:220px;">[${escapeHtml(g.codice)}] ${escapeHtml(g.nome)}</span>
           <span style="font-family:'DM Mono',monospace;font-size:11px;">${escapeHtml(g.lotto)}</span>
           <span style="color:var(--orange);font-weight:700;">${Number(g.quantita).toFixed(2)} ${g.um}</span>
           <span style="color:var(--danger);font-size:11px;">Sc: ${g.scadenza?.substring(0,10)}</span>
+          ${g.ultimo_riordino_at ? `<span style="font-size:11px;color:var(--accent);">Riord. ${formatDate(g.ultimo_riordino_at)} · ${escapeHtml(g.ultimo_riordino_utente_nome || '')} · ${Number(g.ultimo_riordino_qta || 0).toFixed(2)} ${g.um}</span>` : ''}
+          ${['admin', 'magazzino'].includes(state.currentUser?.ruolo) ? `<button class="btn btn-outline btn-sm" onclick="markProdottoRiordinato(${g.prodotto_id})">Ordinato</button>` : ''}
         </div>`).join('')}
     </div>`;
   }

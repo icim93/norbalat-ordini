@@ -203,6 +203,45 @@ async function saveEmailNotificationSettings(next) {
   return payload;
 }
 
+async function getTentataVenditaSettings() {
+  try {
+    const { rows } = await q('SELECT value FROM app_settings WHERE key=$1', ['tentata_vendita_config']);
+    const value = rows[0]?.value;
+    const carichi = Array.isArray(value?.carichi) ? value.carichi : [];
+    return {
+      carichi: carichi.map(entry => ({
+        userId: Number(entry?.userId),
+        linee: Array.isArray(entry?.linee) ? entry.linee.map(line => ({
+          prodId: Number(line?.prodId),
+          qty: Number(line?.qty || 0),
+        })).filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0) : [],
+      })).filter(entry => Number.isFinite(entry.userId)),
+    };
+  } catch (_) {
+    return { carichi: [] };
+  }
+}
+
+async function saveTentataVenditaSettings(next) {
+  const payload = {
+    carichi: Array.isArray(next?.carichi) ? next.carichi.map(entry => ({
+      userId: Number(entry?.userId),
+      linee: Array.isArray(entry?.linee) ? entry.linee.map(line => ({
+        prodId: Number(line?.prodId),
+        qty: Number(line?.qty || 0),
+      })).filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0) : [],
+    })).filter(entry => Number.isFinite(entry.userId)) : [],
+  };
+  await q(
+    `INSERT INTO app_settings (key,value,updated_at)
+     VALUES ($1,$2::jsonb,NOW())
+     ON CONFLICT (key)
+     DO UPDATE SET value=$2::jsonb, updated_at=NOW()`,
+    ['tentata_vendita_config', JSON.stringify(payload)]
+  );
+  return payload;
+}
+
 function getExperimentalAutomationDefaults() {
   return {
     source_url: CLAL_BURRO_ZANGOLATO_URL,
@@ -529,6 +568,11 @@ async function createSchema() {
       peso_fisso  BOOLEAN DEFAULT FALSE,
       gestione_giacenza BOOLEAN DEFAULT TRUE,
       punto_riordino NUMERIC,
+      assortimento_stato TEXT NOT NULL DEFAULT 'attivo',
+      ultimo_riordino_qta NUMERIC,
+      ultimo_riordino_at TIMESTAMPTZ,
+      ultimo_riordino_utente_id INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      ultimo_riordino_utente_nome TEXT DEFAULT '',
       auto_anagrafato BOOLEAN DEFAULT FALSE,
       auto_anagrafato_at TIMESTAMPTZ,
       note        TEXT DEFAULT '',
@@ -810,6 +854,11 @@ async function createSchema() {
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_uploaded_at TIMESTAMPTZ;
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS gestione_giacenza BOOLEAN DEFAULT TRUE;
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS punto_riordino NUMERIC;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS assortimento_stato TEXT NOT NULL DEFAULT 'attivo';
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS ultimo_riordino_qta NUMERIC;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS ultimo_riordino_at TIMESTAMPTZ;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS ultimo_riordino_utente_id INTEGER REFERENCES utenti(id) ON DELETE SET NULL;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS ultimo_riordino_utente_nome TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS auto_anagrafato BOOLEAN DEFAULT FALSE;
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS auto_anagrafato_at TIMESTAMPTZ;
     CREATE INDEX IF NOT EXISTS idx_crm_followup ON clienti_crm_eventi(followup_date);
@@ -882,6 +931,22 @@ async function createSchema() {
       ALTER TABLE listini
         ADD CONSTRAINT listini_mode_check
         CHECK (mode IN ('base_markup','discount_pct','final_price'));
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END $$;
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'prodotti_assortimento_stato_check'
+          AND conrelid = 'prodotti'::regclass
+      ) THEN
+        ALTER TABLE prodotti DROP CONSTRAINT prodotti_assortimento_stato_check;
+      END IF;
+      ALTER TABLE prodotti
+        ADD CONSTRAINT prodotti_assortimento_stato_check
+        CHECK (assortimento_stato IN ('attivo','fuori_assortimento','su_ordinazione'));
     EXCEPTION
       WHEN duplicate_object THEN NULL;
     END $$;
@@ -1890,6 +1955,7 @@ app.get('/api/prodotti', authMiddleware, async (req, res) => {
     const { rows } = await q(`
       SELECT
         id, codice, nome, categoria, um, packaging, peso_fisso, gestione_giacenza, punto_riordino,
+        assortimento_stato, ultimo_riordino_qta, ultimo_riordino_at, ultimo_riordino_utente_id, ultimo_riordino_utente_nome,
         auto_anagrafato, auto_anagrafato_at, note,
         scheda_tecnica_nome, scheda_tecnica_mime, scheda_tecnica_uploaded_at,
         (scheda_tecnica_data IS NOT NULL) AS has_scheda_tecnica
@@ -1904,7 +1970,7 @@ app.post('/api/prodotti', authMiddleware, requireRole('admin'), async (req, res)
   try {
     const {
       codice, nome, categoria, um, packaging = '', peso_fisso = false,
-      gestione_giacenza = true, punto_riordino = null, note = '',
+      gestione_giacenza = true, punto_riordino = null, assortimento_stato = 'attivo', note = '',
     } = req.body;
     if (!codice||!nome||!categoria||!um) return res.status(400).json({ error: 'Campi mancanti' });
     const puntoRiordino = punto_riordino === '' || punto_riordino === null || punto_riordino === undefined
@@ -1913,12 +1979,15 @@ app.post('/api/prodotti', authMiddleware, requireRole('admin'), async (req, res)
     if (puntoRiordino !== null && (!Number.isFinite(puntoRiordino) || puntoRiordino < 0)) {
       return res.status(400).json({ error: 'Punto di riordino non valido' });
     }
+    const assortimentoStato = ['attivo', 'fuori_assortimento', 'su_ordinazione'].includes(String(assortimento_stato || '').trim())
+      ? String(assortimento_stato).trim()
+      : 'attivo';
     const dup = await q('SELECT id FROM prodotti WHERE codice=$1', [codice.toUpperCase()]);
     if (dup.rows.length) return res.status(409).json({ error: 'Codice già esistente' });
     const r = await q(
-      `INSERT INTO prodotti (codice,nome,categoria,um,packaging,peso_fisso,gestione_giacenza,punto_riordino,note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, note]
+      `INSERT INTO prodotti (codice,nome,categoria,um,packaging,peso_fisso,gestione_giacenza,punto_riordino,assortimento_stato,note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, assortimentoStato, note]
     );
     res.json({ id: r.rows[0].id });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -1929,7 +1998,7 @@ app.put('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req, r
     const id = parseInt(req.params.id);
     const {
       codice, nome, categoria, um, packaging = '', peso_fisso = false,
-      gestione_giacenza = true, punto_riordino = null, note = '',
+      gestione_giacenza = true, punto_riordino = null, assortimento_stato = 'attivo', note = '',
     } = req.body;
     if (!codice||!nome) return res.status(400).json({ error: 'Campi mancanti' });
     const puntoRiordino = punto_riordino === '' || punto_riordino === null || punto_riordino === undefined
@@ -1938,13 +2007,16 @@ app.put('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req, r
     if (puntoRiordino !== null && (!Number.isFinite(puntoRiordino) || puntoRiordino < 0)) {
       return res.status(400).json({ error: 'Punto di riordino non valido' });
     }
+    const assortimentoStato = ['attivo', 'fuori_assortimento', 'su_ordinazione'].includes(String(assortimento_stato || '').trim())
+      ? String(assortimento_stato).trim()
+      : 'attivo';
     const dup = await q('SELECT id FROM prodotti WHERE codice=$1 AND id!=$2', [codice.toUpperCase(), id]);
     if (dup.rows.length) return res.status(409).json({ error: 'Codice già in uso' });
     await q(
       `UPDATE prodotti
        SET codice=$1,nome=$2,categoria=$3,um=$4,packaging=$5,peso_fisso=$6,
-           gestione_giacenza=$7,punto_riordino=$8,auto_anagrafato=FALSE,auto_anagrafato_at=NULL,note=$9 WHERE id=$10`,
-      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, note, id]
+           gestione_giacenza=$7,punto_riordino=$8,assortimento_stato=$9,auto_anagrafato=FALSE,auto_anagrafato_at=NULL,note=$10 WHERE id=$11`,
+      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, assortimentoStato, note, id]
     );
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -3495,6 +3567,29 @@ app.put('/api/impostazioni/notifiche-email', authMiddleware, requireRole('admin'
   }
 });
 
+app.get('/api/impostazioni/tentata-vendita', authMiddleware, async (req, res) => {
+  try {
+    res.json(await getTentataVenditaSettings());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/impostazioni/tentata-vendita', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  try {
+    const saved = await saveTentataVenditaSettings(req.body || {});
+    await logDB(
+      req.user.id,
+      `${req.user.nome} ${req.user.cognome || ''}`.trim(),
+      'Configurazione tentata vendita',
+      `${saved.carichi.length} autisti configurati`
+    );
+    res.json(saved);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/impostazioni/notifiche-email/test', authMiddleware, requireRole('admin'), async (req, res) => {
   try {
     const cfg = await getEmailNotificationSettings();
@@ -4000,7 +4095,8 @@ app.get('/api/experimental/clal/status', authMiddleware, requireRole('admin','di
 app.get('/api/giacenze', authMiddleware, async (req, res) => {
   try {
     const { rows } = await q(
-      `SELECT g.*, p.codice, p.nome, p.um, p.categoria, p.gestione_giacenza, p.punto_riordino
+      `SELECT g.*, p.codice, p.nome, p.um, p.categoria, p.gestione_giacenza, p.punto_riordino,
+              p.assortimento_stato, p.ultimo_riordino_qta, p.ultimo_riordino_at, p.ultimo_riordino_utente_id, p.ultimo_riordino_utente_nome
        FROM giacenze g JOIN prodotti p ON p.id = g.prodotto_id
        WHERE COALESCE(p.gestione_giacenza, TRUE) = TRUE
        ORDER BY p.nome, g.lotto`
@@ -4038,18 +4134,23 @@ app.get('/api/giacenze/lotti', authMiddleware, requireRole('admin', 'magazzino')
 app.get('/api/giacenze/alerts', authMiddleware, async (req, res) => {
   try {
     const { rows: sottoSoglia } = await q(
-      `SELECT p.id, p.codice, p.nome, p.um, p.punto_riordino,
+      `SELECT p.id, p.codice, p.nome, p.um, p.punto_riordino, p.assortimento_stato,
+              p.ultimo_riordino_qta, p.ultimo_riordino_at, p.ultimo_riordino_utente_nome,
               COALESCE(SUM(g.quantita),0) as totale_quantita
        FROM prodotti p
        LEFT JOIN giacenze g ON g.prodotto_id = p.id
        WHERE COALESCE(p.gestione_giacenza, TRUE) = TRUE
          AND p.punto_riordino IS NOT NULL
-       GROUP BY p.id, p.codice, p.nome, p.um, p.punto_riordino
+         AND p.punto_riordino > 0
+         AND COALESCE(p.assortimento_stato, 'attivo') = 'attivo'
+       GROUP BY p.id, p.codice, p.nome, p.um, p.punto_riordino, p.assortimento_stato,
+                p.ultimo_riordino_qta, p.ultimo_riordino_at, p.ultimo_riordino_utente_nome
        HAVING COALESCE(SUM(g.quantita),0) < p.punto_riordino`
     );
     const { rows: inScadenza } = await q(
       `SELECT g.id, g.lotto, g.scadenza, g.quantita, g.prodotto_id,
-              p.codice, p.nome, p.um
+              p.codice, p.nome, p.um, p.assortimento_stato,
+              p.ultimo_riordino_qta, p.ultimo_riordino_at, p.ultimo_riordino_utente_nome
        FROM giacenze g JOIN prodotti p ON p.id = g.prodotto_id
        WHERE COALESCE(p.gestione_giacenza, TRUE) = TRUE
          AND g.scadenza IS NOT NULL
@@ -4467,6 +4568,29 @@ app.patch('/api/prodotti/:id/punto-riordino', authMiddleware, requireRole('admin
       return res.status(400).json({ error: 'Punto di riordino non valido' });
     }
     await q('UPDATE prodotti SET punto_riordino=$1 WHERE id=$2', [puntoRiordino, id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/prodotti/:id/riordino', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const quantita = Number(req.body?.quantita);
+    if (!id) return res.status(400).json({ error: 'Prodotto non valido' });
+    if (!Number.isFinite(quantita) || quantita <= 0) return res.status(400).json({ error: 'Quantità ordinata non valida' });
+    const utenteNome = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
+    await q(
+      `UPDATE prodotti
+       SET ultimo_riordino_qta=$1,
+           ultimo_riordino_at=NOW(),
+           ultimo_riordino_utente_id=$2,
+           ultimo_riordino_utente_nome=$3
+       WHERE id=$4`,
+      [quantita, req.user.id || null, utenteNome, id]
+    );
+    await logDB(req.user.id, utenteNome, 'Riordino prodotto', `prodotto #${id} - qty ${quantita}`);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

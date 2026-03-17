@@ -35,6 +35,134 @@
   if (typeof renderGiacenzeAlerts === 'function') renderGiacenzeAlerts();
 }
 
+function renderDashboard() {
+  const ruolo = state.currentUser?.ruolo || 'admin';
+  const t = today();
+  const userId = state.currentUser?.id;
+  const ordiniOggi = state.ordini.filter(o => o.data === t);
+  const assegnatiAutista = ordiniOggi.filter(o => o.autistaDiGiro === userId && o.stato !== 'annullato');
+  const attesa = state.ordini.filter(o => o.stato === 'attesa').length;
+  const consegnati = state.ordini.filter(o => o.stato === 'consegnato').length;
+  const preparare = state.ordini.filter(o => o.stato === 'preparazione').length;
+  const alertSottoSoglia = state.giacenzeAlerts?.sotto_soglia?.length || 0;
+  const alertScadenze = state.giacenzeAlerts?.in_scadenza?.length || 0;
+  const caricoTentata = state.carichiTentataVendita.find(c => c.userId === userId);
+  const clienteFollowup = Object.values(state.crmSummary || {}).filter(c => c?.followup_date && String(c.followup_date).slice(0, 10) <= t).length;
+
+  const statLabels = {
+    admin: ['Ordini oggi', 'In attesa', 'Consegnati', 'Da preparare'],
+    amministrazione: ['Ordini oggi', 'Clienti da seguire', 'Consegnati', 'Da verificare'],
+    magazzino: ['Ordini oggi', 'Da preparare', 'Sotto soglia', 'In scadenza'],
+    autista: ['Consegne oggi', 'Consegnati', 'Tentata carico', 'Da consegnare'],
+    direzione: ['Ordini oggi', 'In attesa', 'Sotto soglia', 'In scadenza'],
+  }[ruolo] || ['Ordini oggi', 'In attesa', 'Consegnati', 'Da preparare'];
+
+  const statValues = {
+    admin: [ordiniOggi.length, attesa, consegnati, preparare],
+    amministrazione: [ordiniOggi.length, clienteFollowup, consegnati, attesa],
+    magazzino: [ordiniOggi.length, preparare, alertSottoSoglia, alertScadenze],
+    autista: [assegnatiAutista.length, assegnatiAutista.filter(o => o.stato === 'consegnato').length, (caricoTentata?.linee || []).length, assegnatiAutista.filter(o => o.stato !== 'consegnato').length],
+    direzione: [ordiniOggi.length, attesa, alertSottoSoglia, alertScadenze],
+  }[ruolo] || [ordiniOggi.length, attesa, consegnati, preparare];
+
+  const statValueEls = [
+    document.getElementById('stat-oggi'),
+    document.getElementById('stat-attesa'),
+    document.getElementById('stat-consegnati'),
+    document.getElementById('stat-preparare'),
+  ];
+  ['1', '2', '3', '4'].forEach((idx, i) => {
+    const labelEl = document.getElementById(`stat-label-${idx}`);
+    if (labelEl) labelEl.textContent = statLabels[i];
+    if (statValueEls[i]) statValueEls[i].textContent = statValues[i];
+  });
+
+  const d = new Date();
+  document.getElementById('dash-date').textContent = d.toLocaleDateString('it-IT', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+  const focus = document.getElementById('dashboard-focus-panels');
+  if (focus) {
+    const panels = [];
+    if (['admin', 'magazzino', 'direzione'].includes(ruolo)) {
+      panels.push(`
+        <div class="card">
+          <div class="card-header"><div class="card-title">Magazzino</div></div>
+          <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
+            <div style="margin-bottom:8px;">${alertSottoSoglia} prodotti sotto soglia e ${alertScadenze} lotti in scadenza.</div>
+            <button class="btn btn-outline btn-sm" onclick="goTo('giacenze')">Apri giacenze</button>
+          </div>
+        </div>`);
+    }
+    if (['admin', 'amministrazione'].includes(ruolo)) {
+      panels.push(`
+        <div class="card">
+          <div class="card-header"><div class="card-title">Clienti e follow-up</div></div>
+          <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
+            <div style="margin-bottom:8px;">Follow-up CRM da gestire: <b>${clienteFollowup}</b></div>
+            <button class="btn btn-outline btn-sm" onclick="goTo('clienti')">Apri clienti</button>
+          </div>
+        </div>`);
+    }
+    if (ruolo === 'autista') {
+      panels.push(`
+        <div class="card">
+          <div class="card-header"><div class="card-title">Giro di oggi</div></div>
+          <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
+            <div style="margin-bottom:8px;">Ordini assegnati: <b>${assegnatiAutista.length}</b></div>
+            <button class="btn btn-outline btn-sm" onclick="goTo('autista')">Apri vista autista</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Tentata vendita</div></div>
+          <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
+            <div style="margin-bottom:8px;">Prodotti nel carico predefinito: <b>${(caricoTentata?.linee || []).length}</b></div>
+            <button class="btn btn-outline btn-sm" onclick="goTo('tentata')">Apri tentata vendita</button>
+          </div>
+        </div>`);
+    }
+    focus.innerHTML = panels.join('');
+  }
+
+  const recentTitle = document.getElementById('dashboard-recent-title');
+  const recentAction = document.getElementById('dashboard-recent-action');
+  const tbody = document.getElementById('dash-orders-table');
+  let recent = [...state.ordini].sort((a, b) => b.id - a.id).slice(0, 8);
+  if (ruolo === 'autista') recent = assegnatiAutista.slice(0, 8);
+  if (ruolo === 'magazzino') recent = ordiniOggi.filter(o => o.stato !== 'consegnato' && o.stato !== 'annullato').slice(0, 8);
+  if (recentTitle) recentTitle.textContent = ruolo === 'autista' ? 'Le mie consegne di oggi' : (ruolo === 'magazzino' ? 'Ordini operativi di oggi' : 'Ultimi ordini');
+  if (recentAction) {
+    if (ruolo === 'autista') {
+      recentAction.textContent = 'Apri mio giro';
+      recentAction.onclick = () => goTo('autista');
+    } else if (ruolo === 'magazzino') {
+      recentAction.textContent = 'Apri preparazione';
+      recentAction.onclick = () => goTo('magazzino');
+    } else {
+      recentAction.textContent = '+ Nuovo Ordine';
+      recentAction.onclick = () => openNewOrder();
+    }
+  }
+
+  tbody.innerHTML = recent.map(o => `
+    <tr>
+      <td><span style="font-family:'DM Mono',monospace;font-weight:600;">#${o.id}</span></td>
+      <td><b>${escapeHtml(getCliente(o.clienteId).nome)}</b></td>
+      <td style="color:var(--text2);">${formatDate(o.data)}</td>
+      <td>
+        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? escapeHtml((u.nome + ' ' + (u.cognome||'')).trim()) : '-'; })()}</div>
+        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">Agente: ${escapeHtml(getAgente(o.agenteId).nome)}</div>` : ''}
+      </td>
+      <td>${statoBadge(o.stato)}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">Dett</button>
+        ${['admin', 'magazzino'].includes(ruolo) ? `<button class="btn btn-outline btn-sm" title="Vai alla preparazione" aria-label="Vai alla preparazione" onclick="openPreparazioneOrdine(${o.id})">Prep</button>` : ''}
+        ${['admin', 'amministrazione'].includes(ruolo) ? `<button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">Mod</button>` : ''}
+      </td>
+    </tr>
+  `).join('') || `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">-</div><p>Nessun dato da mostrare</p></div></td></tr>`;
+  if (typeof renderGiacenzeAlerts === 'function') renderGiacenzeAlerts();
+}
+
 // ================================================
 // ORDINI TABLE
 // ================================================

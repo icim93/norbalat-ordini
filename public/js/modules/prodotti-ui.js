@@ -57,7 +57,7 @@ function renderProdottiTable() {
 
   const tbody = document.getElementById('prodotti-table');
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">-</div><p>Nessun prodotto trovato</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">-</div><p>Nessun prodotto trovato</p></div></td></tr>';
     return;
   }
 
@@ -74,6 +74,7 @@ function renderProdottiTable() {
       <td><span class="badge ${p.pesoFisso ? 'badge-blue' : 'badge-orange'}">${p.pesoFisso ? 'Fisso' : 'Variabile'}</span></td>
       <td><span class="badge ${p.gestioneGiacenza ? 'badge-green' : 'badge-gray'}">${p.gestioneGiacenza ? 'Gestito' : 'Escluso'}</span></td>
       <td style="font-family:'DM Mono',monospace;">${p.puntoRiordino !== null ? escapeHtml(String(p.puntoRiordino)) : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
+      <td><span class="badge ${p.assortimentoStato === 'attivo' ? 'badge-green' : (p.assortimentoStato === 'su_ordinazione' ? 'badge-blue' : 'badge-gray')}">${p.assortimentoStato === 'fuori_assortimento' ? 'Fuori assort.' : (p.assortimentoStato === 'su_ordinazione' ? 'Su ordinazione' : 'Attivo')}</span></td>
       <td>${p.hasSchedaTecnica ? `<button class="btn btn-outline btn-sm" onclick="downloadProdottoScheda(${p.id})">Apri</button>` : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
       <td style="font-family:'DM Mono',monospace;">${eur(getListinoBaseProdotto(p.id))}</td>
       <td>
@@ -95,6 +96,7 @@ function openNewProdotto() {
   document.getElementById('pr-um').value = 'kg';
   document.getElementById('pr-peso').value = 'F';
   document.getElementById('pr-gestione-giacenza').value = '1';
+  document.getElementById('pr-assortimento-stato').value = 'attivo';
   ['pr-gestione-giacenza', 'pr-punto-riordino', 'pr-um', 'pr-peso'].forEach(id => {
     const el = document.getElementById(id);
     if (el) delete el.dataset.touched;
@@ -118,6 +120,7 @@ function openEditProdotto(id) {
   document.getElementById('pr-peso').value = p.pesoFisso ? 'F' : 'V';
   document.getElementById('pr-gestione-giacenza').value = p.gestioneGiacenza ? '1' : '0';
   document.getElementById('pr-punto-riordino').value = p.puntoRiordino ?? '';
+  document.getElementById('pr-assortimento-stato').value = p.assortimentoStato || 'attivo';
   document.getElementById('pr-packaging').value = p.packaging;
   document.getElementById('pr-note').value = p.note || '';
   const fileInput = document.getElementById('pr-scheda-file');
@@ -161,6 +164,7 @@ async function saveProdotto() {
       const raw = document.getElementById('pr-punto-riordino').value;
       return raw === '' ? null : Number(raw);
     })(),
+    assortimento_stato: document.getElementById('pr-assortimento-stato').value,
     note: document.getElementById('pr-note').value.trim(),
   };
   if (body.punto_riordino !== null && (!Number.isFinite(body.punto_riordino) || body.punto_riordino < 0)) {
@@ -179,6 +183,7 @@ async function saveProdotto() {
           peso_fisso: body.peso_fisso ? 1 : 0,
           gestione_giacenza: body.gestione_giacenza ? 1 : 0,
           punto_riordino: body.punto_riordino,
+          assortimento_stato: body.assortimento_stato,
           auto_anagrafato: 0,
           auto_anagrafato_at: null,
           has_scheda_tecnica: state.prodotti[idx].hasSchedaTecnica,
@@ -195,6 +200,7 @@ async function saveProdotto() {
         peso_fisso: body.peso_fisso ? 1 : 0,
         gestione_giacenza: body.gestione_giacenza ? 1 : 0,
         punto_riordino: body.punto_riordino,
+        assortimento_stato: body.assortimento_stato,
       }));
     }
     closeModal('modal-prodotto');
