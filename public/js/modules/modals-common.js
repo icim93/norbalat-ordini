@@ -49,7 +49,7 @@ function showToast(msg, type = '') {
 // Set today's date as default
 document.addEventListener('DOMContentLoaded', () => {
   const dateInput = document.getElementById('ord-data');
-  if (dateInput) dateInput.value = today();
+  if (dateInput) dateInput.value = typeof getNextBusinessDate === 'function' ? getNextBusinessDate() : today();
 });
 
 window.addEventListener('resize', () => {

@@ -24,6 +24,15 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
+  function getNextBusinessDate(fromDate = today()) {
+    const base = String(fromDate || today()).slice(0, 10);
+    const d = new Date(`${base}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return today();
+    d.setDate(d.getDate() + 1);
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -74,6 +83,7 @@
   window.getAgente = getAgente;
   window.getProdotto = getProdotto;
   window.today = today;
+  window.getNextBusinessDate = getNextBusinessDate;
   window.escapeHtml = escapeHtml;
   window.statoBadge = statoBadge;
   window.lineeResume = lineeResume;

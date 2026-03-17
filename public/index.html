@@ -1727,7 +1727,11 @@
     overflow-y: auto;
   }
   .ac-dropdown.open { display: block; }
+  .tentata-user-block { position: relative; z-index: 1; }
+  .tentata-user-block:focus-within { z-index: 80; }
   .tentata-config-card { overflow: visible; }
+  .tentata-config-card { position: relative; z-index: 1; }
+  .tentata-config-card:focus-within { z-index: 90; }
   .tentata-config-card .ac-wrap { z-index: 30; }
 
   .ac-group-label {
@@ -4860,7 +4864,7 @@ function resetMagazzinoFilters() {
   const statoEl = document.getElementById('filter-magazzino-stato');
   const giroEl = document.getElementById('filter-magazzino-giro');
   const orderEl = document.getElementById('filter-magazzino-order');
-  if (dateEl) dateEl.value = today();
+  if (dateEl) dateEl.value = getNextBusinessDate();
   if (statoEl) statoEl.value = '';
   if (giroEl) giroEl.value = '';
   if (orderEl) orderEl.value = getMagazzinoSortPreference();
@@ -4884,7 +4888,9 @@ function renderMagazzinoStatusStrip(ordini) {
 }
 
 function renderMagazzino() {
-  const filterData = document.getElementById('filter-magazzino-data')?.value || today();
+  const dateInput = document.getElementById('filter-magazzino-data');
+  if (dateInput && !dateInput.value) dateInput.value = getNextBusinessDate();
+  const filterData = dateInput?.value || getNextBusinessDate();
   const filterGiro = document.getElementById('filter-magazzino-giro')?.value || '';
   const filterStato = document.getElementById('filter-magazzino-stato')?.value || '';
   const sortEl = document.getElementById('filter-magazzino-order');
@@ -4893,7 +4899,7 @@ function renderMagazzino() {
 
   const sub = document.getElementById('magazzino-sub');
   if (sub) {
-    const label = filterData === today() ? 'Oggi' : formatDate(filterData);
+    const label = filterData === getNextBusinessDate() ? 'Prossimo giorno lavorativo' : formatDate(filterData);
     sub.textContent = `Ordini - ${label}`;
   }
 
@@ -4916,9 +4922,9 @@ function renderMagazzino() {
   const container = document.getElementById('magazzino-list');
   updateMagazzinoUndoButton();
   if (!ordini.length) {
-    const isOggi = filterData === today();
-    let msg = isOggi ? 'Tutti gli ordini di oggi sono stati preparati!' : `Nessun ordine per il ${formatDate(filterData)}`;
-    if (filterGiro) msg = `Nessun ordine per il giro <b>${filterGiro}</b> - ${isOggi ? 'oggi' : formatDate(filterData)}`;
+    const isDefaultDay = filterData === getNextBusinessDate();
+    let msg = isDefaultDay ? 'Nessun ordine da preparare per il prossimo giorno lavorativo' : `Nessun ordine per il ${formatDate(filterData)}`;
+    if (filterGiro) msg = `Nessun ordine per il giro <b>${filterGiro}</b> - ${isDefaultDay ? 'prossimo giorno lavorativo' : formatDate(filterData)}`;
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><p>${msg}</p></div>`;
     renderGiacenzeAlerts();
     renderOrdiniPreparati(filterData, filterGiro);
@@ -5221,7 +5227,7 @@ async function reloadOrdineState(id) {
 
 // Prendi in carico tutti gli ordini in attesa (data+giro correnti)
 async function prendiInCaricoTutti() {
-  const filterData = document.getElementById('filter-magazzino-data')?.value || today();
+  const filterData = document.getElementById('filter-magazzino-data')?.value || getNextBusinessDate();
   const filterGiro = document.getElementById('filter-magazzino-giro')?.value || '';
   let daInCaricare = state.ordini.filter(o =>
     o.dato === filterData || o.data === filterData
@@ -5407,7 +5413,7 @@ function summarizeMissingForAlert(missing = []) {
 }
 
 async function chiudiGiornataMagazzino() {
-  const data = document.getElementById('filter-magazzino-data')?.value || today();
+  const data = document.getElementById('filter-magazzino-data')?.value || getNextBusinessDate();
   const giro = document.getElementById('filter-magazzino-giro')?.value || '';
   await _eseguiChiudiGiornata(data, giro);
 }
@@ -5579,7 +5585,7 @@ function renderTentataConfigList() {
   const tEl = document.getElementById('tentata-list');
   if (!tEl) return;
   const autisti = state.utenti.filter(u => u.ruolo === 'autista');
-  const selectedDate = document.getElementById('tentata-config-date')?.value || today();
+  const selectedDate = document.getElementById('tentata-config-date')?.value || getNextBusinessDate();
   const dayLabels = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
   const cards = autisti.map(a => {
     const config = getTentataConfigForUser(a.id);
@@ -5631,7 +5637,7 @@ function renderTentataConfigList() {
         </div>`;
     }).join('');
     return `
-      <div style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px;">
+      <div class="tentata-user-block" style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
           <div style="font-weight:600;">🚚 ${(a.nome+' '+(a.cognome||'')).trim()}</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -5666,13 +5672,14 @@ function renderTentataPage() {
   if (list) {
     if (state.currentUser?.ruolo === 'autista') {
       const config = getTentataConfigForUser(state.currentUser.id);
-      const activeTemplate = getTentataActiveTemplate(state.currentUser.id, today());
+      const targetDate = getNextBusinessDate();
+      const activeTemplate = getTentataActiveTemplate(state.currentUser.id, targetDate);
       list.innerHTML = `
         <div style="padding:8px 0 12px;">
-          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">Qui trovi il profilo TV assegnato a oggi. Se non c'è un'assegnazione manuale, uso il primo profilo compatibile con il giorno.</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">Qui trovi il profilo TV assegnato al prossimo giorno lavorativo (${formatDate(targetDate)}). Se non c'è un'assegnazione manuale, uso il primo profilo compatibile con il giorno.</div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
             <span class="badge badge-blue">${activeTemplate ? escapeHtml(activeTemplate.nome) : 'Nessun profilo'}</span>
-            ${Object.keys(config.assegnazioni || {}).includes(today()) ? '<span class="badge badge-green">Assegnazione manuale</span>' : '<span class="badge badge-gray">Assegnazione automatica</span>'}
+            ${Object.keys(config.assegnazioni || {}).includes(targetDate) ? '<span class="badge badge-green">Assegnazione manuale</span>' : '<span class="badge badge-gray">Assegnazione automatica</span>'}
           </div>
           <button class="btn btn-green" onclick="openTentataVendita()">+ Nuova tentata vendita</button>
         </div>
@@ -5700,6 +5707,15 @@ function toggleGiroGiorno(gi, d, checked) {
   renderImpostazioni();
 }
 
+function getNextBusinessDate(fromDate = today()) {
+  const base = String(fromDate || today()).slice(0, 10);
+  const d = new Date(`${base}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return today();
+  d.setDate(d.getDate() + 1);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function makeTentataTemplate(nome = 'Nuovo profilo') {
   return { id: `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, nome, giorni: [], linee: [] };
 }
@@ -5722,7 +5738,7 @@ function getTentataTemplate(userId, templateId) {
 
 function getTentataActiveTemplate(userId, dateStr) {
   const config = getTentataConfigForUser(userId);
-  const dateKey = String(dateStr || today()).slice(0, 10);
+  const dateKey = String(dateStr || getNextBusinessDate()).slice(0, 10);
   const explicitId = config.assegnazioni?.[dateKey];
   if (explicitId) {
     const explicit = config.templates.find(tpl => tpl.id === explicitId);
@@ -5754,7 +5770,17 @@ function setTentataConfigSearch(userId, templateId, value) {
   renderTentataConfigDropdown(userId, templateId);
 }
 
+function closeTentataConfigDropdowns(exceptId = '') {
+  document.querySelectorAll('[id^="tentata-search-dd-"]').forEach(dd => {
+    if (exceptId && dd.id === exceptId) return;
+    dd.classList.remove('open');
+    dd.dataset.focus = '-1';
+    dd.querySelectorAll('.ac-item').forEach(el => el.classList.remove('focused'));
+  });
+}
+
 function openTentataConfigSearch(userId, templateId) {
+  closeTentataConfigDropdowns(`tentata-search-dd-${userId}-${templateId}`);
   renderTentataConfigDropdown(userId, templateId);
   document.getElementById(`tentata-search-dd-${userId}-${templateId}`)?.classList.add('open');
 }
@@ -5791,6 +5817,7 @@ function selectTentataConfigProduct(userId, templateId, prodId) {
   addCaricoTentataLine(userId, templateId, prodId);
   if (!state.tentataConfigSearch) state.tentataConfigSearch = {};
   state.tentataConfigSearch[`${userId}:${templateId}`] = '';
+  closeTentataConfigDropdowns();
 }
 
 function handleTentataConfigSearchKey(e, userId, templateId) {
@@ -5889,7 +5916,7 @@ function deleteTentataTemplate(userId, templateId) {
 
 function assignTentataTemplateToDate(userId, templateId) {
   const config = getTentataConfigForUser(userId);
-  const dateKey = document.getElementById('tentata-config-date')?.value || today();
+  const dateKey = document.getElementById('tentata-config-date')?.value || getNextBusinessDate();
   if (!templateId) delete config.assegnazioni[dateKey];
   else config.assegnazioni[dateKey] = templateId;
   renderTentataConfigList();
@@ -5933,7 +5960,7 @@ function createEmptyTentataLine() {
 
 function openTentataVendita() {
   const userId = state.currentUser.id;
-  const activeTemplate = getTentataActiveTemplate(userId, today());
+  const activeTemplate = getTentataActiveTemplate(userId, getNextBusinessDate());
   const config = getTentataConfigForUser(userId);
   tentataTemplateId = activeTemplate?.id || config.templates?.[0]?.id || null;
   tentataLines = activeTemplate ? activeTemplate.linee.map(l => ({ ...l })) : [];
@@ -6121,9 +6148,7 @@ async function saveTentataVendita() {
   const cliente = getCliente(clienteId);
   if (!isClienteSbloccato(cliente)) { showToast('Cliente non ancora approvato dall’amministrazione', 'warning'); return; }
   if (!validLines.length) { showToast('Aggiungi almeno un prodotto', 'warning'); return; }
-  const dataOrdine = new Date();
-  dataOrdine.setDate(dataOrdine.getDate() + 1);
-  const dataTentata = dataOrdine.toISOString().substring(0, 10);
+  const dataTentata = getNextBusinessDate();
 
   const body = {
     cliente_id: clienteId,
@@ -6163,7 +6188,7 @@ if (!window._tentataConfigDdListenerSet) {
   document.addEventListener('click', function(e) {
     document.querySelectorAll('[id^="tentata-search-dd-"]').forEach(dd => {
       const wrap = dd.closest('.ac-wrap');
-      if (wrap && !wrap.contains(e.target)) dd.classList.remove('open');
+      if (wrap && !wrap.contains(e.target)) closeTentataConfigDropdowns();
     });
   });
 }
@@ -7076,7 +7101,7 @@ function showPreparazioneTab(tabName) {
     if (pane) pane.style.display = t === tabName ? '' : 'none';
   });
   if (tabName === 'preparati') {
-    const filterData = document.getElementById('filter-magazzino-data')?.value || today();
+    const filterData = document.getElementById('filter-magazzino-data')?.value || getNextBusinessDate();
     const filterGiro = document.getElementById('filter-magazzino-giro')?.value || '';
     renderOrdiniPreparati(filterData, filterGiro);
   }

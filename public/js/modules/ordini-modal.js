@@ -23,7 +23,7 @@ function openNewOrder() {
   state.editingId = null;
   orderLines = [createEmptyOrderLine()];
   document.getElementById('modal-ordine-title').textContent = 'Nuovo Ordine';
-  document.getElementById('ord-data').value = today();
+  document.getElementById('ord-data').value = typeof getNextBusinessDate === 'function' ? getNextBusinessDate() : today();
   document.getElementById('ord-stato').value = 'attesa';
   document.getElementById('ord-note').value = '';
   document.getElementById('ord-data-non-certa').checked = false;
@@ -1237,5 +1237,4 @@ async function consegnaParziale(id) {
 // ═══════════════════════════════════════════════
 // AUTISTA VIEW
 // ═══════════════════════════════════════════════
-
 
