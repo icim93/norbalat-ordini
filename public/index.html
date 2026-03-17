@@ -3537,8 +3537,8 @@
       <button class="modal-close" onclick="closeModal('modal-tentata')">✕</button>
     </div>
     <div class="modal-body">
-      <div style="background:var(--accent2-light);border:1px solid #f5d7a0;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--accent2);">
-        <b>Carico predefinito per il tuo mezzo.</b> Modifica le quantità prima di confermare. L'ordine sarà registrato come tentata vendita per il giorno successivo.
+      <div id="tentata-target-info" style="background:var(--accent2-light);border:1px solid #f5d7a0;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--accent2);">
+        <b>Carico predefinito.</b> Modifica le quantità prima di confermare. L'ordine sarà registrato per il prossimo giorno lavorativo.
       </div>
       <div class="field">
         <label>Profilo TV</label>
@@ -5640,15 +5640,16 @@ function renderTentataConfigList() {
       <div class="tentata-user-block" style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
           <div style="font-weight:600;">🚚 ${(a.nome+' '+(a.cognome||'')).trim()}</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <span style="font-size:12px;color:var(--text3);">Profilo assegnato al ${formatDate(selectedDate)}:</span>
-            <select style="padding:6px 8px;border:1px solid var(--border);border-radius:8px;" onchange="assignTentataTemplateToDate(${a.id},this.value)">
-              <option value="">Nessuna assegnazione</option>
-              ${templateOptions}
-            </select>
-            <button class="btn btn-outline btn-sm" onclick="addTentataTemplate(${a.id})">+ Profilo</button>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <span style="font-size:12px;color:var(--text3);">Profilo assegnato al ${formatDate(selectedDate)}:</span>
+              <select style="padding:6px 8px;border:1px solid var(--border);border-radius:8px;" onchange="assignTentataTemplateToDate(${a.id},this.value)">
+                <option value="">Nessuna assegnazione</option>
+                ${templateOptions}
+              </select>
+              <button class="btn btn-green btn-sm" onclick="openTentataVendita(${a.id})">+ TV</button>
+              <button class="btn btn-outline btn-sm" onclick="addTentataTemplate(${a.id})">+ Profilo</button>
+            </div>
           </div>
-        </div>
         ${templatesHtml || '<div style="font-size:13px;color:var(--text3);">Nessun profilo configurato</div>'}
       </div>`;
   }).join('');
@@ -5953,13 +5954,15 @@ async function saveTentataConfig() {
 
 let tentataLines = [];
 let tentataTemplateId = null;
+let tentataUserId = null;
 
 function createEmptyTentataLine() {
   return { prodId: null, qty: 1 };
 }
 
-function openTentataVendita() {
-  const userId = state.currentUser.id;
+function openTentataVendita(userId = null) {
+  userId = Number(userId) || state.currentUser.id;
+  tentataUserId = userId;
   const activeTemplate = getTentataActiveTemplate(userId, getNextBusinessDate());
   const config = getTentataConfigForUser(userId);
   tentataTemplateId = activeTemplate?.id || config.templates?.[0]?.id || null;
@@ -5969,6 +5972,15 @@ function openTentataVendita() {
   document.getElementById('ac-tentata-input').value = '';
   document.getElementById('tentata-cliente').value = '';
   document.getElementById('tentata-note').value = '';
+  const targetAutista = state.utenti.find(u => u.id === userId);
+  const targetNome = targetAutista ? `${targetAutista.nome} ${targetAutista.cognome || ''}`.trim() : 'autista';
+  const infoEl = document.getElementById('tentata-target-info');
+  if (infoEl) {
+    const caricoLabel = userId === state.currentUser.id
+      ? 'Carico predefinito per il tuo mezzo.'
+      : `Carico predefinito per ${escapeHtml(targetNome)}.`;
+    infoEl.innerHTML = `<b>${caricoLabel}</b> Modifica le quantità prima di confermare. L'ordine sarà registrato per il ${formatDate(getNextBusinessDate())}.`;
+  }
   const sel = document.getElementById('tentata-template-select');
   if (sel) {
     sel.innerHTML = (config.templates || []).map(tpl => {
@@ -6022,7 +6034,7 @@ function addTentataLine(prodId = null) {
 }
 
 function changeTentataTemplate(templateId) {
-  const activeTemplate = getTentataTemplate(state.currentUser.id, templateId);
+  const activeTemplate = getTentataTemplate(tentataUserId || state.currentUser.id, templateId);
   tentataTemplateId = activeTemplate?.id || null;
   tentataLines = activeTemplate ? activeTemplate.linee.map(line => ({ ...line })) : [];
   if (!tentataLines.length) tentataLines = [createEmptyTentataLine()];
@@ -6153,7 +6165,7 @@ async function saveTentataVendita() {
   const body = {
     cliente_id: clienteId,
     agente_id: state.currentUser.id,
-    autista_di_giro: state.currentUser.id,
+    autista_di_giro: tentataUserId || state.currentUser.id,
     data: dataTentata,
     stato: 'attesa',
     note: note ? `[TENTATA VENDITA] ${note}` : '[TENTATA VENDITA]',
