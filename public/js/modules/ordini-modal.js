@@ -372,6 +372,14 @@ function umPlurale(um, qty) {
   return map[um] || um;
 }
 
+function supportsLegacyPedanaOrder(prodotto) {
+  if (!prodotto) return false;
+  const categoria = String(prodotto.categoria || '').trim().toUpperCase();
+  const packaging = String(prodotto.packaging || '').toLowerCase();
+  const hasLegacyPieces = /\b1\s*pz\b/.test(packaging) || /\bpezz/i.test(packaging);
+  return categoria === 'CAGLIATA' && hasLegacyPieces;
+}
+
 function getProductOrderUnits(prodotto) {
   if (!prodotto) return ['Pezzi'];
   const units = [];
@@ -384,6 +392,7 @@ function getProductOrderUnits(prodotto) {
   if (hasLegacyPieces && !units.includes('Pezzi')) units.unshift('Pezzi');
   if (prodotto.cartoniAttivi && Number.isFinite(Number(prodotto.unitaPerCartone)) && Number(prodotto.unitaPerCartone) > 0) units.push('Cartoni');
   if (prodotto.pedaneAttive && Number.isFinite(Number(prodotto.cartoniPerPedana)) && Number(prodotto.cartoniPerPedana) > 0 && units.includes('Cartoni')) units.push('Pedana');
+  else if (supportsLegacyPedanaOrder(prodotto)) units.push('Pedana');
   return units;
 }
 

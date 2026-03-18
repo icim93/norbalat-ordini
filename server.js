@@ -53,6 +53,7 @@ loadLocalEnvFiles();
 const PORT        = process.env.PORT       || 3000;
 const JWT_SECRET  = process.env.JWT_SECRET || 'norbalat-secret-change-in-production-2026';
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/norbalat';
+const DATABASE_SSL_MODE = String(process.env.DATABASE_SSL_MODE || '').trim().toLowerCase();
 const SALT_ROUNDS = 10;
 const PIVA_LOOKUP_URL = process.env.PIVA_LOOKUP_URL || '';
 const PIVA_LOOKUP_TOKEN = process.env.PIVA_LOOKUP_TOKEN || '';
@@ -77,7 +78,12 @@ const EXPERIMENTAL_TIMEZONE = process.env.EXPERIMENTAL_TIMEZONE || 'Europe/Rome'
 const EXPERIMENTAL_AUTO_IMPORT_CHECK_MS = Math.max(5 * 60 * 1000, Number(process.env.EXPERIMENTAL_AUTO_IMPORT_CHECK_MS || 15 * 60 * 1000));
 
 const app  = express();
-const pool = new Pool({ connectionString: DATABASE_URL });
+const isRemoteDatabase = /^postgres(ql)?:\/\//i.test(DATABASE_URL) && !/localhost|127\.0\.0\.1/i.test(DATABASE_URL);
+const shouldUseDatabaseSsl = ['require', 'true', '1', 'render'].includes(DATABASE_SSL_MODE) || (!DATABASE_SSL_MODE && isRemoteDatabase);
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: shouldUseDatabaseSsl ? { rejectUnauthorized: false } : undefined,
+});
 const TENTATA_VENDITA_CLIENT_NAME = 'TENTATA VENDITA';
 const TENTATA_VENDITA_CLIENT_CLASS = 'cliente_tecnico_tentata';
 
