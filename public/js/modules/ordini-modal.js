@@ -432,6 +432,13 @@ function getLegacyBaseQtyFromPackaging(prodotto, qty, um) {
   const packaging = String(prodotto?.packaging || '').toLowerCase().replace(/\s+/g, '');
   if (!packaging) return null;
   const current = String(um || '').toLowerCase();
+  if (current === 'pezzi' && Number.isFinite(Number(prodotto?.pesoMedioPezzoKg)) && Number(prodotto.pesoMedioPezzoKg) > 0) {
+    return qty * Number(prodotto.pesoMedioPezzoKg);
+  }
+  if (current === 'cartoni' && Number.isFinite(Number(prodotto?.pesoMedioPezzoKg)) && Number(prodotto.pesoMedioPezzoKg) > 0
+      && Number.isFinite(Number(prodotto?.pezziPerCartone)) && Number(prodotto.pezziPerCartone) > 0) {
+    return qty * Number(prodotto.pesoMedioPezzoKg) * Number(prodotto.pezziPerCartone);
+  }
   const saccoMatch = packaging.match(/1sacco=([\d.,]+)kg/i);
   if (saccoMatch && current === 'sacchi') {
     const factor = Number(String(saccoMatch[1]).replace(',', '.'));
@@ -500,8 +507,16 @@ function getLineColliSummary(line, prodotto) {
     const colli = qty * Number(prodotto.unitaPerCartone) * Number(prodotto.cartoniPerPedana);
     return `${Number(colli).toFixed(2).replace(/\.00$/, '')} colli previsti`;
   }
+  if (um === 'pedana' && Number(prodotto?.pezziPerCartone) > 0 && Number(prodotto?.cartoniPerPedana) > 0) {
+    const colli = qty * Number(prodotto.pezziPerCartone) * Number(prodotto.cartoniPerPedana);
+    return `${Number(colli).toFixed(2).replace(/\.00$/, '')} colli previsti`;
+  }
   if (um === 'cartoni' && Number(prodotto?.unitaPerCartone) > 0 && String(prodotto?.um || '').toLowerCase() === 'pz') {
     const colli = qty * Number(prodotto.unitaPerCartone);
+    return `${Number(colli).toFixed(2).replace(/\.00$/, '')} colli previsti`;
+  }
+  if (um === 'cartoni' && Number(prodotto?.pezziPerCartone) > 0) {
+    const colli = qty * Number(prodotto.pezziPerCartone);
     return `${Number(colli).toFixed(2).replace(/\.00$/, '')} colli previsti`;
   }
   return '';

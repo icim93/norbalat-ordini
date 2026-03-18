@@ -51,6 +51,8 @@
       gestioneGiacenza: p.gestione_giacenza !== undefined ? !!p.gestione_giacenza : true,
       puntoRiordino: (p.punto_riordino !== undefined && p.punto_riordino !== null) ? Number(p.punto_riordino) : null,
       cartoniAttivi: !!p.cartoni_attivi,
+      pesoMedioPezzoKg: (p.peso_medio_pezzo_kg !== undefined && p.peso_medio_pezzo_kg !== null) ? Number(p.peso_medio_pezzo_kg) : null,
+      pezziPerCartone: (p.pezzi_per_cartone !== undefined && p.pezzi_per_cartone !== null) ? Number(p.pezzi_per_cartone) : null,
       unitaPerCartone: (p.unita_per_cartone !== undefined && p.unita_per_cartone !== null) ? Number(p.unita_per_cartone) : null,
       pedaneAttive: !!p.pedane_attive,
       cartoniPerPedana: (p.cartoni_per_pedana !== undefined && p.cartoni_per_pedana !== null) ? Number(p.cartoni_per_pedana) : null,

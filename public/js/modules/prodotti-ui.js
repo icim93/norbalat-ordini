@@ -22,17 +22,25 @@ function renderProdottoConversionSummary() {
   if (!box) return;
   const um = document.getElementById('pr-um')?.value || 'kg';
   const baseLabel = getProdottoBaseUnitLabel(um);
+  const pesoMedioPezzoKg = Number(document.getElementById('pr-peso-medio-pezzo-kg')?.value || 0);
+  const pezziPerCartone = Number(document.getElementById('pr-pezzi-per-cartone')?.value || 0);
   const cartoniAttivi = document.getElementById('pr-cartoni-attivi')?.value === '1';
   const pedaneAttive = document.getElementById('pr-pedane-attive')?.value === '1';
   const unitaPerCartone = Number(document.getElementById('pr-unita-per-cartone')?.value || 0);
   const cartoniPerPedana = Number(document.getElementById('pr-cartoni-per-pedana')?.value || 0);
   const pesoCartoneKg = Number(document.getElementById('pr-peso-cartone-kg')?.value || 0);
   const parts = [];
+  if (Number.isFinite(pesoMedioPezzoKg) && pesoMedioPezzoKg > 0) {
+    parts.push(`1 pezzo ≈ ${pesoMedioPezzoKg.toFixed(2).replace(/\.00$/, '')} kg`);
+  }
+  if (cartoniAttivi && Number.isFinite(pezziPerCartone) && pezziPerCartone > 0) {
+    parts.push(`1 cartone = ${pezziPerCartone} pezzi`);
+  }
   if (cartoniAttivi && Number.isFinite(unitaPerCartone) && unitaPerCartone > 0) {
-    parts.push(`1 cartone = ${unitaPerCartone} ${baseLabel}`);
+    parts.push(`1 cartone ≈ ${unitaPerCartone.toFixed(2).replace(/\.00$/, '')} ${baseLabel}`);
   }
   if (cartoniAttivi && pedaneAttive && Number.isFinite(unitaPerCartone) && unitaPerCartone > 0 && Number.isFinite(cartoniPerPedana) && cartoniPerPedana > 0) {
-    parts.push(`1 pedana = ${cartoniPerPedana} cartoni = ${(cartoniPerPedana * unitaPerCartone).toFixed(2).replace(/\.00$/, '')} ${baseLabel}`);
+    parts.push(`1 pedana = ${cartoniPerPedana} cartoni ≈ ${(cartoniPerPedana * unitaPerCartone).toFixed(2).replace(/\.00$/, '')} ${baseLabel}`);
   }
   if (cartoniAttivi && Number.isFinite(pesoCartoneKg) && pesoCartoneKg > 0) {
     parts.push(`peso logistico cartone = ${pesoCartoneKg} kg`);
@@ -100,6 +108,8 @@ function renderProdottiTable() {
       <td style="font-family:'DM Mono',monospace;">${escapeHtml(p.um)}</td>
       <td style="font-size:12px;color:var(--text2);">
         ${escapeHtml(p.packaging || '')}
+        ${(p.pesoMedioPezzoKg) ? `<div style="margin-top:4px;">1 pz ≈ ${escapeHtml(String(p.pesoMedioPezzoKg))} kg</div>` : ''}
+        ${(p.cartoniAttivi && p.pezziPerCartone) ? `<div>1 ct = ${escapeHtml(String(p.pezziPerCartone))} pz</div>` : ''}
         ${(p.cartoniAttivi && p.unitaPerCartone) ? `<div style="margin-top:4px;">1 ct = ${escapeHtml(String(p.unitaPerCartone))} ${escapeHtml(p.um)}</div>` : ''}
         ${(p.pedaneAttive && p.cartoniPerPedana && p.unitaPerCartone) ? `<div>1 pd = ${escapeHtml(String(p.cartoniPerPedana))} ct</div>` : ''}
       </td>
@@ -123,7 +133,7 @@ function renderProdottiTable() {
 function openNewProdotto() {
   state.editingId = null;
   document.getElementById('modal-prodotto-title').textContent = 'Nuovo Prodotto';
-  ['pr-codice', 'pr-nome', 'pr-packaging', 'pr-note', 'pr-punto-riordino', 'pr-unita-per-cartone', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'].forEach(id => { document.getElementById(id).value = ''; });
+  ['pr-codice', 'pr-nome', 'pr-packaging', 'pr-note', 'pr-punto-riordino', 'pr-peso-medio-pezzo-kg', 'pr-pezzi-per-cartone', 'pr-unita-per-cartone', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'].forEach(id => { document.getElementById(id).value = ''; });
   document.getElementById('pr-cat').value = 'FORMAGGI';
   document.getElementById('pr-um').value = 'kg';
   document.getElementById('pr-peso').value = 'F';
@@ -131,7 +141,7 @@ function openNewProdotto() {
   document.getElementById('pr-assortimento-stato').value = 'attivo';
   document.getElementById('pr-cartoni-attivi').value = '0';
   document.getElementById('pr-pedane-attive').value = '0';
-  ['pr-gestione-giacenza', 'pr-punto-riordino', 'pr-um', 'pr-peso', 'pr-cartoni-attivi', 'pr-unita-per-cartone', 'pr-pedane-attive', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'].forEach(id => {
+  ['pr-gestione-giacenza', 'pr-punto-riordino', 'pr-um', 'pr-peso', 'pr-cartoni-attivi', 'pr-peso-medio-pezzo-kg', 'pr-pezzi-per-cartone', 'pr-unita-per-cartone', 'pr-pedane-attive', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'].forEach(id => {
     const el = document.getElementById(id);
     if (el) delete el.dataset.touched;
   });
@@ -158,6 +168,8 @@ function openEditProdotto(id) {
   document.getElementById('pr-assortimento-stato').value = p.assortimentoStato || 'attivo';
   document.getElementById('pr-packaging').value = p.packaging;
   document.getElementById('pr-cartoni-attivi').value = p.cartoniAttivi ? '1' : '0';
+  document.getElementById('pr-peso-medio-pezzo-kg').value = p.pesoMedioPezzoKg ?? '';
+  document.getElementById('pr-pezzi-per-cartone').value = p.pezziPerCartone ?? '';
   document.getElementById('pr-unita-per-cartone').value = p.unitaPerCartone ?? '';
   document.getElementById('pr-pedane-attive').value = p.pedaneAttive ? '1' : '0';
   document.getElementById('pr-cartoni-per-pedana').value = p.cartoniPerPedana ?? '';
@@ -172,14 +184,14 @@ function openEditProdotto(id) {
 
 document.addEventListener('DOMContentLoaded', () => {
   const catEl = document.getElementById('pr-cat');
-  const touchedIds = ['pr-gestione-giacenza', 'pr-punto-riordino', 'pr-um', 'pr-peso', 'pr-cartoni-attivi', 'pr-unita-per-cartone', 'pr-pedane-attive', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'];
+  const touchedIds = ['pr-gestione-giacenza', 'pr-punto-riordino', 'pr-um', 'pr-peso', 'pr-cartoni-attivi', 'pr-peso-medio-pezzo-kg', 'pr-pezzi-per-cartone', 'pr-unita-per-cartone', 'pr-pedane-attive', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'];
   touchedIds.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('input', () => { el.dataset.touched = '1'; });
     el.addEventListener('change', () => { el.dataset.touched = '1'; });
   });
-  ['pr-um', 'pr-cartoni-attivi', 'pr-unita-per-cartone', 'pr-pedane-attive', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'].forEach(id => {
+  ['pr-um', 'pr-cartoni-attivi', 'pr-peso-medio-pezzo-kg', 'pr-pezzi-per-cartone', 'pr-unita-per-cartone', 'pr-pedane-attive', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener('input', renderProdottoConversionSummary);
@@ -208,6 +220,14 @@ async function saveProdotto() {
     peso_fisso: (document.getElementById('pr-peso').value === 'F'),
     gestione_giacenza: document.getElementById('pr-gestione-giacenza').value === '1',
     cartoni_attivi: document.getElementById('pr-cartoni-attivi').value === '1',
+    peso_medio_pezzo_kg: (() => {
+      const raw = document.getElementById('pr-peso-medio-pezzo-kg').value;
+      return raw === '' ? null : Number(raw);
+    })(),
+    pezzi_per_cartone: (() => {
+      const raw = document.getElementById('pr-pezzi-per-cartone').value;
+      return raw === '' ? null : Number(raw);
+    })(),
     unita_per_cartone: (() => {
       const raw = document.getElementById('pr-unita-per-cartone').value;
       return raw === '' ? null : Number(raw);
@@ -232,11 +252,31 @@ async function saveProdotto() {
     showToast('Punto di riordino non valido', 'warning');
     return;
   }
+  if (body.peso_medio_pezzo_kg !== null && (!Number.isFinite(body.peso_medio_pezzo_kg) || body.peso_medio_pezzo_kg <= 0)) {
+    showToast('Peso medio pezzo non valido', 'warning');
+    return;
+  }
+  if (body.pezzi_per_cartone !== null && (!Number.isFinite(body.pezzi_per_cartone) || body.pezzi_per_cartone <= 0)) {
+    showToast('Pezzi per cartone non validi', 'warning');
+    return;
+  }
+  if (body.cartoni_attivi
+      && (!Number.isFinite(body.unita_per_cartone) || body.unita_per_cartone <= 0)
+      && Number.isFinite(body.peso_medio_pezzo_kg) && body.peso_medio_pezzo_kg > 0
+      && Number.isFinite(body.pezzi_per_cartone) && body.pezzi_per_cartone > 0) {
+    body.unita_per_cartone = body.peso_medio_pezzo_kg * body.pezzi_per_cartone;
+  }
+  if (body.peso_cartone_kg === null
+      && Number.isFinite(body.peso_medio_pezzo_kg) && body.peso_medio_pezzo_kg > 0
+      && Number.isFinite(body.pezzi_per_cartone) && body.pezzi_per_cartone > 0) {
+    body.peso_cartone_kg = body.peso_medio_pezzo_kg * body.pezzi_per_cartone;
+  }
   if (body.cartoni_attivi && (!Number.isFinite(body.unita_per_cartone) || body.unita_per_cartone <= 0)) {
     showToast('Unità per cartone non valide', 'warning');
     return;
   }
   if (!body.cartoni_attivi) {
+    body.pezzi_per_cartone = null;
     body.unita_per_cartone = null;
     body.pedane_attive = false;
     body.cartoni_per_pedana = null;
@@ -261,6 +301,8 @@ async function saveProdotto() {
           peso_fisso: body.peso_fisso ? 1 : 0,
           gestione_giacenza: body.gestione_giacenza ? 1 : 0,
           cartoni_attivi: body.cartoni_attivi ? 1 : 0,
+          peso_medio_pezzo_kg: body.peso_medio_pezzo_kg,
+          pezzi_per_cartone: body.pezzi_per_cartone,
           unita_per_cartone: body.unita_per_cartone,
           pedane_attive: body.pedane_attive ? 1 : 0,
           cartoni_per_pedana: body.cartoni_per_pedana,
@@ -283,6 +325,8 @@ async function saveProdotto() {
         peso_fisso: body.peso_fisso ? 1 : 0,
         gestione_giacenza: body.gestione_giacenza ? 1 : 0,
         cartoni_attivi: body.cartoni_attivi ? 1 : 0,
+        peso_medio_pezzo_kg: body.peso_medio_pezzo_kg,
+        pezzi_per_cartone: body.pezzi_per_cartone,
         unita_per_cartone: body.unita_per_cartone,
         pedane_attive: body.pedane_attive ? 1 : 0,
         cartoni_per_pedana: body.cartoni_per_pedana,
