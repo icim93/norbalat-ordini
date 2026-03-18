@@ -351,6 +351,8 @@ document.addEventListener('click', function(e) {
 
 function getDefaultUM(prodotto) {
   if (!prodotto) return 'Pezzi';
+  if (isSacco25KgProduct(prodotto)) return 'Sacchi';
+  if (isCartoniOnlyPackagingProduct(prodotto)) return 'Cartoni';
   if (supportsVariableWeightPieceOrders(prodotto)) return 'Pezzi';
   const packaging = String(prodotto.packaging || '').toLowerCase();
   if (/\b1\s*pz\b/.test(packaging) || /\bpezz/i.test(packaging)) return 'Pezzi';
@@ -366,11 +368,28 @@ function umPlurale(um, qty) {
   const map = {
     'Pezzi':   q === 1 ? 'Pezzo'    : 'Pezzi',
     'Cartoni': q === 1 ? 'Cartone'  : 'Cartoni',
+    'Sacchi':  q === 1 ? 'Sacco'    : 'Sacchi',
     'Litri':   'Litri',
     'Kg':      'Kg',
     'Pedana':  q === 1 ? 'Pedana'   : 'Pedane',
   };
   return map[um] || um;
+}
+
+function isSacco25KgProduct(prodotto) {
+  if (!prodotto) return false;
+  const codice = String(prodotto.codice || '').toUpperCase();
+  const nome = String(prodotto.nome || '').toUpperCase();
+  const packaging = String(prodotto.packaging || '').toLowerCase().replace(/\s+/g, '');
+  if (!(codice.includes('ACIDOC') || codice.includes('GSAL') || nome.includes('ACIDO CITRICO') || nome === 'SALE')) return false;
+  return packaging.includes('1sacco=25kg');
+}
+
+function isCartoniOnlyPackagingProduct(prodotto) {
+  if (!prodotto) return false;
+  const nome = String(prodotto.nome || '').toUpperCase();
+  const codice = String(prodotto.codice || '').toUpperCase();
+  return nome.includes('VASCONE') || nome.includes('VASCHETTA') || codice.startsWith('VAS');
 }
 
 function supportsVariableWeightPieceOrders(prodotto) {
@@ -393,6 +412,8 @@ function supportsLegacyPedanaOrder(prodotto) {
 
 function getProductOrderUnits(prodotto) {
   if (!prodotto) return ['Pezzi'];
+  if (isSacco25KgProduct(prodotto)) return ['Sacchi', 'Kg'];
+  if (isCartoniOnlyPackagingProduct(prodotto)) return ['Cartoni'];
   const units = [];
   const base = String(prodotto.um || '').toLowerCase();
   const packaging = String(prodotto.packaging || '').toLowerCase();
@@ -411,6 +432,11 @@ function getLegacyBaseQtyFromPackaging(prodotto, qty, um) {
   const packaging = String(prodotto?.packaging || '').toLowerCase().replace(/\s+/g, '');
   if (!packaging) return null;
   const current = String(um || '').toLowerCase();
+  const saccoMatch = packaging.match(/1sacco=([\d.,]+)kg/i);
+  if (saccoMatch && current === 'sacchi') {
+    const factor = Number(String(saccoMatch[1]).replace(',', '.'));
+    return Number.isFinite(factor) && factor > 0 ? qty * factor : null;
+  }
   const pieceMatch = packaging.match(/1pz=([\d.,]+)(kg|lt|l)/i);
   if (pieceMatch && current === 'pezzi') {
     const factor = Number(String(pieceMatch[1]).replace(',', '.'));
@@ -431,6 +457,11 @@ function getLineBaseQty(line) {
   const qty = Number(line.qty || 0);
   if (!Number.isFinite(qty) || qty <= 0) return null;
   const um = String(line.unitaMisura || getDefaultUM(p)).trim().toLowerCase();
+  if (um === 'sacchi') {
+    const legacy = getLegacyBaseQtyFromPackaging(p, qty, um);
+    if (Number.isFinite(legacy) && legacy > 0) return legacy;
+    return null;
+  }
   if (um === 'pedana') {
     if (!p.pedaneAttive || !Number.isFinite(Number(p.cartoniPerPedana)) || !Number.isFinite(Number(p.unitaPerCartone))) return null;
     return qty * Number(p.cartoniPerPedana) * Number(p.unitaPerCartone);
@@ -581,6 +612,10 @@ function getKgPerSelectedUnita(prodotto, unitaMisura) {
   const um = String(unitaMisura || '').trim().toLowerCase();
   if (um === 'kg') return 1;
   if (um === 'litri') return 1;
+  if (um === 'sacchi') {
+    const kgPerSacco = getLegacyBaseQtyFromPackaging(prodotto, 1, 'sacchi');
+    return Number.isFinite(kgPerSacco) && kgPerSacco > 0 ? kgPerSacco : null;
+  }
   if (um === 'cartoni' && String(prodotto?.um || '').toLowerCase() === 'kg' && Number.isFinite(Number(prodotto?.unitaPerCartone)) && Number(prodotto.unitaPerCartone) > 0) {
     return Number(prodotto.unitaPerCartone);
   }
