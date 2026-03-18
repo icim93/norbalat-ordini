@@ -2377,6 +2377,7 @@
             </div>
           </div>
           <div class="status-strip" id="magazzino-status-strip"></div>
+          <div id="magazzino-cagliate-summary" style="display:none;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);font-size:12px;color:var(--text2);"></div>
         </div>
 
         <!-- Tab bar -->
@@ -5024,6 +5025,41 @@ function renderMagazzinoStatusStrip(ordini) {
   ].filter(Boolean).join('');
 }
 
+function renderMagazzinoCagliateSummary(ordini) {
+  const box = document.getElementById('magazzino-cagliate-summary');
+  if (!box) return;
+  const totals = new Map();
+  (ordini || []).forEach(o => {
+    (o.linee || []).forEach(l => {
+      const p = l.prodId ? getProdotto(l.prodId) : null;
+      if (!p || String(p.categoria || '').trim().toUpperCase() !== 'CAGLIATA') return;
+      const key = `${p.codice}||${p.nome}`;
+      const entry = totals.get(key) || { codice: p.codice || '', nome: p.nome || '', pedane: 0, pezzi: 0 };
+      const qty = Number(l.qty || 0);
+      if (!Number.isFinite(qty) || qty <= 0) return;
+      const um = String(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi')).trim().toLowerCase();
+      if (l.isPedana || um === 'pedana' || um === 'pedane') entry.pedane += qty;
+      else entry.pezzi += qty;
+      totals.set(key, entry);
+    });
+  });
+  if (!totals.size) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+  const parts = Array.from(totals.values())
+    .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' }))
+    .map(entry => {
+      const chunks = [];
+      if (entry.pedane > 0) chunks.push(`${Number(entry.pedane).toFixed(2).replace(/\.00$/, '')} ${entry.pedane === 1 ? 'pedana' : 'pedane'}`);
+      if (entry.pezzi > 0) chunks.push(`${Number(entry.pezzi).toFixed(2).replace(/\.00$/, '')} ${entry.pezzi === 1 ? 'pezzo' : 'pezzi'}`);
+      return `<b>${escapeHtml(entry.nome || entry.codice)}</b> ${chunks.join(' + ')}`;
+    });
+  box.style.display = '';
+  box.innerHTML = `Cagliate da uscire: ${parts.join(' · ')}`;
+}
+
 function renderMagazzino() {
   const dateInput = document.getElementById('filter-magazzino-data');
   if (dateInput && !dateInput.value) dateInput.value = getNextBusinessDate();
@@ -5045,6 +5081,7 @@ function renderMagazzino() {
   else ordini = ordini.filter(o => o.stato === filterStato);
   if (filterGiro) ordini = ordini.filter(o => getOrdineGiroEffettivo(o) === filterGiro);
   renderMagazzinoStatusStrip(ordini);
+  renderMagazzinoCagliateSummary(ordini);
   if (typeof refreshNavBadges === 'function') refreshNavBadges();
 
   const stOrd = { preparazione: 0, attesa: 1, consegnato: 2 };
