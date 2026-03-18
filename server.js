@@ -749,6 +749,7 @@ async function createSchema() {
       prodotto_nome_libero TEXT DEFAULT '',
       qty             NUMERIC NOT NULL DEFAULT 1,
       qty_base        NUMERIC,
+      colli_effettivi NUMERIC,
       prezzo_unitario NUMERIC,
       peso_effettivo  NUMERIC,
       is_pedana       BOOLEAN DEFAULT FALSE,
@@ -958,6 +959,7 @@ async function createSchema() {
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS nota_riga      TEXT DEFAULT '';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS unita_misura   TEXT DEFAULT 'pezzi';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS qty_base       NUMERIC;
+    ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS colli_effettivi NUMERIC;
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS prezzo_unitario NUMERIC;
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS prodotto_nome_libero TEXT DEFAULT '';
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS preparato      BOOLEAN DEFAULT FALSE;
@@ -1621,6 +1623,7 @@ const zConsegnaParzialePayload = z.object({
 const zPreparazioneLineaPayload = z.object({
   preparato: z.boolean().optional(),
   peso_effettivo: z.coerce.number().nullable().optional(),
+  colli_effettivi: z.coerce.number().nullable().optional(),
   lotto: z.string().max(120).optional(),
 });
 
@@ -2936,7 +2939,7 @@ app.get('/api/ordini', authMiddleware, async (req, res) => {
     if (rows.length) {
       const ids = rows.map(r => r.id);
       const { rows: linee } = await q(
-        `SELECT ol.id, ol.ordine_id, ol.prodotto_id, ol.prodotto_nome_libero, ol.qty, ol.qty_base, ol.peso_effettivo,
+        `SELECT ol.id, ol.ordine_id, ol.prodotto_id, ol.prodotto_nome_libero, ol.qty, ol.qty_base, ol.colli_effettivi, ol.peso_effettivo,
                 ol.prezzo_unitario, ol.is_pedana, ol.nota_riga, ol.unita_misura, ol.preparato, ol.lotto,
                 p.codice, p.nome as prodotto_nome, p.um, p.packaging, p.cartoni_attivi, p.unita_per_cartone, p.pedane_attive, p.cartoni_per_pedana, p.peso_cartone_kg
          FROM ordine_linee ol LEFT JOIN prodotti p ON ol.prodotto_id = p.id
@@ -3096,6 +3099,10 @@ app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, r
     if (payload.peso_effettivo !== undefined) {
       sets.push(`peso_effettivo=$${p++}`);
       params.push(payload.peso_effettivo === null ? null : Number(payload.peso_effettivo));
+    }
+    if (payload.colli_effettivi !== undefined) {
+      sets.push(`colli_effettivi=$${p++}`);
+      params.push(payload.colli_effettivi === null ? null : Number(payload.colli_effettivi));
     }
     if (payload.lotto !== undefined) {
       sets.push(`lotto=$${p++}`);
@@ -3438,7 +3445,7 @@ app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 
     }
     const ids = ordini.map(o => o.id);
     const { rows: linee } = await client.query(
-      `SELECT id, ordine_id, prodotto_id, prodotto_nome_libero, qty, prezzo_unitario, is_pedana, nota_riga, unita_misura, preparato, lotto
+      `SELECT id, ordine_id, prodotto_id, prodotto_nome_libero, qty, colli_effettivi, prezzo_unitario, is_pedana, nota_riga, unita_misura, preparato, lotto
        FROM ordine_linee
        WHERE ordine_id = ANY($1)
        ORDER BY ordine_id, id`,

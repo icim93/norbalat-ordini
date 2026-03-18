@@ -351,6 +351,7 @@ document.addEventListener('click', function(e) {
 
 function getDefaultUM(prodotto) {
   if (!prodotto) return 'Pezzi';
+  if (supportsVariableWeightPieceOrders(prodotto)) return 'Pezzi';
   const packaging = String(prodotto.packaging || '').toLowerCase();
   if (/\b1\s*pz\b/.test(packaging) || /\bpezz/i.test(packaging)) return 'Pezzi';
   if (prodotto.cartoniAttivi) return 'Cartoni';
@@ -372,6 +373,16 @@ function umPlurale(um, qty) {
   return map[um] || um;
 }
 
+function supportsVariableWeightPieceOrders(prodotto) {
+  if (!prodotto) return false;
+  const categoria = String(prodotto.categoria || '').trim().toUpperCase();
+  const baseUm = String(prodotto.um || '').trim().toLowerCase();
+  const packaging = String(prodotto.packaging || '').toLowerCase();
+  if (baseUm !== 'kg' || prodotto.pesoFisso) return false;
+  if (['CAGLIATA', 'RICOTTA', 'FORMAGGI'].includes(categoria)) return true;
+  return /\b1\s*pz\b/.test(packaging) || /\bpezz/i.test(packaging);
+}
+
 function supportsLegacyPedanaOrder(prodotto) {
   if (!prodotto) return false;
   const categoria = String(prodotto.categoria || '').trim().toUpperCase();
@@ -389,7 +400,7 @@ function getProductOrderUnits(prodotto) {
   if (base === 'kg') units.push('Kg');
   else if (base === 'lt') units.push('Litri');
   else units.push('Pezzi');
-  if (hasLegacyPieces && !units.includes('Pezzi')) units.unshift('Pezzi');
+  if ((hasLegacyPieces || supportsVariableWeightPieceOrders(prodotto)) && !units.includes('Pezzi')) units.unshift('Pezzi');
   if (prodotto.cartoniAttivi && Number.isFinite(Number(prodotto.unitaPerCartone)) && Number(prodotto.unitaPerCartone) > 0) units.push('Cartoni');
   if (prodotto.pedaneAttive && Number.isFinite(Number(prodotto.cartoniPerPedana)) && Number(prodotto.cartoniPerPedana) > 0 && units.includes('Cartoni')) units.push('Pedana');
   else if (supportsLegacyPedanaOrder(prodotto)) units.push('Pedana');
@@ -444,6 +455,25 @@ function getLineBaseQtyLabel(line) {
   const currentIsBase = (current === 'kg' && baseUm === 'kg') || (current === 'litri' && baseUm === 'lt') || (current === 'pezzi' && baseUm === 'pz');
   if (currentIsBase) return '';
   return `${Number(baseQty).toFixed(2).replace(/\.00$/, '')} ${baseUm}`;
+}
+
+function getLineColliSummary(line, prodotto) {
+  if (!line || !prodotto) return '';
+  const qty = Number(line.qty || 0);
+  if (!Number.isFinite(qty) || qty <= 0) return '';
+  const um = String(line.unitaMisura || getDefaultUM(prodotto)).trim().toLowerCase();
+  if (um === 'pezzi') {
+    return `${Number(qty).toFixed(2).replace(/\.00$/, '')} colli`;
+  }
+  if (um === 'pedana' && Number(prodotto?.unitaPerCartone) > 0 && Number(prodotto?.cartoniPerPedana) > 0 && String(prodotto?.um || '').toLowerCase() === 'pz') {
+    const colli = qty * Number(prodotto.unitaPerCartone) * Number(prodotto.cartoniPerPedana);
+    return `${Number(colli).toFixed(2).replace(/\.00$/, '')} colli previsti`;
+  }
+  if (um === 'cartoni' && Number(prodotto?.unitaPerCartone) > 0 && String(prodotto?.um || '').toLowerCase() === 'pz') {
+    const colli = qty * Number(prodotto.unitaPerCartone);
+    return `${Number(colli).toFixed(2).replace(/\.00$/, '')} colli previsti`;
+  }
+  return '';
 }
 
 function getLastPriceForClienteProd(clienteId, prodId) {
@@ -631,6 +661,7 @@ function renderOrderLines() {
     const showPesoApprox = !!l.showPesoApprox;
     const showAdvanced = !!l.showAdvanced;
     const approxKg = estimateLineKg(l);
+    const colliSummary = getLineColliSummary({ ...l, unitaMisura: curUM }, p);
     const prezzoListino = p ? getListinoPrezzo(p.id, clienteId, dataOrdine) : null;
     const prezzo = Number.isFinite(Number(l.prezzoUnitario)) ? Number(l.prezzoUnitario) : null;
     const qty = Number(l.qty || 0);
@@ -691,6 +722,7 @@ function renderOrderLines() {
       </div>
       ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">${p.packaging}${isPedana ? ' - PEDANA INTERA' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">PEDANA INTERA</div>` : '')}
       ${getLineBaseQtyLabel(l) ? `<div style="font-size:11px;color:var(--accent);padding-left:2px;">Conversione: <b>${Number(l.qty || 0).toFixed(2).replace(/\.00$/, '')} ${umPlurale(curUM, l.qty || 1)}</b> = <b>${getLineBaseQtyLabel(l)}</b></div>` : ''}
+      ${colliSummary ? `<div style="font-size:11px;color:var(--text2);padding-left:2px;">Colli logistici: <b>${colliSummary}</b></div>` : ''}
       ${approxKg !== null ? `<div style="font-size:11px;color:var(--accent);padding-left:2px;">Stima peso: <b>${approxKg.toFixed(2)} kg</b></div>` : ''}
       ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">${p.note}</div>` : ''}
       ${p ? `<div style="font-size:11px;color:var(--text2);padding-left:2px;">Listino: ${prezzoListino !== null ? eur(prezzoListino) : 'n.d.'}${subtot !== null ? ` - Subtotale: <b>${eur(subtot)}</b>` : ''}</div>` : ''}

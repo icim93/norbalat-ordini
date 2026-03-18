@@ -131,6 +131,7 @@
         prodottoNomeLibero: l.prodotto_nome_libero || '',
         qty: l.qty,
         qtyBase: (l.qty_base !== undefined && l.qty_base !== null) ? Number(l.qty_base) : null,
+        colliEffettivi: (l.colli_effettivi !== undefined && l.colli_effettivi !== null) ? Number(l.colli_effettivi) : null,
         prezzoUnitario: (l.prezzo_unitario !== undefined && l.prezzo_unitario !== null) ? Number(l.prezzo_unitario) : null,
         pesoEffettivo: l.peso_effettivo || null,
         isPedana: !!l.is_pedana,

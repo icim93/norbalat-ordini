@@ -5144,8 +5144,10 @@ function renderMagazzino() {
           ? `<div style="font-size:11px;color:var(--danger);margin-top:2px;">Disponibile sul lotto selezionato: ${maxUnitsForSelectedLotto} ${umPlurale(l.unitaMisura || 'Pezzi', maxUnitsForSelectedLotto)}. Usa ◐ per dividere la riga.</div>`
           : '';
         const lineNote = l.notaRiga ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;">Nota riga: ${escapeHtml(l.notaRiga)}</div>` : '';
+        const trackColli = !!l.isPedana || (String(p?.um || '').toLowerCase() === 'kg' && !p?.pesoFisso && ['CAGLIATA','FORMAGGI','RICOTTA'].includes(String(p?.categoria || '').toUpperCase()));
 
         // Indici per navigazione Enter
+        const navColli = trackColli ? _navIdx++ : -1;
         const navPeso = !p.pesoFisso ? _navIdx++ : -1;
         const navLotto = _navIdx++;
 
@@ -5157,6 +5159,13 @@ function renderMagazzino() {
                onchange="setLinePesoEffettivo(${o.id},${li},this.value)"
                onkeydown="if(event.key==='Enter'){event.preventDefault();magazzinoNavNext(${navPeso})}">`
           : `<span style="font-size:12px;color:var(--text3);min-width:92px;text-align:right;">${l.qty} ${umLabel}</span>`;
+        const colliInput = trackColli
+          ? `<input type="number" step="0.01" min="0" placeholder="colli" value="${l.colliEffettivi ?? ''}"
+               data-mgnav="${navColli}"
+               style="width:74px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;"
+               onchange="setLineColliEffettivi(${o.id},${li},this.value)"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();magazzinoNavNext(${navColli})}">`
+          : '';
 
         // Bottone split: solo per righe non-pedana con qty > 1
         const splitBtn = (!l.isPedana && Number(l.qty) > 1)
@@ -5201,9 +5210,11 @@ function renderMagazzino() {
           <div data-line-nome="${o.id}-${li}" style="flex:1;font-size:13px;min-width:0;${barratoStyle}">
             <div>${l.qty} ${umLabel} — [${p.codice}] ${p.nome}</div>
             ${baseQtyInfo ? `<div style="font-size:11px;color:var(--accent);text-decoration:none;">= ${baseQtyInfo}</div>` : ''}
+            ${trackColli ? `<div style="font-size:11px;color:var(--text2);text-decoration:none;">Colli ordine: <b>${Number(l.qty || 0).toFixed(2).replace(/\.00$/, '')}</b>${l.colliEffettivi !== null && l.colliEffettivi !== undefined ? ` · Colli reali: <b>${Number(l.colliEffettivi).toFixed(2).replace(/\.00$/, '')}</b>` : ''}</div>` : ''}
             ${lineNote}
             ${partialHint}
           </div>
+          ${colliInput}
           ${pesoInput}
           ${lottoEl}
           ${splitBtn}
@@ -5305,6 +5316,18 @@ function setLinePesoEffettivo(ordineId, lineIdx, val) {
   pushMagazzinoUndo({ ordineId, lineIdx, field: 'pesoEffettivo', prev });
   o.linee[lineIdx].pesoEffettivo = next;
   saveLineaPreparazione(ordineId, lineIdx, { peso_effettivo: next });
+}
+
+function setLineColliEffettivi(ordineId, lineIdx, val) {
+  const o = state.ordini.find(x => x.id === ordineId);
+  if (!o) return;
+  const prev = o.linee[lineIdx].colliEffettivi ?? null;
+  const n = parseFloat(String(val).replace(',', '.'));
+  const next = Number.isFinite(n) ? n : null;
+  if (prev === next) return;
+  pushMagazzinoUndo({ ordineId, lineIdx, field: 'colliEffettivi', prev });
+  o.linee[lineIdx].colliEffettivi = next;
+  saveLineaPreparazione(ordineId, lineIdx, { colli_effettivi: next });
 }
 
 function setLineLotto(ordineId, lineIdx, val) {
@@ -5658,6 +5681,9 @@ async function undoMagazzinoLastAction() {
   } else if (action.field === 'pesoEffettivo') {
     line.pesoEffettivo = action.prev ?? null;
     patch.peso_effettivo = action.prev ?? null;
+  } else if (action.field === 'colliEffettivi') {
+    line.colliEffettivi = action.prev ?? null;
+    patch.colli_effettivi = action.prev ?? null;
   } else if (action.field === 'lotto') {
     line.lotto = String(action.prev || '');
     patch.lotto = line.lotto;
@@ -7467,10 +7493,16 @@ function updatePDFPreview() {
       const nome = l.prodottoNomeLibero || p?.nome || 'Prodotto libero';
       const qty = l.qty || 1;
       const qtyBase = Number(l.qtyBase);
+      const colliEffettivi = Number(l.colliEffettivi);
       const qtyBaseLabel = Number.isFinite(qtyBase) && qtyBase > 0
         ? `${Number(qtyBase).toFixed(2).replace(/\.00$/, '')} ${p?.um || ''}`
         : (typeof getLineBaseQtyLabel === 'function' ? getLineBaseQtyLabel(l) : '');
       const qtyDisplay = qtyBaseLabel || `${qty} ${umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), qty)}`;
+      const colliDisplay = Number.isFinite(colliEffettivi) && colliEffettivi > 0
+        ? `${Number(colliEffettivi).toFixed(2).replace(/\.00$/, '')} colli`
+        : ((String(l.unitaMisura || '').toLowerCase() === 'pezzi' || !!l.isPedana)
+          ? `${Number(qty).toFixed(2).replace(/\.00$/, '')} colli`
+          : '');
       const peso = l.pesoEffettivo
         ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>`
         : (p?.pesoFisso ? `<span style="color:#555;">${qtyDisplay}</span>` : `<span style="color:#c0392b;">peso mancante</span>`);
@@ -7480,6 +7512,7 @@ function updatePDFPreview() {
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;font-size:12px;border-bottom:1px dotted #eee;">
         <span style="flex:1;">${nome}${nota}</span>
+        <span style="white-space:nowrap;margin-left:8px;font-size:11px;color:#555;">${colliDisplay || '-'}</span>
         <span style="white-space:nowrap;margin-left:8px;">${peso}</span>
         <span style="white-space:nowrap;margin-left:12px;font-size:11px;">${lotto}</span>
       </div>`;
