@@ -8356,7 +8356,6 @@ function renderScaricoRapidoRows() {
     const lotti = row.prodottoId ? (state.giacenzeLotti[row.prodottoId] || []).filter(g => Number(g.quantita || 0) > 0) : [];
     const selectedLotto = lotti.find(g => g.lotto === row.lotto);
     return `
-      <div style="display:grid;grid-template-columns:minmax(220px,2fr) minmax(220px,2fr) minmax(110px,0.8fr) minmax(180px,1.4fr) auto;gap:10px;align-items:end;padding:10px 0;border-bottom:1px solid var(--border);">
       <div style="display:grid;grid-template-columns:minmax(220px,2fr) minmax(220px,2fr) minmax(110px,0.8fr) auto;gap:10px;align-items:end;padding:10px 0;border-bottom:1px solid var(--border);">
         <div class="field" style="margin:0;">
           <label>Prodotto</label>
