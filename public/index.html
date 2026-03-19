@@ -9001,7 +9001,7 @@ function renderRientroTV() {
     </div>`;
 }
 
-let _rientroTVRighe = [];
+window._rientroTVRighe = Array.isArray(window._rientroTVRighe) ? window._rientroTVRighe : [];
 
 async function caricaRientroTV() {
   const data = document.getElementById('rientro-tv-data')?.value;
@@ -9013,7 +9013,7 @@ async function caricaRientroTV() {
   lista.innerHTML = '<div style="color:var(--text3);padding:16px;">Caricamento...</div>';
   try {
     const rows = await api('GET', `/api/giacenze/rientro-tv?data=${data}&giro=${encodeURIComponent(giro)}`);
-    _rientroTVRighe = rows;
+    window._rientroTVRighe = rows;
     if (!rows.length) {
       lista.innerHTML = '<div class="empty-state"><div class="empty-icon">📦</div><p>Nessun prodotto preparato per questa data/giro</p></div>';
       if (footer) footer.style.display = 'none';
@@ -9058,7 +9058,7 @@ async function caricaRientroTV() {
 }
 
 async function confermaRientroTV() {
-  const righe = _rientroTVRighe.map((r, i) => ({
+  const righe = (window._rientroTVRighe || []).map((r, i) => ({
     prodotto_id: r.prodotto_id,
     lotto: r.lotto,
     quantita_rientro: parseFloat(document.getElementById(`rientro-qty-${i}`)?.value || 0) || 0,
@@ -9071,7 +9071,7 @@ async function confermaRientroTV() {
     await api('POST', '/api/giacenze/rientro-tv', { righe });
     await reloadGiacenze();
     showToast(`Rientro registrato per ${righe.length} prodotti ✅`, 'success');
-    _rientroTVRighe = [];
+    window._rientroTVRighe = [];
     const lista = document.getElementById('rientro-tv-lista');
     if (lista) lista.innerHTML = '<div style="color:var(--success);padding:16px;font-weight:600;">✅ Rientro confermato con successo!</div>';
     const footer = document.getElementById('rientro-tv-footer');
