@@ -4873,6 +4873,7 @@ function renderAutistaView() {
   document.getElementById('aut-totale').textContent = ordini.length;
 
   const container = document.getElementById('autista-orders');
+  refreshDailyClosureSummary();
   if (!ordini.length) {
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">🎉</div><p>Nessun ordine assegnato per ${formatDate(t)}.</p></div>`;
     return;
@@ -4918,7 +4919,6 @@ function renderAutistaView() {
       </div>
     </div>`;
   }).join('');
-  refreshDailyClosureSummary();
 }
 
 async function confermaConsegnaRapida(id) {
@@ -6376,14 +6376,17 @@ async function chiudiGiornataGiro() {
   } catch (e) {
     const payload = e?.payload || {};
     if (e?.status === 409 && payload.code === 'GIRO_GIA_CONFERMATO') {
+      showToast(`Giro già chiuso da ${payload.confermata_nome || 'un altro utente'}`, 'warning');
       const password = prompt(`Giro già confermato da ${payload.confermata_nome || 'un altro utente'}.\nInserisci la password per annullare la chiusura:`, '');
       if (!password) return;
       try {
         await api('POST', '/api/giro/giornata/annulla', { data, giro, password });
+        await loadAllData();
         await refreshDailyClosureSummary();
+        renderAutistaView();
         showToast('Chiusura giro annullata', 'success');
       } catch (eAnn) {
-        showToast(eAnn.message || 'Errore annullamento giro', 'warning');
+        showToast(eAnn?.payload?.error || eAnn?.payload?.message || eAnn.message || 'Errore annullamento giro', 'warning');
       }
       return;
     }
@@ -6392,7 +6395,7 @@ async function chiudiGiornataGiro() {
       showToast(`Restano ordini senza esito: ${pending}`, 'warning');
       return;
     }
-    showToast(e.message || 'Errore chiusura giro', 'warning');
+    showToast(payload.error || payload.message || e.message || 'Errore chiusura giro', 'warning');
   }
 }
 
@@ -6400,19 +6403,24 @@ async function chiudiGiornataAzienda() {
   const data = document.getElementById('filter-magazzino-data')?.value || today();
   try {
     await api('POST', '/api/azienda/giornata/chiudi', { data });
+    await loadAllData();
     await refreshDailyClosureSummary();
+    renderMagazzino();
     showToast('Chiusura azienda confermata', 'success');
   } catch (e) {
     const payload = e?.payload || {};
     if (e?.status === 409 && payload.code === 'AZIENDA_GIA_CONFERMATA') {
+      showToast(`Azienda già chiusa da ${payload.confermata_nome || 'un altro utente'}`, 'warning');
       const password = prompt(`Azienda già chiusa da ${payload.confermata_nome || 'un altro utente'}.\nInserisci la password per annullare la chiusura:`, '');
       if (!password) return;
       try {
         await api('POST', '/api/azienda/giornata/annulla', { data, password });
+        await loadAllData();
         await refreshDailyClosureSummary();
+        renderMagazzino();
         showToast('Chiusura azienda annullata', 'success');
       } catch (eAnn) {
-        showToast(eAnn.message || 'Errore annullamento chiusura azienda', 'warning');
+        showToast(eAnn?.payload?.error || eAnn?.payload?.message || eAnn.message || 'Errore annullamento chiusura azienda', 'warning');
       }
       return;
     }
@@ -6423,7 +6431,7 @@ async function chiudiGiornataAzienda() {
       showToast(`Mancano chiusure giro: ${pending}`, 'warning');
       return;
     }
-    showToast(e.message || 'Errore chiusura azienda', 'warning');
+    showToast(payload.error || payload.message || e.message || 'Errore chiusura azienda', 'warning');
   }
 }
 
