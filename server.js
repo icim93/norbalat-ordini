@@ -5094,6 +5094,7 @@ app.get('/api/giacenze', authMiddleware, async (req, res) => {
               p.assortimento_stato, p.ultimo_riordino_qta, p.ultimo_riordino_at, p.ultimo_riordino_utente_id, p.ultimo_riordino_utente_nome
        FROM giacenze g JOIN prodotti p ON p.id = g.prodotto_id
        WHERE COALESCE(p.gestione_giacenza, TRUE) = TRUE
+         AND COALESCE(g.quantita, 0) > 0
        ORDER BY p.nome, g.lotto`
     );
     // Calcola totale per prodotto
