@@ -190,6 +190,82 @@
     background: rgba(220,238,250,0.2);
     border-color: rgba(220,238,250,0.42);
   }
+  .topbar-notify-wrap { position: relative; }
+  .topbar-notify {
+    position: relative;
+    background: rgba(220,238,250,0.12);
+    border: 1px solid rgba(220,238,250,0.28);
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    color: #e4f2fb;
+    transition: all 0.2s;
+  }
+  .topbar-notify:hover,
+  .topbar-notify.open {
+    background: rgba(220,238,250,0.2);
+    border-color: rgba(220,238,250,0.42);
+  }
+  .topbar-notify-badge {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #e07a00;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+  }
+  .topbar-notify-panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: min(360px, 82vw);
+    max-height: 420px;
+    overflow: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    padding: 8px 0;
+    display: none;
+    z-index: 250;
+  }
+  .topbar-notify-panel.open { display: block; }
+  .topbar-notify-head {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding: 6px 14px 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .topbar-notify-item {
+    display:block;
+    width:100%;
+    text-align:left;
+    padding:10px 14px;
+    background:none;
+    border:none;
+    border-bottom:1px solid var(--surface2);
+    cursor:pointer;
+  }
+  .topbar-notify-item:hover { background: var(--surface2); }
+  .topbar-notify-item:last-child { border-bottom:none; }
+  .topbar-notify-item.unseen { background: #f5fbff; }
+  .topbar-notify-title { font-size:13px; color: var(--text1); line-height:1.35; }
+  .topbar-notify-meta { font-size:11px; color: var(--text3); margin-top:4px; }
+  .topbar-notify-empty { padding:16px 14px; font-size:13px; color:var(--text2); }
 
   .app-layout { display: flex; min-height: calc(100vh - 60px); }
 
@@ -1961,6 +2037,19 @@
     <div class="topbar-user">
       <span id="topbar-username" style="font-size:14px;font-weight:500;color:#c8dff0;"></span>
       <span id="topbar-role" class="topbar-role"></span>
+      <div class="topbar-notify-wrap" id="topbar-notify-wrap">
+        <button class="topbar-notify" id="topbar-notify-btn" onclick="toggleTopbarNotifications()" aria-label="Notifiche ordini">
+          Notifiche
+          <span class="topbar-notify-badge" id="topbar-notify-badge"></span>
+        </button>
+        <div class="topbar-notify-panel" id="topbar-notify-panel">
+          <div class="topbar-notify-head">
+            <strong style="font-size:13px;">Nuovi ordini</strong>
+            <span id="topbar-notify-head-count" style="font-size:11px;color:var(--text3);"></span>
+          </div>
+          <div id="topbar-notify-list"></div>
+        </div>
+      </div>
       <button class="topbar-help" onclick="openHelpAssistant()">Aiuto</button>
       <button class="topbar-logout" onclick="doLogout()">Esci</button>
     </div>
@@ -4149,6 +4238,9 @@ let state = {
   pianoData: '',
   giriCalendario: [],
   activityLog: [],
+  topbarNotifications: [],
+  orderNotificationSeenId: 0,
+  orderNotificationPoller: null,
   magazzinoResidualLog: [],
   carichiTentataVendita: [],
   tentataConfigSearch: {},
@@ -4308,11 +4400,193 @@ async function loadAllData() {
     // Alerts giacenze
     state.giacenzeAlerts = await api('GET', '/api/giacenze/alerts').catch(() => ({ sotto_soglia: [], in_scadenza: [] }));
     if (typeof loadCrmSummary === 'function') await loadCrmSummary();
+    if (typeof loadTopbarNotifications === 'function') await loadTopbarNotifications();
+    if (typeof startTopbarNotificationPolling === 'function') startTopbarNotificationPolling();
     if (typeof refreshNavBadges === 'function') refreshNavBadges();
   } catch(e) {
     console.error('loadAllData error:', e);
     showToast('Errore caricamento dati', 'warning');
   }
+}
+
+function getOrderNotificationSeenKey() {
+  return state.currentUser?.id ? `norbalat_order_notification_seen_${state.currentUser.id}` : '';
+}
+
+function getStoredOrderNotificationSeenId() {
+  const key = getOrderNotificationSeenKey();
+  if (!key) return 0;
+  return Number(localStorage.getItem(key) || 0) || 0;
+}
+
+function setStoredOrderNotificationSeenId(id) {
+  const key = getOrderNotificationSeenKey();
+  if (!key) return;
+  const safeId = Math.max(0, Number(id) || 0);
+  localStorage.setItem(key, String(safeId));
+  state.orderNotificationSeenId = safeId;
+}
+
+function formatNotificationDateTime(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('it-IT', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function renderTopbarNotifications() {
+  const badge = document.getElementById('topbar-notify-badge');
+  const list = document.getElementById('topbar-notify-list');
+  const headCount = document.getElementById('topbar-notify-head-count');
+  if (!badge || !list || !headCount) return;
+  const seenId = Number(state.orderNotificationSeenId || 0);
+  const unseen = (state.topbarNotifications || []).filter(item => Number(item.id) > seenId);
+  if (unseen.length) {
+    badge.style.display = 'inline-flex';
+    badge.textContent = String(unseen.length);
+  } else {
+    badge.style.display = 'none';
+    badge.textContent = '';
+  }
+  headCount.textContent = state.topbarNotifications.length
+    ? `${state.topbarNotifications.length} recenti`
+    : 'Nessuna notifica';
+  list.innerHTML = state.topbarNotifications.length
+    ? state.topbarNotifications.map(item => {
+        const orderMatch = String(item.detail || '').match(/#(\d+)/);
+        const orderLabel = orderMatch ? ` ordine #${orderMatch[1]}` : ' un nuovo ordine';
+        const unseenClass = Number(item.id) > seenId ? ' unseen' : '';
+        return `
+          <button class="topbar-notify-item${unseenClass}" onclick="openOrderNotification(${item.id}, ${orderMatch ? Number(orderMatch[1]) : 0})">
+            <div class="topbar-notify-title"><b>${escapeHtml(item.userName || 'Utente')}</b> ha aggiunto${escapeHtml(orderLabel)}</div>
+            <div class="topbar-notify-meta">${escapeHtml(formatNotificationDateTime(item.ts))}${item.detail ? ` · ${escapeHtml(item.detail)}` : ''}</div>
+          </button>
+        `;
+      }).join('')
+    : '<div class="topbar-notify-empty">Nessun nuovo ordine registrato di recente.</div>';
+}
+
+async function loadTopbarNotifications() {
+  if (!state.currentUser?.id || !state.token) return;
+  const rows = await api('GET', '/api/notifiche/ordini?limit=12').catch(() => []);
+  state.topbarNotifications = (rows || []).map(row => ({
+    id: Number(row.id),
+    userId: row.user_id || null,
+    userName: row.user_name || '',
+    detail: row.detail || '',
+    ts: row.ts,
+  }));
+  if (!state.orderNotificationSeenId) {
+    state.orderNotificationSeenId = getStoredOrderNotificationSeenId();
+  }
+  renderTopbarNotifications();
+}
+
+function startTopbarNotificationPolling() {
+  stopTopbarNotificationPolling();
+  if (!state.currentUser?.id || !state.token) return;
+  state.orderNotificationPoller = setInterval(() => {
+    loadTopbarNotifications().catch(() => {});
+  }, 30000);
+}
+
+function stopTopbarNotificationPolling() {
+  if (state.orderNotificationPoller) {
+    clearInterval(state.orderNotificationPoller);
+    state.orderNotificationPoller = null;
+  }
+}
+
+function markTopbarNotificationsSeen() {
+  const maxId = Math.max(0, ...(state.topbarNotifications || []).map(item => Number(item.id) || 0));
+  if (maxId) setStoredOrderNotificationSeenId(maxId);
+  renderTopbarNotifications();
+}
+
+function toggleTopbarNotifications(forceOpen = null) {
+  const panel = document.getElementById('topbar-notify-panel');
+  const btn = document.getElementById('topbar-notify-btn');
+  if (!panel || !btn) return;
+  const shouldOpen = forceOpen === null ? !panel.classList.contains('open') : !!forceOpen;
+  panel.classList.toggle('open', shouldOpen);
+  btn.classList.toggle('open', shouldOpen);
+  if (shouldOpen) markTopbarNotificationsSeen();
+}
+
+async function openOrderNotification(notificationId, orderId) {
+  if (notificationId) setStoredOrderNotificationSeenId(Math.max(Number(notificationId) || 0, Number(state.orderNotificationSeenId || 0)));
+  toggleTopbarNotifications(false);
+  if (!orderId) return;
+  const local = state.ordini.find(o => o.id === Number(orderId));
+  if (local) {
+    openDettaglio(Number(orderId));
+    return;
+  }
+  try {
+    const fresh = await api('GET', `/api/ordini/${orderId}`);
+    const normalized = normalizeOrdine(fresh);
+    const idx = state.ordini.findIndex(o => o.id === normalized.id);
+    if (idx >= 0) state.ordini[idx] = normalized;
+    else state.ordini.unshift(normalized);
+    openDettaglio(normalized.id);
+  } catch (e) {
+    showToast(e.message || 'Ordine non disponibile', 'warning');
+  }
+}
+
+function sortTentataLines(lines = []) {
+  const categoriaRank = (prodotto) => {
+    const cat = String(prodotto?.categoria || '').trim().toUpperCase();
+    if (cat === 'CAGLIATA') return 0;
+    if (cat === 'PANNA UHT') return 1;
+    if (cat === 'FORMAGGI') return 2;
+    if (cat === 'RICOTTA') return 3;
+    return 4;
+  };
+  return [...lines].sort((a, b) => {
+    const pa = getProdotto(a?.prodId);
+    const pb = getProdotto(b?.prodId);
+    const catDiff = categoriaRank(pa) - categoriaRank(pb);
+    if (catDiff !== 0) return catDiff;
+    return String(pa?.nome || '').localeCompare(String(pb?.nome || ''), 'it', { sensitivity: 'base' });
+  });
+}
+
+function buildOrderMergePromptMessage(payload = {}) {
+  const overlaps = Array.isArray(payload.overlapping_lines) ? payload.overlapping_lines.filter(Boolean) : [];
+  if (!overlaps.length) {
+    return `Esiste gia un ordine per questo cliente nello stesso giorno. Vuoi sommare il nuovo inserimento all'ordine #${payload.existing_order_id || '?'}?`;
+  }
+  if (overlaps.length === 1) {
+    return `Stai aggiungendo altri ${overlaps[0]}. Vuoi sommarli all'ordine #${payload.existing_order_id || '?'}?`;
+  }
+  return `Stai aggiungendo prodotti gia presenti nell'ordine #${payload.existing_order_id || '?'}. Vuoi sommare le nuove righe invece di creare un altro ordine?`;
+}
+
+async function createOrderWithMergePrompt(body) {
+  try {
+    const saved = await api('POST', '/api/ordini', body);
+    return { saved, merged: !!saved?.merged_into_existing, cancelled: false };
+  } catch (e) {
+    if (e?.status !== 409 || e?.payload?.code !== 'ORDER_MERGE_CONFIRM_REQUIRED') throw e;
+    const ok = await customConfirm(buildOrderMergePromptMessage(e.payload), 'Somma', 'Ordine gia presente');
+    if (!ok) return { saved: null, merged: false, cancelled: true };
+    const saved = await api('POST', '/api/ordini', { ...body, merge_duplicate: true });
+    return { saved, merged: true, cancelled: false };
+  }
+}
+
+if (!window._topbarNotificationListenerSet) {
+  window._topbarNotificationListenerSet = true;
+  document.addEventListener('click', function(e) {
+    const wrap = document.getElementById('topbar-notify-wrap');
+    if (!wrap || wrap.contains(e.target)) return;
+    toggleTopbarNotifications(false);
+  });
 }
 
 // ─── NORMALIZZATORI snake_case → camelCase ─────────────────────────
@@ -6751,6 +7025,7 @@ function renderTentataConfigList() {
     const templates = config.templates || [];
     const templateOptions = templates.map(tpl => `<option value="${tpl.id}" ${tpl.id === assignedTemplateId ? 'selected' : ''}>${escapeHtml(tpl.nome)}</option>`).join('');
     const templatesHtml = templates.map(tpl => {
+      tpl.linee = sortTentataLines(tpl.linee || []);
       const searchKey = `${a.id}:${tpl.id}`;
       const searchValue = state.tentataConfigSearch?.[searchKey] || '';
       const lineeHtml = (tpl.linee || []).map((l, li) => {
@@ -7090,7 +7365,7 @@ async function saveTentataConfig() {
           id: template.id,
           nome: String(template.nome || '').trim() || 'Profilo TV',
           giorni: Array.isArray(template.giorni) ? template.giorni : [],
-          linee: (template.linee || [])
+          linee: sortTentataLines(template.linee || [])
             .map(line => ({ prodId: line.prodId, qty: Number(line.qty || 0) }))
             .filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0),
         })),
@@ -7129,7 +7404,7 @@ async function openTentataVendita(userId = null) {
   const activeTemplate = getTentataActiveTemplate(userId, getNextBusinessDate());
   const config = getTentataConfigForUser(userId);
   tentataTemplateId = activeTemplate?.id || config.templates?.[0]?.id || null;
-  tentataLines = activeTemplate ? activeTemplate.linee.map(l => ({ ...l })) : [];
+  tentataLines = activeTemplate ? sortTentataLines(activeTemplate.linee.map(l => ({ ...l }))) : [];
   if (!tentataLines.length) tentataLines = [createEmptyTentataLine()];
   acState.tentata = { value: null, query: '', focusIdx: -1 };
   document.getElementById('ac-tentata-input').value = tentataCliente.nome;
@@ -7157,6 +7432,7 @@ async function openTentataVendita(userId = null) {
 
 function renderTentataLines() {
   const container = document.getElementById('tentata-lines-container');
+  tentataLines = sortTentataLines(tentataLines);
   container.innerHTML = tentataLines.map((l, i) => {
     const p = getProdotto(l.prodId);
     return `<div class="order-line" id="tentata-line-${i}">
@@ -7192,6 +7468,7 @@ function addTentataLine(prodId = null) {
   } else {
     tentataLines.push(createEmptyTentataLine());
   }
+  tentataLines = sortTentataLines(tentataLines);
   renderTentataLines();
   if (!prodId) setTimeout(() => document.getElementById(`ac-tentata-prod-input-${tentataLines.length - 1}`)?.focus(), 50);
 }
@@ -7199,7 +7476,7 @@ function addTentataLine(prodId = null) {
 function changeTentataTemplate(templateId) {
   const activeTemplate = getTentataTemplate(tentataUserId || state.currentUser.id, templateId);
   tentataTemplateId = activeTemplate?.id || null;
-  tentataLines = activeTemplate ? activeTemplate.linee.map(line => ({ ...line })) : [];
+  tentataLines = activeTemplate ? sortTentataLines(activeTemplate.linee.map(line => ({ ...line }))) : [];
   if (!tentataLines.length) tentataLines = [createEmptyTentataLine()];
   renderTentataLines();
 }
@@ -7335,13 +7612,18 @@ async function saveTentataVendita() {
     data: dataTentata,
     stato: 'attesa',
     note: note ? `[TENTATA VENDITA] ${note}` : '[TENTATA VENDITA]',
-    linee: validLines.map(l => ({ prodotto_id: l.prodId, qty: l.qty })),
+    linee: sortTentataLines(validLines).map(l => ({ prodotto_id: l.prodId, qty: l.qty })),
   };
   try {
-    const saved = await api('POST', '/api/ordini', body);
-    state.ordini.unshift(normalizeOrdine(saved));
+    const result = await createOrderWithMergePrompt(body);
+    if (result.cancelled) return;
+    const saved = result.saved;
+    const normalized = normalizeOrdine(saved);
+    const existingIdx = state.ordini.findIndex(o => o.id === normalized.id);
+    if (existingIdx !== -1) state.ordini[existingIdx] = normalized;
+    else state.ordini.unshift(normalized);
     closeModal('modal-tentata');
-    showToast(`Tentata vendita registrata per il ${formatDate(dataTentata)}!`, 'success');
+    showToast(result.merged ? `Tentata vendita sommata all'ordine #${normalized.id}` : `Tentata vendita registrata per il ${formatDate(dataTentata)}!`, 'success');
     renderAutistaView();
   } catch(e) { showToast(e.message, 'warning'); }
 }
@@ -7877,10 +8159,15 @@ async function saveCatalogoOrder() {
     data, stato: 'attesa', note, data_non_certa: dataNonCerta, stef, altro_vettore: altroVettore, giro_override: giroOverride, linee,
   };
   try {
-    const saved = await api('POST', '/api/ordini', body);
-    state.ordini.unshift(normalizeOrdine(saved));
+    const result = await createOrderWithMergePrompt(body);
+    if (result.cancelled) return;
+    const saved = result.saved;
+    const normalized = normalizeOrdine(saved);
+    const existingIdx = state.ordini.findIndex(o => o.id === normalized.id);
+    if (existingIdx !== -1) state.ordini[existingIdx] = normalized;
+    else state.ordini.unshift(normalized);
     closeModal('modal-catalogo');
-    showToast(`Ordine salvato ✅ — ${linee.length} prodotti`, 'success');
+    showToast(result.merged ? `Ordine sommato al #${normalized.id}` : `Ordine salvato - ${linee.length} prodotti`, 'success');
     renderPage(state.currentPage);
   } catch(e) {
     showToast(e.message || 'Errore salvataggio', 'warning');
@@ -7945,15 +8232,25 @@ function updatePDFPreview() {
       const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
       const qty = l.qty || 1;
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
-      return `<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:12px;border-bottom:1px dotted #eee;">
-        <span style="flex:1;min-width:0;padding-right:8px;word-break:break-word;overflow-wrap:anywhere;">${nome}${nota}</span>
-        <span style="white-space:nowrap;margin-left:8px;font-weight:700;">${qty} ${um}</span>
+      return `<div style="display:grid;grid-template-columns:24px minmax(0,1.6fr) minmax(90px,0.7fr) minmax(150px,1fr) minmax(110px,0.8fr);gap:8px;align-items:center;padding:4px 0;font-size:12px;border-bottom:1px dotted #eee;">
+        <span style="width:16px;height:16px;border:1.5px solid #666;border-radius:3px;display:inline-block;"></span>
+        <span style="min-width:0;word-break:break-word;overflow-wrap:anywhere;">${nome}${nota}</span>
+        <span style="white-space:nowrap;font-weight:700;">${qty} ${um}</span>
+        <span style="display:block;min-height:18px;border-bottom:1px solid #999;padding-bottom:2px;">&nbsp;</span>
+        <span style="display:block;min-height:18px;border-bottom:1px solid #999;padding-bottom:2px;">&nbsp;</span>
       </div>`;
     }).join('');
     const flags = [o.stef ? '🚛 STEF' : '', o.altroVettore ? '🚚 Altro vettore' : '', o.dataNonCerta ? '⚠️' : ''].filter(Boolean).join(' ');
     return `<div class="print-order-block" style="margin-bottom:10px;padding:0 0 6px;page-break-inside:avoid;break-inside:avoid;">
       <div style="font-weight:700;font-size:13px;text-decoration:underline;word-break:break-word;overflow-wrap:anywhere;">${cl.nome}${flags ? ' <span style="font-weight:400;font-size:11px;">'+flags+'</span>' : ''}</div>
       ${o.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">📝 ${o.note}</div>` : ''}
+      <div style="display:grid;grid-template-columns:24px minmax(0,1.6fr) minmax(90px,0.7fr) minmax(150px,1fr) minmax(110px,0.8fr);gap:8px;font-size:10px;font-weight:700;color:#555;text-transform:uppercase;padding:2px 0 4px;border-bottom:1px solid #ccc;margin-bottom:2px;">
+        <span></span>
+        <span>Prodotto</span>
+        <span>Ordine</span>
+        <span>Lotto</span>
+        <span>Quantita</span>
+      </div>
       ${linee || '<div style="font-size:11px;color:#aaa;">nessun prodotto</div>'}
     </div>`;
   }

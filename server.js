@@ -3145,6 +3145,186 @@ async function getOrdineCompleto(id) {
   return ordine;
 }
 
+function normalizeOrderLineMatchKey(line = {}) {
+  const um = normalizeOrdineUm(line.unita_misura || line.unitaMisura || 'base');
+  const prodottoId = Number(line.prodotto_id || line.prodottoId || 0);
+  if (Number.isFinite(prodottoId) && prodottoId > 0) return `prod:${prodottoId}:${um}`;
+  const libero = String(line.prodotto_nome_libero || line.prodottoNomeLibero || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!libero) return '';
+  return `free:${libero}:${um}`;
+}
+
+function mergeOrderNotes(existingNote = '', incomingNote = '') {
+  const curr = String(existingNote || '').trim();
+  const next = String(incomingNote || '').trim();
+  if (!curr) return next;
+  if (!next) return curr;
+  if (curr.includes(next)) return curr;
+  return `${curr} | ${next}`;
+}
+
+function formatOrderLineLabel(line = {}, productMap = new Map()) {
+  const prodottoId = Number(line.prodotto_id || line.prodottoId || 0);
+  const product = prodottoId ? productMap.get(prodottoId) : null;
+  const nome = product?.nome || String(line.prodotto_nome_libero || line.prodottoNomeLibero || 'prodotto').trim() || 'prodotto';
+  const qty = Number(line.qty || 0);
+  const um = String(line.unita_misura || line.unitaMisura || product?.um || 'pezzi').trim() || 'pezzi';
+  const qtyLabel = Number.isFinite(qty) ? Number(qty).toFixed(2).replace(/\.00$/, '') : '?';
+  return `${qtyLabel} ${um} di ${nome}`;
+}
+
+async function prepareOrderLinesForSave({ linee = [], clienteId, data, client }) {
+  const prepared = [];
+  const productIds = [...new Set(
+    linee
+      .map(l => Number.parseInt(l.prodotto_id, 10))
+      .filter(id => Number.isFinite(id) && id > 0)
+  )];
+  let productRowsById = new Map();
+  if (productIds.length) {
+    const { rows } = await client.query(
+      `SELECT id, nome, codice, um, cartoni_attivi, peso_medio_pezzo_kg, pezzi_per_cartone,
+              unita_per_cartone, pedane_attive, cartoni_per_pedana
+         FROM prodotti
+        WHERE id = ANY($1::int[])`,
+      [productIds]
+    );
+    productRowsById = new Map(rows.map(row => [row.id, row]));
+  }
+
+  for (const l of linee) {
+    const prodottoId = l.prodotto_id ? parseInt(l.prodotto_id, 10) : null;
+    const prodottoNomeLibero = String(l.prodotto_nome_libero || '').trim();
+    if (!prodottoId && !prodottoNomeLibero) {
+      throw new Error('Ogni riga ordine deve avere un prodotto o un nome libero');
+    }
+    const prodottoRow = prodottoId ? productRowsById.get(prodottoId) || null : null;
+    const prezzoUnitario = await resolveOrderLinePrice({
+      prodottoId,
+      clienteId,
+      data,
+      manualPrice: l.prezzo_unitario,
+      client,
+    });
+    const qty = Number(l.qty);
+    const unitaMisura = l.unita_misura || 'pezzi';
+    const qtyBase = prodottoRow
+      ? calcolaQtyBaseRiga({ qty, unitaMisura, prodotto: prodottoRow })
+      : null;
+    prepared.push({
+      prodottoId,
+      prodottoNomeLibero,
+      qty,
+      qtyBase,
+      prezzoUnitario,
+      isPedana: !!l.is_pedana,
+      notaRiga: l.nota_riga || '',
+      unitaMisura,
+      preparato: !!l.preparato,
+      lotto: String(l.lotto || '').trim(),
+      productRow: prodottoRow,
+      matchKey: normalizeOrderLineMatchKey({
+        prodotto_id: prodottoId,
+        prodotto_nome_libero: prodottoNomeLibero,
+        unita_misura: unitaMisura,
+      }),
+    });
+  }
+
+  return prepared;
+}
+
+async function insertPreparedOrderLines(client, ordineId, preparedLines) {
+  for (const l of preparedLines) {
+    await client.query(
+      `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [ordineId, l.prodottoId, l.prodottoNomeLibero, l.qty, l.qtyBase, l.prezzoUnitario, l.isPedana, l.notaRiga, l.unitaMisura, l.preparato, l.lotto]
+    );
+  }
+}
+
+async function mergePreparedLinesIntoOrder({
+  client,
+  existingOrderId,
+  preparedLines,
+  meta,
+}) {
+  const { rows: existingLines } = await client.query(
+    'SELECT * FROM ordine_linee WHERE ordine_id=$1 ORDER BY id',
+    [existingOrderId]
+  );
+  const existingLineByKey = new Map();
+  for (const row of existingLines) {
+    const key = normalizeOrderLineMatchKey(row);
+    if (key && !existingLineByKey.has(key)) existingLineByKey.set(key, row);
+  }
+
+  for (const line of preparedLines) {
+    const existing = line.matchKey ? existingLineByKey.get(line.matchKey) : null;
+    if (existing) {
+      const nextQty = Number(existing.qty || 0) + Number(line.qty || 0);
+      const nextQtyBase = line.productRow
+        ? calcolaQtyBaseRiga({ qty: nextQty, unitaMisura: existing.unita_misura || line.unitaMisura, prodotto: line.productRow })
+        : (
+          Number.isFinite(Number(existing.qty_base)) && Number.isFinite(Number(line.qtyBase))
+            ? (Number(existing.qty_base) + Number(line.qtyBase))
+            : (Number.isFinite(Number(existing.qty_base)) ? Number(existing.qty_base) : (Number.isFinite(Number(line.qtyBase)) ? Number(line.qtyBase) : null))
+        );
+      await client.query(
+        `UPDATE ordine_linee
+            SET qty=$1,
+                qty_base=$2,
+                prezzo_unitario=COALESCE(prezzo_unitario, $3)
+          WHERE id=$4`,
+        [nextQty, nextQtyBase, line.prezzoUnitario, existing.id]
+      );
+      continue;
+    }
+    await client.query(
+      `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [
+        existingOrderId,
+        line.prodottoId,
+        line.prodottoNomeLibero,
+        line.qty,
+        line.qtyBase,
+        line.prezzoUnitario,
+        line.isPedana,
+        line.notaRiga,
+        line.unitaMisura,
+        line.preparato,
+        line.lotto,
+      ]
+    );
+  }
+
+  await client.query(
+    `UPDATE ordini
+        SET agente_id = COALESCE(agente_id, $1),
+            autista_di_giro = COALESCE(autista_di_giro, $2),
+            stato = CASE WHEN stato IN ('annullato','consegnato') THEN stato ELSE 'attesa' END,
+            note = $3,
+            data_non_certa = COALESCE(data_non_certa, FALSE) OR $4,
+            stef = COALESCE(stef, FALSE) OR $5,
+            altro_vettore = COALESCE(altro_vettore, FALSE) OR $6,
+            giro_override = CASE WHEN COALESCE(giro_override, '') <> '' THEN giro_override ELSE $7 END,
+            updated_at = NOW()
+      WHERE id = $8`,
+    [
+      meta.agenteId || null,
+      meta.autistaDiGiro || null,
+      mergeOrderNotes(meta.existingNote, meta.note),
+      !!meta.dataNonCerta,
+      !!meta.stef,
+      !!meta.altroVettore,
+      String(meta.giroOverride || ''),
+      existingOrderId,
+    ]
+  );
+}
+
 app.get('/api/ordini', authMiddleware, async (req, res) => {
   try {
     const { data, stato, agente_id, autista_id, giro, search } = req.query;
@@ -3211,50 +3391,95 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
   const client = await pool.connect();
   try {
     const { cliente_id, agente_id=null, autista_di_giro=null,
-            data, stato='attesa', note='', data_non_certa=false, stef=false, altro_vettore=false, giro_override='', linee=[] } = req.body;
+            data, stato='attesa', note='', data_non_certa=false, stef=false, altro_vettore=false, giro_override='', linee=[], merge_duplicate=false } = req.body;
     if (!cliente_id||!data) return res.status(400).json({ error: 'Campi obbligatori mancanti' });
     if (!linee.length) return res.status(400).json({ error: 'Almeno un prodotto richiesto' });
     const c = await q('SELECT id, sbloccato, onboarding_stato FROM clienti WHERE id=$1', [cliente_id]);
     if (!c.rows.length) return res.status(400).json({ error: 'Cliente non trovato' });
     if (!c.rows[0].sbloccato || c.rows[0].onboarding_stato !== 'approvato') return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
     await client.query('BEGIN');
-    const r = await client.query(
-      `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef,altro_vettore,giro_override)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
-      [cliente_id, agente_id||null, autista_di_giro||null, req.user.id, data, stato, note, data_non_certa, stef, !!altro_vettore, String(giro_override || '')]
+    const preparedLines = await prepareOrderLinesForSave({
+      linee,
+      clienteId: cliente_id,
+      data,
+      client,
+    });
+    const { rows: existingOrderRows } = await client.query(
+      `SELECT id, note
+         FROM ordini
+        WHERE cliente_id=$1
+          AND data=$2
+          AND stato NOT IN ('annullato', 'consegnato')
+        ORDER BY id DESC
+        LIMIT 1
+        FOR UPDATE`,
+      [cliente_id, data]
     );
-    const oid = r.rows[0].id;
-    for (const l of linee) {
-      const prodottoId = l.prodotto_id ? parseInt(l.prodotto_id, 10) : null;
-      const prodottoNomeLibero = String(l.prodotto_nome_libero || '').trim();
-      if (!prodottoId && !prodottoNomeLibero) {
-        throw new Error('Ogni riga ordine deve avere un prodotto o un nome libero');
-      }
-      const prodottoRow = prodottoId
-        ? (await client.query('SELECT id, um, cartoni_attivi, peso_medio_pezzo_kg, pezzi_per_cartone, unita_per_cartone, pedane_attive, cartoni_per_pedana FROM prodotti WHERE id=$1 LIMIT 1', [prodottoId])).rows[0]
-        : null;
-      const prezzoUnitario = await resolveOrderLinePrice({
-        prodottoId,
-        clienteId: cliente_id,
-        data,
-        manualPrice: l.prezzo_unitario,
-        client,
-      });
-      const qtyBase = prodottoRow
-        ? calcolaQtyBaseRiga({ qty: l.qty, unitaMisura: l.unita_misura || 'pezzi', prodotto: prodottoRow })
-        : null;
-      await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [oid, prodottoId, prodottoNomeLibero, l.qty, qtyBase, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi', !!l.preparato, String(l.lotto || '').trim()]
+
+    let oid;
+    let mergedIntoExisting = false;
+    if (existingOrderRows.length) {
+      const existingOrderId = existingOrderRows[0].id;
+      const { rows: existingLines } = await client.query(
+        'SELECT * FROM ordine_linee WHERE ordine_id=$1 ORDER BY id',
+        [existingOrderId]
       );
+      const existingKeys = new Set(existingLines.map(row => normalizeOrderLineMatchKey(row)).filter(Boolean));
+      const overlappingLines = preparedLines.filter(line => line.matchKey && existingKeys.has(line.matchKey));
+      if (overlappingLines.length && !merge_duplicate) {
+        const productIds = [...new Set(preparedLines.map(line => Number(line.prodottoId)).filter(id => Number.isFinite(id) && id > 0))];
+        const productMap = productIds.length
+          ? new Map((await client.query('SELECT id, nome FROM prodotti WHERE id = ANY($1::int[])', [productIds])).rows.map(row => [row.id, row]))
+          : new Map();
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'Esiste gia un ordine per questo cliente nello stesso giorno con prodotti gia presenti',
+          code: 'ORDER_MERGE_CONFIRM_REQUIRED',
+          existing_order_id: existingOrderId,
+          overlapping_lines: overlappingLines.map(line => formatOrderLineLabel({
+            prodotto_id: line.prodottoId,
+            prodotto_nome_libero: line.prodottoNomeLibero,
+            qty: line.qty,
+            unita_misura: line.unitaMisura,
+          }, productMap)),
+        });
+      }
+
+      await mergePreparedLinesIntoOrder({
+        client,
+        existingOrderId,
+        preparedLines,
+        meta: {
+          agenteId: agente_id,
+          autistaDiGiro: autista_di_giro,
+          note,
+          existingNote: existingOrderRows[0].note || '',
+          dataNonCerta: data_non_certa,
+          stef,
+          altroVettore: !!altro_vettore,
+          giroOverride: giro_override,
+        },
+      });
+      oid = existingOrderId;
+      mergedIntoExisting = true;
+    } else {
+      const r = await client.query(
+        `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef,altro_vettore,giro_override)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+        [cliente_id, agente_id||null, autista_di_giro||null, req.user.id, data, stato, note, data_non_certa, stef, !!altro_vettore, String(giro_override || '')]
+      );
+      oid = r.rows[0].id;
+      await insertPreparedOrderLines(client, oid, preparedLines);
     }
     await client.query('COMMIT');
     const u = req.user;
-    await logDB(u.id, `${u.nome} ${u.cognome||''}`.trim(), 'Nuovo ordine', `#${oid}`);
-    res.json(await getOrdineCompleto(oid));
+    await logDB(u.id, `${u.nome} ${u.cognome||''}`.trim(), 'Nuovo ordine', mergedIntoExisting ? `#${oid} (accodato)` : `#${oid}`);
+    res.json({
+      ...(await getOrdineCompleto(oid)),
+      merged_into_existing: mergedIntoExisting,
+    });
   } catch(e) {
-    await client.query('ROLLBACK');
+    try { await client.query('ROLLBACK'); } catch (_) {}
     res.status(500).json({ error: e.message });
   } finally { client.release(); }
 });
@@ -4560,6 +4785,23 @@ app.get('/api/activity', authMiddleware, requireRole('admin','direzione','ammini
     const { rows } = await q('SELECT * FROM activity_log ORDER BY id DESC LIMIT 500');
     res.json(rows);
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/notifiche/ordini', authMiddleware, async (req, res) => {
+  try {
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 12));
+    const { rows } = await q(
+      `SELECT id, user_id, user_name, action, detail, ts
+         FROM activity_log
+        WHERE action = 'Nuovo ordine'
+        ORDER BY id DESC
+        LIMIT $1`,
+      [limit]
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.delete('/api/activity', authMiddleware, requireRole('admin'), async (req, res) => {

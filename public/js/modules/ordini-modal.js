@@ -1297,10 +1297,14 @@ async function saveOrder() {
                  data, stato, note, data_non_certa: dataNonCerta, stef, altro_vettore: altroVettore, giro_override: giroOverride, linee };
   try {
     let saved;
+    let merged = false;
     if (state.editingId) {
       saved = await api('PUT', `/api/ordini/${state.editingId}`, body);
     } else {
-      saved = await api('POST', '/api/ordini', body);
+      const result = await createOrderWithMergePrompt(body);
+      if (result.cancelled) return;
+      saved = result.saved;
+      merged = !!result.merged;
     }
     // Aggiorna state locale
     const normalized = normalizeOrdine(saved);
@@ -1309,7 +1313,9 @@ async function saveOrder() {
       if (idx2 !== -1) state.ordini[idx2] = normalized;
       else state.ordini.unshift(normalized);
     } else {
-      state.ordini.unshift(normalized);
+      const existingIdx = state.ordini.findIndex(o => o.id === normalized.id);
+      if (existingIdx !== -1) state.ordini[existingIdx] = normalized;
+      else state.ordini.unshift(normalized);
     }
     closeModal('modal-ordine');
     showToast(state.editingId ? 'Ordine aggiornato ✅' : 'Ordine salvato ✅', 'success');

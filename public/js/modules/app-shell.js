@@ -334,6 +334,7 @@
 
   function doLogout() {
     window.stopDevMonitor();
+    if (typeof window.stopTopbarNotificationPolling === 'function') window.stopTopbarNotificationPolling();
     clearStoredAuth();
     window.state.token = null;
     window.state.currentUser = null;
@@ -361,6 +362,9 @@
     window.state.magazzinoHighlightOrderId = null;
     window.state.magazzinoUndoStack = [];
     window.state.magazzinoResidualLog = [];
+    window.state.topbarNotifications = [];
+    window.state.orderNotificationSeenId = 0;
+    window.state.orderNotificationPoller = null;
     document.getElementById('screen-app').style.display = 'none';
     document.getElementById('screen-login').style.display = 'flex';
   }
