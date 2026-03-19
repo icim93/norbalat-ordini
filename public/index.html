@@ -8521,8 +8521,11 @@ function renderGiacenze() {
     const riordinoInfo = card.ultimoRiordinoAt
       ? `<div style="font-size:12px;color:var(--accent);font-weight:600;">Riordinato il ${formatDate(card.ultimoRiordinoAt)} da ${escapeHtml(card.ultimoRiordinoUtenteNome || 'utente')} · qty ${Number(card.ultimoRiordinoQta || 0).toFixed(2)} ${g.um}</div>`
       : `<div style="font-size:12px;color:var(--text3);">Nessun riordino registrato</div>`;
+    const outOfStock = card.assortimentoStato === 'attivo' && Number(card.totale || 0) <= 0;
     const totalBadgeStyle = card.sottoSoglia
       ? 'background:var(--danger-light);color:var(--danger);'
+      : outOfStock
+        ? 'background:var(--danger-light);color:var(--danger);'
       : card.lottiInScadenza.length
         ? 'background:var(--orange-light);color:var(--orange);'
         : 'background:var(--success-light);color:var(--success);';
@@ -8556,6 +8559,7 @@ function renderGiacenze() {
               <span style="color:var(--text3);font-size:12px;">${escapeHtml(g.categoria)}</span>
               ${assortimentoBadge(card.assortimentoStato)}
               ${card.prodottoAnagrafica?.autoAnagrafato ? '<span class="badge badge-orange">Da verificare</span>' : ''}
+              ${outOfStock ? '<span class="badge badge-red">Rottura stock</span>' : ''}
               ${card.sottoSoglia ? '<span class="badge badge-red">Sotto soglia</span>' : ''}
               ${card.lottiInScadenza.length ? `<span class="badge badge-orange">${card.lottiInScadenza.length} in scadenza</span>` : ''}
             </div>

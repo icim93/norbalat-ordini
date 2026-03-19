@@ -5090,12 +5090,41 @@ app.get('/api/experimental/clal/status', authMiddleware, requireRole('admin','di
 app.get('/api/giacenze', authMiddleware, async (req, res) => {
   try {
     const { rows } = await q(
-      `SELECT g.*, p.codice, p.nome, p.um, p.categoria, p.gestione_giacenza, p.punto_riordino,
-              p.assortimento_stato, p.ultimo_riordino_qta, p.ultimo_riordino_at, p.ultimo_riordino_utente_id, p.ultimo_riordino_utente_nome
-       FROM giacenze g JOIN prodotti p ON p.id = g.prodotto_id
-       WHERE COALESCE(p.gestione_giacenza, TRUE) = TRUE
-         AND COALESCE(g.quantita, 0) > 0
-       ORDER BY p.nome, g.lotto`
+      `WITH giacenze_ranked AS (
+         SELECT
+           g.*,
+           p.codice,
+           p.nome,
+           p.um,
+           p.categoria,
+           p.gestione_giacenza,
+           p.punto_riordino,
+           p.assortimento_stato,
+           p.ultimo_riordino_qta,
+           p.ultimo_riordino_at,
+           p.ultimo_riordino_utente_id,
+           p.ultimo_riordino_utente_nome,
+           SUM(CASE WHEN COALESCE(g.quantita, 0) > 0 THEN COALESCE(g.quantita, 0) ELSE 0 END) OVER (PARTITION BY g.prodotto_id) AS totale_lotti_aperti,
+           ROW_NUMBER() OVER (
+             PARTITION BY g.prodotto_id
+             ORDER BY
+               CASE WHEN COALESCE(g.quantita, 0) > 0 THEN 0 ELSE 1 END,
+               g.updated_at DESC NULLS LAST,
+               g.id DESC
+           ) AS prodotto_row_rank
+         FROM giacenze g
+         JOIN prodotti p ON p.id = g.prodotto_id
+         WHERE COALESCE(p.gestione_giacenza, TRUE) = TRUE
+       )
+       SELECT *
+       FROM giacenze_ranked
+       WHERE COALESCE(quantita, 0) > 0
+          OR (
+            COALESCE(assortimento_stato, 'attivo') = 'attivo'
+            AND COALESCE(totale_lotti_aperti, 0) = 0
+            AND prodotto_row_rank = 1
+          )
+       ORDER BY nome, lotto`
     );
     // Calcola totale per prodotto
     const totali = {};
