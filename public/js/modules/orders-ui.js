@@ -237,10 +237,12 @@ function renderOrdiniStatusStrip(list) {
   const dataNonCerta = list.filter(o => o.dataNonCerta).length;
   const stef = list.filter(o => o.stef || o.altroVettore).length;
   const inAttesa = list.filter(o => o.stato === 'attesa').length;
+  const inSospeso = list.filter(o => o.stato === 'sospeso').length;
   const inPrep = list.filter(o => o.stato === 'preparazione').length;
   strip.innerHTML = [
     `<span class="status-pill"><span>Visualizzati</span><strong>${list.length}</strong></span>`,
     `<span class="status-pill warn"><span>In attesa</span><strong>${inAttesa}</strong></span>`,
+    inSospeso ? `<span class="status-pill"><span>In sospeso</span><strong>${inSospeso}</strong></span>` : '',
     `<span class="status-pill info"><span>In preparazione</span><strong>${inPrep}</strong></span>`,
     dataNonCerta ? `<span class="status-pill alert"><span>Date incerte</span><strong>${dataNonCerta}</strong></span>` : '',
     stef ? `<span class="status-pill"><span>Vettori esterni</span><strong>${stef}</strong></span>` : '',

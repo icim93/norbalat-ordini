@@ -2050,6 +2050,7 @@
                   <select class="toolbar-select" id="filter-stato" onchange="renderOrdiniTable()">
                     <option value="">Tutti gli stati</option>
                     <option value="attesa">In attesa</option>
+                    <option value="sospeso">In sospeso</option>
                     <option value="preparazione">In preparazione</option>
                     <option value="consegnato">Consegnato</option>
                     <option value="annullato">Annullato</option>
@@ -2462,6 +2463,7 @@
                   <select class="toolbar-select" id="filter-magazzino-stato" onchange="renderMagazzino()">
                     <option value="">Tutti gli stati</option>
                     <option value="attesa">In attesa</option>
+                    <option value="sospeso">In sospeso</option>
                     <option value="preparazione">In preparazione</option>
                     <option value="consegnato">Consegnati</option>
                   </select>
@@ -3004,6 +3006,7 @@
           <label>Stato</label>
           <select id="ord-stato">
             <option value="attesa">In attesa</option>
+            <option value="sospeso">In sospeso</option>
             <option value="preparazione">In preparazione</option>
             <option value="consegnato">Consegnato</option>
             <option value="annullato">Annullato</option>
@@ -4541,7 +4544,7 @@ function renderAutistaView() {
 
   // Sort: non consegnati prima
   const sorted = [...ordini].sort((a,b) => {
-    const rank = {attesa:0, preparazione:1, consegnato:2, annullato:3};
+    const rank = {attesa:0, sospeso:1, preparazione:2, consegnato:3, annullato:4};
     return (rank[a.stato]||0) - (rank[b.stato]||0);
   });
 
@@ -5159,12 +5162,14 @@ function renderMagazzinoStatusStrip(ordini) {
   const strip = document.getElementById('magazzino-status-strip');
   if (!strip) return;
   const attesa = ordini.filter(o => o.stato === 'attesa').length;
+  const sospesi = ordini.filter(o => o.stato === 'sospeso').length;
   const preparazione = ordini.filter(o => o.stato === 'preparazione').length;
   const dateIncerte = ordini.filter(o => o.dataNonCerta).length;
   const vettori = ordini.filter(o => o.stef || o.altroVettore).length;
   strip.innerHTML = [
     `<span class="status-pill"><span>Ordini</span><strong>${ordini.length}</strong></span>`,
     `<span class="status-pill warn"><span>In attesa</span><strong>${attesa}</strong></span>`,
+    sospesi ? `<span class="status-pill"><span>In sospeso</span><strong>${sospesi}</strong></span>` : '',
     `<span class="status-pill info"><span>In preparazione</span><strong>${preparazione}</strong></span>`,
     dateIncerte ? `<span class="status-pill alert"><span>Date incerte</span><strong>${dateIncerte}</strong></span>` : '',
     vettori ? `<span class="status-pill"><span>Vettori esterni</span><strong>${vettori}</strong></span>` : '',
@@ -5230,7 +5235,7 @@ function renderMagazzino() {
   renderMagazzinoCagliateSummary(ordini);
   if (typeof refreshNavBadges === 'function') refreshNavBadges();
 
-  const stOrd = { preparazione: 0, attesa: 1, consegnato: 2 };
+  const stOrd = { preparazione: 0, attesa: 1, sospeso: 2, consegnato: 3 };
   ordini.sort((a, b) => {
     const byState = (stOrd[a.stato] ?? 9) - (stOrd[b.stato] ?? 9);
     if (byState !== 0) return byState;
@@ -7783,6 +7788,9 @@ function updatePDFPreview() {
         : ((String(l.unitaMisura || '').toLowerCase() === 'pezzi' || !!l.isPedana)
           ? `${Number(qty).toFixed(2).replace(/\.00$/, '')} colli`
           : '');
+      const prezzoUnitario = Number(l.prezzoUnitario);
+      const prezzoDisplay = Number.isFinite(prezzoUnitario) ? eur(prezzoUnitario) : 'prezzo n.d.';
+      const subtotaleDisplay = Number.isFinite(prezzoUnitario) ? eur(prezzoUnitario * qty) : '';
       const peso = l.pesoEffettivo
         ? `<b style="color:#2e7d32;">${l.pesoEffettivo} kg</b>`
         : (p?.pesoFisso ? `<span style="color:#555;">${qtyDisplay}</span>` : `<span style="color:#c0392b;">peso mancante</span>`);
@@ -7794,6 +7802,7 @@ function updatePDFPreview() {
         <span style="flex:1;">${nome}${nota}</span>
         <span style="white-space:nowrap;margin-left:8px;font-size:11px;color:#555;">${colliDisplay || '-'}</span>
         <span style="white-space:nowrap;margin-left:8px;">${peso}</span>
+        <span style="white-space:nowrap;margin-left:12px;font-size:11px;color:#555;">${prezzoDisplay}${subtotaleDisplay ? ` · ${subtotaleDisplay}` : ''}</span>
         <span style="white-space:nowrap;margin-left:12px;font-size:11px;">${lotto}</span>
       </div>`;
     }).join('');

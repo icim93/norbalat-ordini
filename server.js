@@ -759,7 +759,7 @@ async function createSchema() {
       inserted_by      INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
       data             DATE NOT NULL,
       stato            TEXT NOT NULL DEFAULT 'attesa'
-                         CHECK(stato IN ('attesa','preparazione','consegnato','annullato')),
+                         CHECK(stato IN ('attesa','sospeso','preparazione','consegnato','annullato')),
       note             TEXT DEFAULT '',
       data_non_certa   BOOLEAN DEFAULT FALSE,
       stef             BOOLEAN DEFAULT FALSE,
@@ -1066,6 +1066,22 @@ async function createSchema() {
   END $$;
 
   ALTER TABLE clienti ADD COLUMN IF NOT EXISTS alias TEXT DEFAULT '';
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'ordini_stato_check'
+          AND conrelid = 'ordini'::regclass
+      ) THEN
+        ALTER TABLE ordini DROP CONSTRAINT ordini_stato_check;
+      END IF;
+      ALTER TABLE ordini
+        ADD CONSTRAINT ordini_stato_check
+        CHECK (stato IN ('attesa','sospeso','preparazione','consegnato','annullato'));
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END $$;
 
     DO $$
     BEGIN
@@ -1514,7 +1530,7 @@ const PERMISSIONS = {
   'onboarding:manage': ['admin', 'amministrazione'],
   'ordini:create': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'ordini:update': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
-  'ordini:delete': ['admin', 'amministrazione'],
+  'ordini:delete': ['admin', 'amministrazione', 'direzione'],
   'ordini:stato': ['admin', 'autista', 'magazzino', 'amministrazione', 'direzione'],
   'scorte:view': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'scorte:manage': ['admin', 'magazzino'],

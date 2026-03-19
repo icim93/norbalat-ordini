@@ -55,6 +55,7 @@
   function statoBadge(stato) {
     const map = {
       attesa: ['badge-orange', 'In attesa'],
+      sospeso: ['badge-gray', 'In sospeso'],
       preparazione: ['badge-blue', 'In preparazione'],
       consegnato: ['badge-green', 'Consegnato'],
       annullato: ['badge-red', 'Annullato'],
