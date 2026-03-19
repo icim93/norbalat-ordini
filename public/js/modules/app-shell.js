@@ -360,6 +360,7 @@
     window.state.docCanManage = false;
     window.state.magazzinoHighlightOrderId = null;
     window.state.magazzinoUndoStack = [];
+    window.state.magazzinoResidualLog = [];
     document.getElementById('screen-app').style.display = 'none';
     document.getElementById('screen-login').style.display = 'flex';
   }

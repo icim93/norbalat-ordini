@@ -1713,7 +1713,7 @@ async function listOrdiniApertiByDateGiro({ data, giro = '', client = null }) {
     giroWhere = `AND COALESCE(NULLIF(o.giro_override,''), c.giro, '') = $2`;
   }
   const { rows } = await db.query(
-    `SELECT o.id, o.cliente_id, o.agente_id, o.autista_di_giro, o.inserted_by, o.data, o.stato, o.note,
+    `SELECT o.id, o.cliente_id, c.nome AS cliente_nome, o.agente_id, o.autista_di_giro, o.inserted_by, o.data, o.stato, o.note,
             o.data_non_certa, o.stef, o.altro_vettore, o.giro_override,
             c.giro AS cliente_giro,
             COALESCE(NULLIF(o.giro_override,''), c.giro, '') AS giro_effettivo
@@ -1726,6 +1726,47 @@ async function listOrdiniApertiByDateGiro({ data, giro = '', client = null }) {
     params
   );
   return rows;
+}
+
+function formatResidualValue(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '';
+  if (Math.abs(num - Math.round(num)) < 0.000001) return String(Math.round(num));
+  return String(Math.round(num * 1000) / 1000);
+}
+
+function getResidualLineLabel(line) {
+  return String(line.prodotto_nome || line.prodotto_nome_libero || `Prodotto #${line.prodotto_id || 'N/D'}`).trim();
+}
+
+function buildResidualLineSnapshot(line) {
+  return {
+    linea_id: line.id,
+    prodotto_id: line.prodotto_id || null,
+    prodotto: getResidualLineLabel(line),
+    qty_ordinata: Number(line.qty || 0),
+    qty_base: line.qty_base === null || line.qty_base === undefined ? null : Number(line.qty_base),
+    unita_misura: line.unita_misura || 'pezzi',
+    preparato: !!line.preparato,
+    colli_effettivi: line.colli_effettivi === null || line.colli_effettivi === undefined ? null : Number(line.colli_effettivi),
+    peso_effettivo: line.peso_effettivo === null || line.peso_effettivo === undefined ? null : Number(line.peso_effettivo),
+    lotto: String(line.lotto || '').trim(),
+  };
+}
+
+function buildResidualTriggerText(line) {
+  const ordered = `${formatResidualValue(line.qty)} ${line.unita_misura || 'pezzi'}`.trim();
+  const parts = [`non preparato`, `ordinato ${ordered}`];
+  if (line.colli_effettivi !== null && line.colli_effettivi !== undefined) {
+    parts.push(`colli scaricati ${formatResidualValue(line.colli_effettivi)}`);
+  }
+  if (line.peso_effettivo !== null && line.peso_effettivo !== undefined) {
+    parts.push(`peso scaricato ${formatResidualValue(line.peso_effettivo)} kg`);
+  }
+  if (String(line.lotto || '').trim()) {
+    parts.push(`lotto ${String(line.lotto).trim()}`);
+  }
+  return `${getResidualLineLabel(line)}: ${parts.join(', ')}`;
 }
 
 function applyListinoRule(currentPrice, rule) {
@@ -3474,10 +3515,12 @@ app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 
     }
     const ids = ordini.map(o => o.id);
     const { rows: linee } = await client.query(
-      `SELECT id, ordine_id, prodotto_id, prodotto_nome_libero, qty, colli_effettivi, prezzo_unitario, is_pedana, nota_riga, unita_misura, preparato, lotto
-       FROM ordine_linee
-       WHERE ordine_id = ANY($1)
-       ORDER BY ordine_id, id`,
+      `SELECT ol.id, ol.ordine_id, ol.prodotto_id, ol.prodotto_nome_libero, COALESCE(p.nome, ol.prodotto_nome_libero, '') AS prodotto_nome,
+              ol.qty, ol.qty_base, ol.colli_effettivi, ol.peso_effettivo, ol.prezzo_unitario, ol.is_pedana, ol.nota_riga, ol.unita_misura, ol.preparato, ol.lotto
+       FROM ordine_linee ol
+       LEFT JOIN prodotti p ON p.id = ol.prodotto_id
+       WHERE ol.ordine_id = ANY($1)
+       ORDER BY ol.ordine_id, ol.id`,
       [ids]
     );
     const lineeByOrder = {};
@@ -3492,12 +3535,11 @@ app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 
       if (nonPrep.length) {
         missing.push({
           ordine_id: o.id,
-          mancanti: nonPrep.map(l => ({
-            linea_id: l.id,
-            prodotto_id: l.prodotto_id || null,
-            prodotto_nome_libero: l.prodotto_nome_libero || '',
-            qty: Number(l.qty || 0),
-          })),
+          cliente_id: o.cliente_id,
+          cliente: o.cliente_nome || '',
+          trigger: 'linee_non_preparate',
+          trigger_count: nonPrep.length,
+          mancanti: nonPrep.map(buildResidualLineSnapshot),
         });
       }
     });
@@ -3521,6 +3563,7 @@ app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 
     await client.query('BEGIN');
     const reloaded = [];
     const deleted = [];
+    const residualLogs = [];
     for (const o of ordini) {
       const righe = lineeByOrder[o.id] || [];
       const mancanti = righe.filter(l => !l.preparato);
@@ -3536,7 +3579,25 @@ app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 
           noteSuffix: 'riporto da chiusura giornata',
           client,
         });
-        reloaded.push({ ordine_id: o.id, new_order_id: created.newOrdineId, next_date: created.nextDate });
+        const residualReasonLines = mancanti.map(buildResidualTriggerText);
+        reloaded.push({
+          ordine_id: o.id,
+          cliente_id: o.cliente_id,
+          cliente: o.cliente_nome || '',
+          new_order_id: created.newOrdineId,
+          next_date: created.nextDate,
+          reason_code: 'linee_non_preparate',
+          reason_summary: `${mancanti.length} riga/e non preparata/e`,
+          reason_lines: residualReasonLines,
+          missing_lines: mancanti.map(buildResidualLineSnapshot),
+        });
+        residualLogs.push({
+          ordine_id: o.id,
+          cliente: o.cliente_nome || `Cliente #${o.cliente_id}`,
+          new_order_id: created.newOrdineId,
+          next_date: created.nextDate,
+          residualReasonLines,
+        });
         await client.query(
           `UPDATE ordini
            SET stato='consegnato',
@@ -3565,6 +3626,14 @@ app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 
     );
     await client.query('COMMIT');
     await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Chiusura giornata magazzino', `${data}${giroVal ? ` (${giroVal})` : ''}`);
+    for (const item of residualLogs) {
+      await logDB(
+        req.user.id,
+        `${req.user.nome} ${req.user.cognome || ''}`.trim(),
+        'Residuo ordine generato',
+        `Ordine #${item.ordine_id} (${item.cliente}) -> #${item.new_order_id} del ${item.next_date}. Motivo: ${item.residualReasonLines.join(' | ')}`
+      );
+    }
     res.json({ ok: true, missing_count: missing.length, reloaded, deleted });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch {}
@@ -3989,6 +4058,58 @@ app.delete('/api/activity', authMiddleware, requireRole('admin'), async (req, re
 });
 
 // ─── STATS ───────────────────────────────────────────────────────
+app.get('/api/magazzino/residui-log', authMiddleware, requireRole('admin','magazzino'), async (req, res) => {
+  try {
+    const data = String(req.query?.data || '').trim();
+    const giro = String(req.query?.giro || '').trim();
+    const params = [];
+    const where = [`esito = 'con_residui'`];
+    if (data) {
+      params.push(data);
+      where.push(`data = $${params.length}`);
+    }
+    if (giro) {
+      params.push(giro);
+      where.push(`giro = $${params.length}`);
+    }
+    params.push(40);
+    const { rows } = await q(
+      `SELECT id, data, giro, confermata_nome, confermata_at, dettagli
+       FROM magazzino_chiusure_giornata
+       WHERE ${where.join(' AND ')}
+       ORDER BY confermata_at DESC NULLS LAST, id DESC
+       LIMIT $${params.length}`,
+      params
+    );
+
+    const entries = [];
+    rows.forEach(row => {
+      const details = row.dettagli && typeof row.dettagli === 'object' ? row.dettagli : {};
+      const reloaded = Array.isArray(details.reloaded) ? details.reloaded : [];
+      reloaded.forEach(item => {
+        entries.push({
+          log_id: row.id,
+          data: row.data,
+          giro: row.giro || '',
+          confermata_nome: row.confermata_nome || '',
+          confermata_at: row.confermata_at,
+          ordine_id: item.ordine_id,
+          cliente_id: item.cliente_id || null,
+          cliente: item.cliente || '',
+          new_order_id: item.new_order_id,
+          next_date: item.next_date || null,
+          reason_code: item.reason_code || '',
+          reason_summary: item.reason_summary || '',
+          reason_lines: Array.isArray(item.reason_lines) ? item.reason_lines : [],
+          missing_lines: Array.isArray(item.missing_lines) ? item.missing_lines : [],
+        });
+      });
+    });
+
+    res.json(entries);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/stats/dashboard', authMiddleware, async (req, res) => {
   try {
     const oggi = new Date().toISOString().split('T')[0];

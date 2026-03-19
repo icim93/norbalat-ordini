@@ -2491,6 +2491,7 @@
               </div>
               <div class="toolbar-actions">
                 <button class="btn btn-outline btn-sm" onclick="resetMagazzinoFilters()">Reset</button>
+                <button class="btn btn-outline btn-sm" onclick="openMagazzinoResidualLogModal()">Motivi residui</button>
                 <button class="btn btn-outline btn-sm" onclick="openPDFGiornaliero()">PDF</button>
                 <button id="magazzino-undo-btn" class="btn btn-outline btn-sm" onclick="undoMagazzinoLastAction()" disabled style="opacity:0.5;">UNDO</button>
                 <button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="prendiInCaricoTutti()">Prendi in carico tutti</button>
@@ -3977,6 +3978,28 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-magazzino-residui">
+  <div class="modal" style="max-width:980px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Motivi residui giornata</div>
+        <div id="magazzino-residui-subtitle" style="font-size:12px;color:var(--text2);margin-top:4px;">Dettaglio dei riporti generati in chiusura giornata.</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-magazzino-residui')">✕</button>
+    </div>
+    <div class="modal-body" style="padding-top:14px;">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+        <div id="magazzino-residui-filters" style="font-size:13px;color:var(--text2);"></div>
+        <button class="btn btn-outline btn-sm" onclick="reloadMagazzinoResidualLog()">Aggiorna</button>
+      </div>
+      <div id="magazzino-residui-list" style="max-height:65vh;overflow-y:auto;padding-right:4px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-magazzino-residui')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-ferie">
   <div class="modal" style="max-width:620px;">
     <div class="modal-header">
@@ -4061,6 +4084,7 @@ let state = {
   pianoData: '',
   giriCalendario: [],
   activityLog: [],
+  magazzinoResidualLog: [],
   carichiTentataVendita: [],
   tentataConfigSearch: {},
   tentataModalSearch: '',
@@ -5934,6 +5958,95 @@ async function _eseguiChiudiGiornata(data, giro, opts = {}) {
 
     showToast(e.message || 'Errore chiusura giornata', 'warning');
   }
+}
+
+function formatResidualReasonLine(item) {
+  const lines = Array.isArray(item?.reason_lines) ? item.reason_lines.filter(Boolean) : [];
+  if (lines.length) return lines;
+  return ['Dettaglio motivo non disponibile per questa chiusura.'];
+}
+
+function renderMagazzinoResidualLog() {
+  const listEl = document.getElementById('magazzino-residui-list');
+  const subtitleEl = document.getElementById('magazzino-residui-subtitle');
+  const filtersEl = document.getElementById('magazzino-residui-filters');
+  if (!listEl) return;
+  const data = document.getElementById('filter-magazzino-data')?.value || getNextBusinessDate();
+  const giro = document.getElementById('filter-magazzino-giro')?.value || '';
+  if (filtersEl) filtersEl.textContent = `Filtro attuale: ${formatDate(data)}${giro ? ` · giro ${giro}` : ' · tutti i giri'}`;
+  if (subtitleEl) subtitleEl.textContent = 'Per ogni riporto vedi ordine origine, nuovo ordine e righe che hanno generato il residuo.';
+  const rows = Array.isArray(state.magazzinoResidualLog) ? state.magazzinoResidualLog : [];
+  if (!rows.length) {
+    listEl.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px;text-align:center;">Nessun residuo registrato per il filtro selezionato.</div>';
+    return;
+  }
+  listEl.innerHTML = rows.map(item => {
+    const confirmedAt = item.confermata_at ? new Date(item.confermata_at) : null;
+    const confirmedLabel = confirmedAt
+      ? `${confirmedAt.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' })} ${confirmedAt.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' })}`
+      : '-';
+    const reasonLines = formatResidualReasonLine(item);
+    const missingLines = Array.isArray(item.missing_lines) ? item.missing_lines : [];
+    return `
+      <div style="border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:var(--surface);margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:15px;font-weight:700;">${escapeHtml(item.cliente || `Ordine #${item.ordine_id}`)}</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:4px;">
+              Ordine origine <b>#${item.ordine_id}</b> → riporto <b>#${item.new_order_id}</b>${item.next_date ? ` del <b>${escapeHtml(formatDate(item.next_date))}</b>` : ''}
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text3);text-align:right;">
+            <div>Chiusura: ${escapeHtml(formatDate(item.data))}${item.giro ? ` · ${escapeHtml(item.giro)}` : ''}</div>
+            <div>${escapeHtml(item.confermata_nome || 'Sistema')} · ${escapeHtml(confirmedLabel)}</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--orange-light);border:1px solid #f2d1a6;font-size:12px;color:#8b4b00;">
+          <b>${escapeHtml(item.reason_summary || 'Residuo generato')}</b>
+          <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px;">
+            ${reasonLines.map(line => `<div>${escapeHtml(line)}</div>`).join('')}
+          </div>
+        </div>
+        ${missingLines.length ? `
+          <div style="margin-top:10px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px;">Snapshot righe non riportate</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              ${missingLines.map(line => `
+                <div style="font-size:12px;color:var(--text2);padding:8px 10px;border-radius:8px;background:var(--surface2);">
+                  <b>${escapeHtml(line.prodotto || line.prodotto_nome_libero || `Prodotto #${line.prodotto_id || '?'}`)}</b>
+                  · ordinato ${escapeHtml(String(line.qty_ordinata ?? '0'))} ${escapeHtml(line.unita_misura || 'pezzi')}
+                  ${line.colli_effettivi !== null && line.colli_effettivi !== undefined ? ` · colli scaricati ${escapeHtml(String(line.colli_effettivi))}` : ''}
+                  ${line.peso_effettivo !== null && line.peso_effettivo !== undefined ? ` · peso scaricato ${escapeHtml(String(line.peso_effettivo))} kg` : ''}
+                  ${line.lotto ? ` · lotto ${escapeHtml(line.lotto)}` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+async function reloadMagazzinoResidualLog() {
+  const listEl = document.getElementById('magazzino-residui-list');
+  if (listEl) listEl.innerHTML = '<div style="padding:24px;color:var(--text2);font-size:13px;text-align:center;">Caricamento motivi residui...</div>';
+  try {
+    const data = document.getElementById('filter-magazzino-data')?.value || getNextBusinessDate();
+    const giro = document.getElementById('filter-magazzino-giro')?.value || '';
+    const query = new URLSearchParams();
+    if (data) query.set('data', data);
+    if (giro) query.set('giro', giro);
+    state.magazzinoResidualLog = await api('GET', `/api/magazzino/residui-log?${query.toString()}`);
+    renderMagazzinoResidualLog();
+  } catch (e) {
+    state.magazzinoResidualLog = [];
+    if (listEl) listEl.innerHTML = `<div style="padding:24px;color:var(--danger);font-size:13px;text-align:center;">${escapeHtml(e.message || 'Errore caricamento motivi residui')}</div>`;
+  }
+}
+
+async function openMagazzinoResidualLogModal() {
+  if (!['admin', 'magazzino'].includes(state.currentUser?.ruolo)) return;
+  openModal('modal-magazzino-residui');
+  await reloadMagazzinoResidualLog();
 }
 
 // ═══════════════════════════════════════════════
