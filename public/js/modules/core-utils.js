@@ -57,6 +57,7 @@
       attesa: ['badge-orange', 'In attesa'],
       sospeso: ['badge-gray', 'In sospeso'],
       preparazione: ['badge-blue', 'In preparazione'],
+      preparato: ['badge-blue', 'Preparato'],
       consegnato: ['badge-green', 'Consegnato'],
       annullato: ['badge-red', 'Annullato'],
     };

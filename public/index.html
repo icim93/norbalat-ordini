@@ -2052,6 +2052,7 @@
                     <option value="attesa">In attesa</option>
                     <option value="sospeso">In sospeso</option>
                     <option value="preparazione">In preparazione</option>
+                    <option value="preparato">Preparato</option>
                     <option value="consegnato">Consegnato</option>
                     <option value="annullato">Annullato</option>
                   </select>
@@ -2465,6 +2466,7 @@
                     <option value="attesa">In attesa</option>
                     <option value="sospeso">In sospeso</option>
                     <option value="preparazione">In preparazione</option>
+                    <option value="preparato">Preparati</option>
                     <option value="consegnato">Consegnati</option>
                   </select>
                 </div>
@@ -3008,6 +3010,7 @@
             <option value="attesa">In attesa</option>
             <option value="sospeso">In sospeso</option>
             <option value="preparazione">In preparazione</option>
+            <option value="preparato">Preparato</option>
             <option value="consegnato">Consegnato</option>
             <option value="annullato">Annullato</option>
           </select>
@@ -3699,6 +3702,48 @@
     </div>
     <div class="modal-body" id="det-body"></div>
     <div class="modal-footer" id="det-footer"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-esito-consegna">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Esito consegna</div>
+        <div id="esito-consegna-subtitle" style="font-size:12px;color:var(--text2);margin-top:4px;"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-esito-consegna')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="esito-consegna-ordine-id">
+      <div class="field">
+        <label>Esito</label>
+        <select id="esito-consegna-outcome" onchange="updateEsitoConsegnaFields()">
+          <option value="delivered">Consegnato</option>
+          <option value="partial">Consegnato parziale</option>
+          <option value="failed">Non consegnato</option>
+        </select>
+      </div>
+      <div class="field" id="esito-consegna-failed-wrap" style="display:none;">
+        <label>Gestione ordine</label>
+        <select id="esito-consegna-failed-status">
+          <option value="sospeso">In sospeso</option>
+          <option value="annullato">Annullato</option>
+        </select>
+      </div>
+      <div class="field" id="esito-consegna-date-wrap" style="display:none;">
+        <label>Data riporto residuo</label>
+        <input type="date" id="esito-consegna-date">
+      </div>
+      <div class="field">
+        <label>Eventuali note</label>
+        <textarea id="esito-consegna-note" rows="4" placeholder="Es. cliente con cella rotta, rifiuto parziale, problemi allo scarico..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-esito-consegna')">Annulla</button>
+      <button class="btn btn-green" onclick="submitEsitoConsegna()">Conferma</button>
+    </div>
   </div>
 </div>
 
@@ -4544,7 +4589,7 @@ function renderAutistaView() {
 
   // Sort: non consegnati prima
   const sorted = [...ordini].sort((a,b) => {
-    const rank = {attesa:0, sospeso:1, preparazione:2, consegnato:3, annullato:4};
+    const rank = {attesa:0, sospeso:1, preparazione:2, preparato:3, consegnato:4, annullato:5};
     return (rank[a.stato]||0) - (rank[b.stato]||0);
   });
 
@@ -4573,9 +4618,9 @@ function renderAutistaView() {
       </div>
       ${o.note ? `<div style="font-size:12px;color:var(--text2);padding:6px 8px;background:var(--surface2);border-radius:6px;margin-bottom:8px;">📝 ${o.note}</div>` : ''}
       <div class="mob-actions">
-        ${!isConsegnato
-          ? `<button class="btn btn-green" onclick="confermaConsegnaRapida(${o.id})">✅ Consegnato</button>`
-          : `<button class="btn btn-outline" disabled style="opacity:0.5;">✅ Consegnato</button>`
+        ${o.stato === 'preparato'
+          ? `<button class="btn btn-green" onclick="openEsitoConsegna(${o.id})">✅ Esito consegna</button>`
+          : `<button class="btn btn-outline" ${isConsegnato ? 'disabled style="opacity:0.5;"' : 'disabled style="opacity:0.5;"'}>${isConsegnato ? '✅ Consegnato' : '⏳ Non pronto'}</button>`
         }
         <button class="btn btn-outline" onclick="openDettaglio(${o.id})">👁️ Dettagli</button>
         <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id})" title="Elimina ordine">🗑️</button>
@@ -4585,14 +4630,7 @@ function renderAutistaView() {
 }
 
 async function confermaConsegnaRapida(id) {
-  id = parseInt(id);
-  try {
-    await api('PATCH', `/api/ordini/${id}/stato`, { stato: 'consegnato' });
-    const o = state.ordini.find(x => x.id === id);
-    if (o) o.stato = 'consegnato';
-    showToast('Consegna confermata! ✅', 'success');
-    renderAutistaView();
-  } catch(e) { showToast(e.message, 'warning'); }
+  return openEsitoConsegna(id);
 }
 
 // ═══════════════════════════════════════════════
@@ -5164,6 +5202,7 @@ function renderMagazzinoStatusStrip(ordini) {
   const attesa = ordini.filter(o => o.stato === 'attesa').length;
   const sospesi = ordini.filter(o => o.stato === 'sospeso').length;
   const preparazione = ordini.filter(o => o.stato === 'preparazione').length;
+  const preparati = ordini.filter(o => o.stato === 'preparato').length;
   const dateIncerte = ordini.filter(o => o.dataNonCerta).length;
   const vettori = ordini.filter(o => o.stef || o.altroVettore).length;
   strip.innerHTML = [
@@ -5171,6 +5210,7 @@ function renderMagazzinoStatusStrip(ordini) {
     `<span class="status-pill warn"><span>In attesa</span><strong>${attesa}</strong></span>`,
     sospesi ? `<span class="status-pill"><span>In sospeso</span><strong>${sospesi}</strong></span>` : '',
     `<span class="status-pill info"><span>In preparazione</span><strong>${preparazione}</strong></span>`,
+    preparati ? `<span class="status-pill info"><span>Preparati</span><strong>${preparati}</strong></span>` : '',
     dateIncerte ? `<span class="status-pill alert"><span>Date incerte</span><strong>${dateIncerte}</strong></span>` : '',
     vettori ? `<span class="status-pill"><span>Vettori esterni</span><strong>${vettori}</strong></span>` : '',
   ].filter(Boolean).join('');
@@ -5228,14 +5268,14 @@ function renderMagazzino() {
   }
 
   let ordini = state.ordini.filter(o => o.data === filterData && o.stato !== 'annullato');
-  if (!filterStato) ordini = ordini.filter(o => o.stato !== 'consegnato');
+  if (!filterStato) ordini = ordini.filter(o => o.stato !== 'consegnato' && o.stato !== 'preparato');
   else ordini = ordini.filter(o => o.stato === filterStato);
   if (filterGiro) ordini = ordini.filter(o => getOrdineGiroEffettivo(o) === filterGiro);
   renderMagazzinoStatusStrip(ordini);
   renderMagazzinoCagliateSummary(ordini);
   if (typeof refreshNavBadges === 'function') refreshNavBadges();
 
-  const stOrd = { preparazione: 0, attesa: 1, sospeso: 2, consegnato: 3 };
+  const stOrd = { preparazione: 0, attesa: 1, sospeso: 2, preparato: 3, consegnato: 4 };
   ordini.sort((a, b) => {
     const byState = (stOrd[a.stato] ?? 9) - (stOrd[b.stato] ?? 9);
     if (byState !== 0) return byState;
@@ -5448,7 +5488,7 @@ function renderMagazzino() {
           ? `<span style="font-size:12px;color:var(--accent);margin-top:4px;">Completato</span>`
           : !inPrep
             ? `<button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="setOrdinePrepara(${o.id})">Preso in carico</button>`
-            : `<button class="btn btn-green btn-sm" data-pronto-ordine="${o.id}" ${prontoDisabled} style="${prontoStyle}" onclick="confermaConsegna(${o.id})">Pronto</button>`
+            : `<button class="btn btn-green btn-sm" data-pronto-ordine="${o.id}" ${prontoDisabled} style="${prontoStyle}" onclick="markOrdinePreparato(${o.id})">Caricato</button>`
         }
       </div>
     </div>`;
@@ -5512,6 +5552,20 @@ function setLinePesoEffettivo(ordineId, lineIdx, val) {
   pushMagazzinoUndo({ ordineId, lineIdx, field: 'pesoEffettivo', prev });
   o.linee[lineIdx].pesoEffettivo = next;
   saveLineaPreparazione(ordineId, lineIdx, { peso_effettivo: next });
+}
+
+async function markOrdinePreparato(id) {
+  try {
+    const prevStato = state.ordini.find(x => x.id === id)?.stato || 'preparazione';
+    await api('PATCH', `/api/ordini/${id}/stato`, { stato: 'preparato' });
+    const ordine = state.ordini.find(x => x.id === id);
+    if (ordine) ordine.stato = 'preparato';
+    pushMagazzinoUndo({ type: 'stato', ordineId: id, prevStato });
+    showToast('Ordine preparato e caricato', 'success');
+    renderMagazzino();
+  } catch (e) {
+    showToast(e.message, 'warning');
+  }
 }
 
 function setLineColliEffettivi(ordineId, lineIdx, val) {
@@ -5788,7 +5842,7 @@ function renderOrdiniPreparati(filterData, filterGiro) {
 
   const data = filterData || today();
   let ordiniPrep = state.ordini.filter(o =>
-    o.data === data && (o.stato === 'preparazione' || o.stato === 'consegnato')
+    o.data === data && (o.stato === 'preparato' || o.stato === 'consegnato')
   );
   if (filterGiro) ordiniPrep = ordiniPrep.filter(o => getOrdineGiroEffettivo(o) === filterGiro);
   // Mostra solo quelli con tutte le righe preparate
@@ -8921,6 +8975,142 @@ function renderGiacenzeAlerts() {
 <script src="/js/modules/crm.js"></script>
 <script src="/js/modules/documenti-ui.js"></script>
 <script src="/js/modules/help-assistant.js"></script>
+<script>
+function updateEsitoConsegnaFields() {
+  const outcome = document.getElementById('esito-consegna-outcome')?.value || 'delivered';
+  const failedWrap = document.getElementById('esito-consegna-failed-wrap');
+  const dateWrap = document.getElementById('esito-consegna-date-wrap');
+  if (failedWrap) failedWrap.style.display = outcome === 'failed' ? 'block' : 'none';
+  if (dateWrap) dateWrap.style.display = outcome === 'partial' ? 'block' : 'none';
+}
+
+function openEsitoConsegna(id, forcedOutcome = '') {
+  id = parseInt(id, 10);
+  const ordine = state.ordini.find(x => x.id === id);
+  if (!ordine) {
+    showToast('Ordine non trovato', 'warning');
+    return;
+  }
+  if (ordine.stato !== 'preparato') {
+    showToast('L\'ordine deve essere in stato preparato', 'warning');
+    return;
+  }
+  const cliente = getCliente(ordine.clienteId);
+  document.getElementById('esito-consegna-ordine-id').value = String(id);
+  document.getElementById('esito-consegna-subtitle').textContent = `Ordine #${ordine.id} - ${cliente?.nome || 'Cliente'}`;
+  document.getElementById('esito-consegna-outcome').value = forcedOutcome || 'delivered';
+  document.getElementById('esito-consegna-failed-status').value = 'sospeso';
+  document.getElementById('esito-consegna-date').value = today();
+  document.getElementById('esito-consegna-note').value = '';
+  updateEsitoConsegnaFields();
+  openModal('modal-esito-consegna');
+}
+
+async function submitEsitoConsegna() {
+  const id = parseInt(document.getElementById('esito-consegna-ordine-id')?.value || '', 10);
+  const outcome = document.getElementById('esito-consegna-outcome')?.value || 'delivered';
+  const failedStatus = document.getElementById('esito-consegna-failed-status')?.value || 'sospeso';
+  const preferredDate = (document.getElementById('esito-consegna-date')?.value || '').trim();
+  const note = (document.getElementById('esito-consegna-note')?.value || '').trim();
+  const ordine = state.ordini.find(x => x.id === id);
+  if (!ordine) {
+    showToast('Ordine non trovato', 'warning');
+    return;
+  }
+
+  const payload = { outcome, note };
+  if (outcome === 'failed') payload.failed_status = failedStatus;
+  if (outcome === 'partial') {
+    const delivered = {};
+    for (const line of ordine.linee) {
+      const prodotto = line.prodottoNomeLibero || getProdotto(line.prodId)?.nome || 'Prodotto';
+      const raw = prompt(`Quantita consegnata per ${prodotto} (ordinata: ${line.qty})`, String(line.qty));
+      if (raw === null) return;
+      const qty = Number(String(raw).replace(',', '.'));
+      if (!Number.isFinite(qty) || qty < 0 || qty > Number(line.qty)) {
+        showToast(`Quantita non valida per ${prodotto}`, 'warning');
+        return;
+      }
+      delivered[line.id] = qty;
+    }
+    payload.delivered = delivered;
+    payload.preferred_date = preferredDate || null;
+  }
+
+  try {
+    const result = await api('POST', `/api/ordini/${id}/esito-consegna`, payload);
+    await loadAllData();
+    closeModal('modal-esito-consegna');
+    closeModal('modal-dettaglio');
+    if (outcome === 'delivered') showToast('Consegna confermata', 'success');
+    if (outcome === 'failed') showToast(`Ordine aggiornato a ${failedStatus}`, 'success');
+    if (outcome === 'partial') showToast(`Consegna parziale registrata. Riporto #${result.new_order_id}`, 'success');
+    renderPage(state.currentPage);
+  } catch (e) {
+    showToast(e.message || 'Errore registrazione esito', 'warning');
+  }
+}
+
+async function confermaConsegna(id) {
+  return openEsitoConsegna(id, 'delivered');
+}
+
+async function consegnaParziale(id) {
+  return openEsitoConsegna(id, 'partial');
+}
+
+function openDettaglio(id) {
+  const o = state.ordini.find(x => x.id === id);
+  if (!o) return;
+  const c = getCliente(o.clienteId);
+  const a = getAgente(o.agenteId);
+
+  document.getElementById('det-title').textContent = `Ordine #${o.id} - ${c.nome}`;
+  document.getElementById('det-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Cliente</div>
+        <div style="font-weight:600;">${escapeHtml(c.nome)}</div>
+        <div style="font-size:13px;color:var(--text2);">${escapeHtml(c.localita || '')}${c.giro ? ` - giro: ${escapeHtml(c.giro)}` : ''}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Agente</div>
+        <div style="font-weight:600;">${escapeHtml((a?.nome + ' ' + (a?.cognome || '')).trim() || '-')}</div>
+        <div style="font-size:13px;color:var(--text2);">${formatDate(o.data)}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:14px;">${statoBadge(o.stato)}</div>
+    <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px;">Prodotti ordinati</div>
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+      ${o.linee.map(l => {
+        const p = l.prodId ? getProdotto(l.prodId) : null;
+        const nome = l.prodottoNomeLibero || p?.nome || 'Prodotto libero';
+        const codice = p?.codice || 'LIB';
+        const um = l.unitaMisura || p?.um || 'pz';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);font-size:14px;">
+          <div>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-right:8px;">[${escapeHtml(codice)}]</span>
+            <span>${escapeHtml(nome)}</span>
+            ${p?.packaging ? `<div style="font-size:11px;color:var(--text3);">${escapeHtml(p.packaging)}</div>` : ''}
+          </div>
+          <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--accent);">${l.qty} ${escapeHtml(um)}</span>
+        </div>`;
+      }).join('')}
+    </div>
+    ${o.note ? `<div style="margin-top:14px;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px;color:var(--text2);"><b>Note:</b> ${escapeHtml(o.note)}</div>` : ''}
+  `;
+
+  const footer = document.getElementById('det-footer');
+  const canEsito = o.stato === 'preparato';
+  footer.innerHTML = `
+    <button class="btn btn-outline" onclick="closeModal('modal-dettaglio')">Chiudi</button>
+    ${canEsito ? `<button class="btn btn-green" onclick="openEsitoConsegna(${o.id})">Esito consegna</button>` : ''}
+    <button class="btn btn-orange" onclick="closeModal('modal-dettaglio');openEditOrder(${o.id})">Modifica</button>
+  `;
+
+  openModal('modal-dettaglio');
+}
+</script>
 
 <div class="modal-overlay" id="modal-help-assistant">
   <div class="modal" style="max-width:760px;width:min(760px,96vw);">

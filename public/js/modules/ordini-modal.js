@@ -1380,12 +1380,18 @@ function openDettaglio(id) {
   `;
 
   const footer = document.getElementById('det-footer');
-  const canConferma = o.stato !== 'consegnato' && o.stato !== 'annullato';
+  const canConferma = o.stato === 'preparato';
   footer.innerHTML = `
     <button class="btn btn-outline" onclick="closeModal('modal-dettaglio')">Chiudi</button>
     ${canConferma ? `<button class="btn btn-green" onclick="confermaConsegna(${o.id})">✅ Conferma Consegna</button>` : ''}
     ${canConferma ? `<button class="btn btn-outline" onclick="consegnaParziale(${o.id})">↪️ Consegna parziale</button>` : ''}
     <button class="btn btn-orange" onclick="closeModal('modal-dettaglio');openEditOrder(${o.id})">✏️ Modifica</button>
+  `;
+
+  footer.innerHTML = `
+    <button class="btn btn-outline" onclick="closeModal('modal-dettaglio')">Chiudi</button>
+    ${canConferma ? `<button class="btn btn-green" onclick="openEsitoConsegna(${o.id})">Esito consegna</button>` : ''}
+    <button class="btn btn-orange" onclick="closeModal('modal-dettaglio');openEditOrder(${o.id})">âœï¸ Modifica</button>
   `;
 
   openModal('modal-dettaglio');

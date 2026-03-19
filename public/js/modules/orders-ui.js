@@ -44,6 +44,7 @@ function renderDashboard() {
   const attesa = state.ordini.filter(o => o.stato === 'attesa').length;
   const consegnati = state.ordini.filter(o => o.stato === 'consegnato').length;
   const preparare = state.ordini.filter(o => o.stato === 'preparazione').length;
+  const preparati = state.ordini.filter(o => o.stato === 'preparato').length;
   const alertSottoSoglia = state.giacenzeAlerts?.sotto_soglia?.length || 0;
   const alertScadenze = state.giacenzeAlerts?.in_scadenza?.length || 0;
   const caricoTentata = state.carichiTentataVendita.find(c => c.userId === userId);
@@ -52,16 +53,16 @@ function renderDashboard() {
   const statLabels = {
     admin: ['Ordini oggi', 'In attesa', 'Consegnati', 'Da preparare'],
     amministrazione: ['Ordini oggi', 'Clienti da seguire', 'Consegnati', 'Da verificare'],
-    magazzino: ['Ordini oggi', 'Da preparare', 'Sotto soglia', 'In scadenza'],
-    autista: ['Consegne oggi', 'Consegnati', 'Tentata carico', 'Da consegnare'],
+    magazzino: ['Ordini oggi', 'Da preparare', 'Preparati', 'In scadenza'],
+    autista: ['Consegne oggi', 'Consegnati', 'Preparati', 'Da consegnare'],
     direzione: ['Ordini oggi', 'In attesa', 'Sotto soglia', 'In scadenza'],
   }[ruolo] || ['Ordini oggi', 'In attesa', 'Consegnati', 'Da preparare'];
 
   const statValues = {
     admin: [ordiniOggi.length, attesa, consegnati, preparare],
     amministrazione: [ordiniOggi.length, clienteFollowup, consegnati, attesa],
-    magazzino: [ordiniOggi.length, preparare, alertSottoSoglia, alertScadenze],
-    autista: [assegnatiAutista.length, assegnatiAutista.filter(o => o.stato === 'consegnato').length, (caricoTentata?.linee || []).length, assegnatiAutista.filter(o => o.stato !== 'consegnato').length],
+    magazzino: [ordiniOggi.length, preparare, preparati, alertScadenze],
+    autista: [assegnatiAutista.length, assegnatiAutista.filter(o => o.stato === 'consegnato').length, assegnatiAutista.filter(o => o.stato === 'preparato').length, assegnatiAutista.filter(o => ['attesa', 'preparazione', 'preparato'].includes(o.stato)).length],
     direzione: [ordiniOggi.length, attesa, alertSottoSoglia, alertScadenze],
   }[ruolo] || [ordiniOggi.length, attesa, consegnati, preparare];
 
@@ -131,7 +132,7 @@ function renderDashboard() {
   const tbody = document.getElementById('dash-orders-table');
   let recent = [...state.ordini].sort((a, b) => b.id - a.id).slice(0, 8);
   if (ruolo === 'autista') recent = assegnatiAutista.slice(0, 8);
-  if (ruolo === 'magazzino') recent = ordiniOggi.filter(o => o.stato !== 'consegnato' && o.stato !== 'annullato').slice(0, 8);
+  if (ruolo === 'magazzino') recent = ordiniOggi.filter(o => !['consegnato', 'annullato', 'sospeso'].includes(o.stato)).slice(0, 8);
   if (recentTitle) recentTitle.textContent = ruolo === 'autista' ? 'Le mie consegne di oggi' : (ruolo === 'magazzino' ? 'Ordini operativi di oggi' : 'Ultimi ordini');
   if (recentAction) {
     if (ruolo === 'autista') {
@@ -239,11 +240,13 @@ function renderOrdiniStatusStrip(list) {
   const inAttesa = list.filter(o => o.stato === 'attesa').length;
   const inSospeso = list.filter(o => o.stato === 'sospeso').length;
   const inPrep = list.filter(o => o.stato === 'preparazione').length;
+  const preparati = list.filter(o => o.stato === 'preparato').length;
   strip.innerHTML = [
     `<span class="status-pill"><span>Visualizzati</span><strong>${list.length}</strong></span>`,
     `<span class="status-pill warn"><span>In attesa</span><strong>${inAttesa}</strong></span>`,
     inSospeso ? `<span class="status-pill"><span>In sospeso</span><strong>${inSospeso}</strong></span>` : '',
     `<span class="status-pill info"><span>In preparazione</span><strong>${inPrep}</strong></span>`,
+    preparati ? `<span class="status-pill success"><span>Preparati</span><strong>${preparati}</strong></span>` : '',
     dataNonCerta ? `<span class="status-pill alert"><span>Date incerte</span><strong>${dataNonCerta}</strong></span>` : '',
     stef ? `<span class="status-pill"><span>Vettori esterni</span><strong>${stef}</strong></span>` : '',
   ].filter(Boolean).join('');

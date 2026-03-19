@@ -759,7 +759,7 @@ async function createSchema() {
       inserted_by      INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
       data             DATE NOT NULL,
       stato            TEXT NOT NULL DEFAULT 'attesa'
-                         CHECK(stato IN ('attesa','sospeso','preparazione','consegnato','annullato')),
+                         CHECK(stato IN ('attesa','sospeso','preparazione','preparato','consegnato','annullato')),
       note             TEXT DEFAULT '',
       data_non_certa   BOOLEAN DEFAULT FALSE,
       stef             BOOLEAN DEFAULT FALSE,
@@ -1078,7 +1078,7 @@ async function createSchema() {
       END IF;
       ALTER TABLE ordini
         ADD CONSTRAINT ordini_stato_check
-        CHECK (stato IN ('attesa','sospeso','preparazione','consegnato','annullato'));
+        CHECK (stato IN ('attesa','sospeso','preparazione','preparato','consegnato','annullato'));
     EXCEPTION
       WHEN duplicate_object THEN NULL;
     END $$;
@@ -1783,6 +1783,45 @@ function buildResidualTriggerText(line) {
     parts.push(`lotto ${String(line.lotto).trim()}`);
   }
   return `${getResidualLineLabel(line)}: ${parts.join(', ')}`;
+}
+
+async function restoreOrderInventory({ ordineId, client, reqUser, note = 'Rientro ordine', restoreRatios = null, resetPreparation = false }) {
+  const userName = `${reqUser?.nome || ''} ${reqUser?.cognome || ''}`.trim() || reqUser?.username || 'Sistema';
+  const { rows: movRows } = await client.query(
+    `SELECT DISTINCT ON (m.ordine_linea_id)
+            m.id, m.ordine_linea_id, m.giacenza_id, m.prodotto_id, m.lotto, m.quantita,
+            ol.qty AS line_qty
+       FROM movimenti_giacenza m
+       JOIN ordine_linee ol ON ol.id = m.ordine_linea_id
+      WHERE ol.ordine_id = $1
+        AND m.tipo = 'scarico_ordine'
+      ORDER BY m.ordine_linea_id, m.id DESC`,
+    [ordineId]
+  );
+  for (const mov of movRows) {
+    if (!mov.giacenza_id) continue;
+    const ratioRaw = restoreRatios && restoreRatios[mov.ordine_linea_id] !== undefined
+      ? Number(restoreRatios[mov.ordine_linea_id])
+      : 1;
+    const ratio = Math.max(0, Math.min(1, ratioRaw));
+    if (!Number.isFinite(ratio) || ratio <= 0) continue;
+    const qtyRestore = Math.abs(Number(mov.quantita || 0)) * ratio;
+    if (!Number.isFinite(qtyRestore) || qtyRestore <= 0) continue;
+    const { rows: giacRows } = await client.query('SELECT quantita FROM giacenze WHERE id=$1 LIMIT 1', [mov.giacenza_id]);
+    if (!giacRows.length) continue;
+    const qtyBefore = Number(giacRows[0].quantita || 0);
+    const qtyAfter = qtyBefore + qtyRestore;
+    await client.query('UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2', [qtyAfter, mov.giacenza_id]);
+    await client.query(
+      `INSERT INTO movimenti_giacenza
+        (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,ordine_id,ordine_linea_id,utente_id,utente_nome,note)
+       VALUES ($1,$2,$3,'rettifica',$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [mov.giacenza_id, mov.prodotto_id, mov.lotto || '', qtyRestore, qtyBefore, qtyAfter, ordineId, mov.ordine_linea_id, reqUser?.id || null, userName, note]
+    );
+  }
+  if (resetPreparation) {
+    await client.query(`UPDATE ordine_linee SET preparato=FALSE WHERE ordine_id=$1`, [ordineId]);
+  }
 }
 
 function applyListinoRule(currentPrice, rule) {
@@ -3155,13 +3194,34 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
 });
 
 app.patch('/api/ordini/:id/stato', authMiddleware, requirePermission('ordini:stato'), async (req, res) => {
+  const client = await pool.connect();
   try {
     const id = parseInt(req.params.id);
     const { stato } = req.body;
     if (!stato) return res.status(400).json({ error: 'Stato mancante' });
-    await q('UPDATE ordini SET stato=$1,updated_at=NOW() WHERE id=$2', [stato, id]);
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT id, stato FROM ordini WHERE id=$1 FOR UPDATE', [id]);
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Ordine non trovato' });
+    }
+    const prevStato = String(rows[0].stato || '');
+    if (prevStato === 'preparato' && ['sospeso', 'annullato'].includes(String(stato))) {
+      await restoreOrderInventory({
+        ordineId: id,
+        client,
+        reqUser: req.user,
+        note: `Rientro merce da ordine ${stato}`,
+        resetPreparation: true,
+      });
+    }
+    await client.query('UPDATE ordini SET stato=$1,updated_at=NOW() WHERE id=$2', [stato, id]);
+    await client.query('COMMIT');
     res.json({ ok: true, stato });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
 });
 
 app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
@@ -3483,14 +3543,14 @@ app.post('/api/magazzino/giornata/annulla', authMiddleware, requireRole('admin',
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Nessuna chiusura trovata per questa data/giro' });
     }
-    // Ripristina ordini consegnato → preparazione
+    // Ripristina ordini preparato → preparazione
     const params = [data];
     let pi = 2;
     let giroWhere = '';
     if (giroVal) { params.push(giroVal); giroWhere = `AND COALESCE(NULLIF(o.giro_override,''), c.giro, '') = $${pi++}`; }
     await client.query(
       `UPDATE ordini o SET stato='preparazione', updated_at=NOW()
-       FROM clienti c WHERE o.cliente_id = c.id AND o.data = $1 AND o.stato = 'consegnato' ${giroWhere}`,
+       FROM clienti c WHERE o.cliente_id = c.id AND o.data = $1 AND o.stato = 'preparato' ${giroWhere}`,
       params
     );
     await client.query('COMMIT');
@@ -3584,7 +3644,7 @@ app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 
       const righe = lineeByOrder[o.id] || [];
       const mancanti = righe.filter(l => !l.preparato);
       if (!mancanti.length) {
-        await client.query(`UPDATE ordini SET stato='consegnato', updated_at=NOW() WHERE id=$1`, [o.id]);
+        await client.query(`UPDATE ordini SET stato='preparato', updated_at=NOW() WHERE id=$1`, [o.id]);
         continue;
       }
       if (action_if_residual === 'reload') {
@@ -3616,7 +3676,7 @@ app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 
         });
         await client.query(
           `UPDATE ordini
-           SET stato='consegnato',
+           SET stato='preparato',
                note=TRIM(BOTH ' ' FROM COALESCE(note,'') || ' [CHIUSURA GIORNATA: residuo su #' || $1 || ']'),
                updated_at=NOW()
            WHERE id=$2`,
@@ -3657,6 +3717,156 @@ app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 
   } finally {
     client.release();
   }
+});
+
+app.post('/api/ordini/:id/esito-consegna', authMiddleware, requirePermission('ordini:stato'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const ordineId = parseInt(req.params.id, 10);
+    const outcome = String(req.body?.outcome || '').trim().toLowerCase();
+    const note = String(req.body?.note || '').trim();
+    const deliveredMap = req.body?.delivered || {};
+    const preferredDate = String(req.body?.preferred_date || '').trim() || null;
+    const failedStatus = String(req.body?.failed_status || '').trim().toLowerCase();
+    if (!['delivered', 'partial', 'failed'].includes(outcome)) {
+      return res.status(400).json({ error: 'Esito consegna non valido' });
+    }
+    if (outcome === 'failed' && !['sospeso', 'annullato'].includes(failedStatus)) {
+      return res.status(400).json({ error: 'Stato finale non valido per consegna non riuscita' });
+    }
+
+    await client.query('BEGIN');
+    const { rows: ordRows } = await client.query('SELECT * FROM ordini WHERE id=$1 FOR UPDATE', [ordineId]);
+    if (!ordRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Ordine non trovato' });
+    }
+    const ordine = ordRows[0];
+    if (String(ordine.stato || '') !== 'preparato') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'L\'ordine deve essere in stato preparato per registrare l\'esito consegna' });
+    }
+    const { rows: linee } = await client.query('SELECT * FROM ordine_linee WHERE ordine_id=$1 ORDER BY id', [ordineId]);
+    if (!linee.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Ordine senza righe' });
+    }
+
+    if (outcome === 'delivered') {
+      await client.query(
+        `UPDATE ordini
+            SET stato='consegnato',
+                note=CASE WHEN $1 <> '' THEN TRIM(BOTH ' ' FROM COALESCE(note,'') || ' [NOTE CONSEGNA: ' || $1 || ']') ELSE note END,
+                updated_at=NOW()
+          WHERE id=$2`,
+        [note, ordineId]
+      );
+      await client.query('COMMIT');
+      await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Esito consegna', `ordine #${ordineId} consegnato${note ? ` | ${note}` : ''}`);
+      return res.json({ ok: true, stato: 'consegnato' });
+    }
+
+    if (outcome === 'failed') {
+      await restoreOrderInventory({
+        ordineId,
+        client,
+        reqUser: req.user,
+        note: `Rientro merce da ordine ${failedStatus}${note ? ` | ${note}` : ''}`,
+        resetPreparation: true,
+      });
+      await client.query(
+        `UPDATE ordini
+            SET stato=$1,
+                note=CASE WHEN $2 <> '' THEN TRIM(BOTH ' ' FROM COALESCE(note,'') || ' [ESITO CONSEGNA: ' || $2 || ']') ELSE note END,
+                updated_at=NOW()
+          WHERE id=$3`,
+        [failedStatus, note, ordineId]
+      );
+      await client.query('COMMIT');
+      await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Esito consegna', `ordine #${ordineId} -> ${failedStatus}${note ? ` | ${note}` : ''}`);
+      return res.json({ ok: true, stato: failedStatus });
+    }
+
+    const residuali = [];
+    const restoreRatios = {};
+    for (const l of linee) {
+      const key = String(l.id);
+      const qty = Number(l.qty || 0);
+      const consegnata = Math.max(0, Math.min(qty, Number(deliveredMap[key] ?? qty)));
+      const residuo = qty - consegnata;
+      if (residuo > 0) {
+        restoreRatios[l.id] = qty > 0 ? (residuo / qty) : 0;
+        residuali.push({
+          prodotto_id: l.prodotto_id,
+          prodotto_nome_libero: l.prodotto_nome_libero || '',
+          qty: residuo,
+          qty_base: l.qty_base !== null && l.qty_base !== undefined && qty > 0 ? (Number(l.qty_base) * (residuo / qty)) : null,
+          is_pedana: !!l.is_pedana,
+          nota_riga: l.nota_riga || '',
+          unita_misura: l.unita_misura || 'pezzi',
+          prezzo_unitario: l.prezzo_unitario,
+          lotto: l.lotto || '',
+        });
+      }
+    }
+    if (!residuali.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Nessun residuo da riportare: usa consegna completa' });
+    }
+
+    await restoreOrderInventory({
+      ordineId,
+      client,
+      reqUser: req.user,
+      note: `Rientro merce da consegna parziale${note ? ` | ${note}` : ''}`,
+      restoreRatios,
+      resetPreparation: false,
+    });
+
+    const { rows: cRows } = await client.query('SELECT giro FROM clienti WHERE id=$1', [ordine.cliente_id]);
+    const giro = cRows[0]?.giro || '';
+    const autoNextData = await getNextDeliveryDate(giro, ordine.data);
+    const nextData = preferredDate && preferredDate >= autoNextData ? preferredDate : autoNextData;
+    const ins = await client.query(
+      `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef,altro_vettore,giro_override,inserted_at,updated_at)
+       VALUES ($1,$2,$3,$4,$5,'attesa',$6,$7,$8,$9,$10,NOW(),NOW()) RETURNING id`,
+      [
+        ordine.cliente_id,
+        ordine.agente_id || null,
+        ordine.autista_di_giro || null,
+        req.user.id || null,
+        nextData,
+        `[RIPORTO PARZIALE da #${ordineId}] ${note}`.trim(),
+        !!ordine.data_non_certa,
+        !!ordine.stef,
+        !!ordine.altro_vettore,
+        String(ordine.giro_override || ''),
+      ]
+    );
+    const newOrdineId = ins.rows[0].id;
+    for (const r of residuali) {
+      await client.query(
+        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10)`,
+        [newOrdineId, r.prodotto_id, r.prodotto_nome_libero || '', r.qty, r.qty_base ?? null, r.prezzo_unitario, r.is_pedana, r.nota_riga, r.unita_misura, r.lotto || '']
+      );
+    }
+    await client.query(
+      `UPDATE ordini
+          SET stato='consegnato',
+              note=TRIM(BOTH ' ' FROM COALESCE(note,'') || ' [PARZIALE: residuo su #' || $1 || ']'
+                || CASE WHEN $2 <> '' THEN ' [NOTE CONSEGNA: ' || $2 || ']' ELSE '' END),
+              updated_at=NOW()
+        WHERE id=$3`,
+      [newOrdineId, note, ordineId]
+    );
+    await client.query('COMMIT');
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Esito consegna', `ordine #${ordineId} parziale -> riporto #${newOrdineId}${note ? ` | ${note}` : ''}`);
+    res.json({ ok: true, stato: 'consegnato', new_order_id: newOrdineId, next_date: nextData });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
 });
 
 app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission('ordini:stato'), async (req, res) => {
