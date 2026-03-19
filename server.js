@@ -940,6 +940,29 @@ async function createSchema() {
       dettagli          JSONB DEFAULT '{}'::jsonb
     );
 
+    CREATE TABLE IF NOT EXISTS giro_chiusure_giornata (
+      id                SERIAL PRIMARY KEY,
+      data              DATE NOT NULL,
+      giro              TEXT DEFAULT '',
+      autista_id        INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      autista_nome      TEXT DEFAULT '',
+      confermata_da     INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      confermata_nome   TEXT DEFAULT '',
+      confermata_at     TIMESTAMPTZ DEFAULT NOW(),
+      esito             TEXT DEFAULT '',
+      dettagli          JSONB DEFAULT '{}'::jsonb
+    );
+
+    CREATE TABLE IF NOT EXISTS azienda_chiusure_giornata (
+      id                SERIAL PRIMARY KEY,
+      data              DATE NOT NULL,
+      confermata_da     INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      confermata_nome   TEXT DEFAULT '',
+      confermata_at     TIMESTAMPTZ DEFAULT NOW(),
+      esito             TEXT DEFAULT '',
+      dettagli          JSONB DEFAULT '{}'::jsonb
+    );
+
     CREATE TABLE IF NOT EXISTS experimental_clal_quotes (
       id                BIGSERIAL PRIMARY KEY,
       source_key        TEXT NOT NULL DEFAULT 'burro_milano_zangolato',
@@ -967,6 +990,8 @@ async function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_doc_files_folder ON doc_files(folder_id);
     CREATE INDEX IF NOT EXISTS idx_scorte_stato ON scorte_magazzino(stato, prodotto_id);
     CREATE INDEX IF NOT EXISTS idx_magazzino_chiusure_data_giro ON magazzino_chiusure_giornata(data, giro);
+    CREATE INDEX IF NOT EXISTS idx_giro_chiusure_data_giro_autista ON giro_chiusure_giornata(data, giro, autista_id);
+    CREATE INDEX IF NOT EXISTS idx_azienda_chiusure_data ON azienda_chiusure_giornata(data);
     CREATE INDEX IF NOT EXISTS idx_utenti_username_lower ON utenti (LOWER(username));
     CREATE INDEX IF NOT EXISTS idx_exp_clal_source_fetched ON experimental_clal_quotes(source_key, fetched_at DESC);
 
@@ -1742,6 +1767,99 @@ async function listOrdiniApertiByDateGiro({ data, giro = '', client = null }) {
     params
   );
   return rows;
+}
+
+async function buildDailyClosureSummary({ data, client = null }) {
+  const run = client ? ((sql, params) => client.query(sql, params)) : q;
+  const { rows: orders } = await run(
+    `SELECT o.id, o.stato, o.autista_di_giro,
+            COALESCE(NULLIF(o.giro_override,''), c.giro, '') AS giro_effettivo,
+            COALESCE(au.nome || ' ' || COALESCE(au.cognome,''), '') AS autista_nome
+     FROM ordini o
+     JOIN clienti c ON c.id = o.cliente_id
+     LEFT JOIN utenti au ON au.id = o.autista_di_giro
+     WHERE o.data = $1`,
+    [data]
+  );
+  const { rows: magRows } = await run(
+    `SELECT id, giro, confermata_nome, confermata_at, esito
+     FROM magazzino_chiusure_giornata
+     WHERE data = $1
+     ORDER BY confermata_at DESC`,
+    [data]
+  );
+  const { rows: giroRows } = await run(
+    `SELECT id, giro, autista_id, autista_nome, confermata_nome, confermata_at, esito
+     FROM giro_chiusure_giornata
+     WHERE data = $1
+     ORDER BY confermata_at DESC`,
+    [data]
+  );
+  const { rows: aziendaRows } = await run(
+    `SELECT id, confermata_nome, confermata_at, esito
+     FROM azienda_chiusure_giornata
+     WHERE data = $1
+     ORDER BY confermata_at DESC
+     LIMIT 1`,
+    [data]
+  );
+
+  const statusCounts = {
+    attesa: 0,
+    preparazione: 0,
+    preparato: 0,
+    consegnato: 0,
+    sospeso: 0,
+    annullato: 0,
+  };
+  orders.forEach(o => { if (statusCounts[o.stato] !== undefined) statusCounts[o.stato]++; });
+  const openOrders = orders.filter(o => ['attesa', 'preparazione', 'preparato'].includes(String(o.stato || '')));
+  const expectedDrivers = new Map();
+  orders.forEach(o => {
+    if (!o.autista_di_giro) return;
+    const key = `${o.autista_di_giro}__${String(o.giro_effettivo || '').trim()}`;
+    if (!expectedDrivers.has(key)) {
+      expectedDrivers.set(key, {
+        autista_id: o.autista_di_giro,
+        autista_nome: String(o.autista_nome || '').trim(),
+        giro: String(o.giro_effettivo || '').trim(),
+      });
+    }
+  });
+  const closedDriverKeys = new Set(
+    giroRows.map(r => `${r.autista_id || ''}__${String(r.giro || '').trim()}`)
+  );
+  const closedDriverAll = new Set(
+    giroRows.filter(r => !String(r.giro || '').trim()).map(r => String(r.autista_id || ''))
+  );
+  const pendingDriverClosures = [...expectedDrivers.values()].filter(item => {
+    if (closedDriverAll.has(String(item.autista_id || ''))) return false;
+    return !closedDriverKeys.has(`${item.autista_id}__${item.giro}`);
+  });
+
+  return {
+    data,
+    orders: {
+      total: orders.length,
+      open: openOrders.length,
+      counts: statusCounts,
+    },
+    magazzino: {
+      closed: magRows.length > 0,
+      count: magRows.length,
+      items: magRows,
+    },
+    giro: {
+      expected_count: expectedDrivers.size,
+      closed_count: closedDriverKeys.size,
+      items: giroRows,
+      pending: pendingDriverClosures,
+    },
+    azienda: {
+      closed: aziendaRows.length > 0,
+      item: aziendaRows[0] || null,
+    },
+  };
 }
 
 function formatResidualValue(value) {
@@ -3716,6 +3834,174 @@ app.post('/api/magazzino/giornata/chiudi', authMiddleware, requireRole('admin', 
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
+  }
+});
+
+app.get('/api/chiusure-giornata/summary', authMiddleware, async (req, res) => {
+  try {
+    const data = String(req.query?.data || '').trim();
+    if (!data) return res.status(400).json({ error: 'data obbligatoria' });
+    const summary = await buildDailyClosureSummary({ data });
+    res.json(summary);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/giro/giornata/annulla', authMiddleware, requireRole('admin', 'autista'), async (req, res) => {
+  const { data, giro = '', password, autista_id = null } = req.body || {};
+  if (!data || !password) return res.status(400).json({ error: 'data e password obbligatori' });
+  const { rows: userRows } = await q('SELECT password FROM utenti WHERE id=$1', [req.user.id]);
+  if (!userRows.length) return res.status(401).json({ error: 'Utente non trovato' });
+  const ok = await bcrypt.compare(String(password), userRows[0].password);
+  if (!ok) return res.status(401).json({ error: 'Password errata' });
+  const giroVal = String(giro || '').trim();
+  const autistaId = req.user.ruolo === 'autista' ? req.user.id : (autista_id ? parseInt(autista_id, 10) : null);
+  if (!autistaId) return res.status(400).json({ error: 'autista non specificato' });
+  const { rows } = await q(
+    `DELETE FROM giro_chiusure_giornata
+     WHERE data=$1 AND giro=$2 AND autista_id=$3
+     RETURNING id`,
+    [data, giroVal, autistaId]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Nessuna chiusura giro trovata' });
+  await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Annullamento chiusura giro', `${data}${giroVal ? ` (${giroVal})` : ''}`);
+  res.json({ ok: true });
+});
+
+app.post('/api/giro/giornata/chiudi', authMiddleware, requireRole('admin', 'autista'), async (req, res) => {
+  try {
+    const data = String(req.body?.data || '').trim();
+    const giro = String(req.body?.giro || '').trim();
+    const autistaId = req.user.ruolo === 'autista' ? req.user.id : (req.body?.autista_id ? parseInt(req.body.autista_id, 10) : null);
+    if (!data) return res.status(400).json({ error: 'data obbligatoria' });
+    if (!autistaId) return res.status(400).json({ error: 'autista obbligatorio' });
+
+    const { rows: existing } = await q(
+      `SELECT confermata_nome, confermata_at
+       FROM giro_chiusure_giornata
+       WHERE data=$1 AND giro=$2 AND autista_id=$3
+       ORDER BY id DESC LIMIT 1`,
+      [data, giro, autistaId]
+    );
+    if (existing.length) {
+      return res.status(409).json({
+        code: 'GIRO_GIA_CONFERMATO',
+        message: `Giro già confermato da ${existing[0].confermata_nome}`,
+        confermata_nome: existing[0].confermata_nome,
+        confermata_at: existing[0].confermata_at,
+      });
+    }
+
+    const params = [data, autistaId];
+    let giroWhere = '';
+    if (giro) {
+      params.push(giro);
+      giroWhere = `AND COALESCE(NULLIF(o.giro_override,''), c.giro, '') = $3`;
+    }
+    const { rows: orders } = await q(
+      `SELECT o.id, o.stato, COALESCE(NULLIF(o.giro_override,''), c.giro, '') AS giro_effettivo, c.nome AS cliente_nome
+       FROM ordini o
+       JOIN clienti c ON c.id = o.cliente_id
+       WHERE o.data = $1 AND o.autista_di_giro = $2 ${giroWhere}
+       ORDER BY o.id`,
+      params
+    );
+    if (!orders.length) return res.status(400).json({ error: 'Nessun ordine assegnato per la selezione' });
+    const aperti = orders.filter(o => ['attesa', 'preparazione', 'preparato'].includes(String(o.stato || '')));
+    if (aperti.length) {
+      return res.status(409).json({
+        code: 'GIRO_NON_CHIUDIBILE',
+        message: 'Restano ordini senza esito consegna',
+        pending: aperti.map(o => ({ id: o.id, cliente: o.cliente_nome, stato: o.stato })),
+      });
+    }
+
+    const counts = orders.reduce((acc, row) => {
+      acc[row.stato] = (acc[row.stato] || 0) + 1;
+      return acc;
+    }, {});
+    const { rows: userData } = await q('SELECT nome, cognome FROM utenti WHERE id=$1', [autistaId]);
+    const autistaNome = `${userData[0]?.nome || ''} ${userData[0]?.cognome || ''}`.trim() || `Autista #${autistaId}`;
+    await q(
+      `INSERT INTO giro_chiusure_giornata (data,giro,autista_id,autista_nome,confermata_da,confermata_nome,esito,dettagli)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
+      [
+        data,
+        giro,
+        autistaId,
+        autistaNome,
+        req.user.id || null,
+        `${req.user.nome} ${req.user.cognome || ''}`.trim(),
+        'ok',
+        JSON.stringify({ counts, pending_count: 0, critical_count: (counts.sospeso || 0) + (counts.annullato || 0) }),
+      ]
+    );
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Chiusura giornata giro', `${data}${giro ? ` (${giro})` : ''} - ${autistaNome}`);
+    res.json({ ok: true, counts });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/azienda/giornata/annulla', authMiddleware, requireRole('admin', 'direzione'), async (req, res) => {
+  const { data, password } = req.body || {};
+  if (!data || !password) return res.status(400).json({ error: 'data e password obbligatori' });
+  const { rows: userRows } = await q('SELECT password FROM utenti WHERE id=$1', [req.user.id]);
+  if (!userRows.length) return res.status(401).json({ error: 'Utente non trovato' });
+  const ok = await bcrypt.compare(String(password), userRows[0].password);
+  if (!ok) return res.status(401).json({ error: 'Password errata' });
+  const { rows } = await q(`DELETE FROM azienda_chiusure_giornata WHERE data=$1 RETURNING id`, [data]);
+  if (!rows.length) return res.status(404).json({ error: 'Nessuna chiusura azienda trovata' });
+  await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Annullamento chiusura azienda', data);
+  res.json({ ok: true });
+});
+
+app.post('/api/azienda/giornata/chiudi', authMiddleware, requireRole('admin', 'direzione'), async (req, res) => {
+  try {
+    const data = String(req.body?.data || '').trim();
+    if (!data) return res.status(400).json({ error: 'data obbligatoria' });
+    const summary = await buildDailyClosureSummary({ data });
+    if (summary.azienda.closed) {
+      return res.status(409).json({
+        code: 'AZIENDA_GIA_CONFERMATA',
+        confermata_nome: summary.azienda.item?.confermata_nome || '',
+        confermata_at: summary.azienda.item?.confermata_at || null,
+      });
+    }
+    if (!summary.magazzino.closed) {
+      return res.status(409).json({ code: 'MAGAZZINO_NON_CHIUSO', message: 'Manca la chiusura giornata magazzino' });
+    }
+    if (summary.orders.open > 0) {
+      return res.status(409).json({ code: 'ORDINI_APERTI', message: 'Restano ordini senza esito finale', open_count: summary.orders.open });
+    }
+    if (summary.giro.pending.length) {
+      return res.status(409).json({
+        code: 'GIRI_NON_CHIUSI',
+        message: 'Non tutti i giri risultano chiusi',
+        pending: summary.giro.pending,
+      });
+    }
+    await q(
+      `INSERT INTO azienda_chiusure_giornata (data,confermata_da,confermata_nome,esito,dettagli)
+       VALUES ($1,$2,$3,$4,$5::jsonb)`,
+      [
+        data,
+        req.user.id || null,
+        `${req.user.nome} ${req.user.cognome || ''}`.trim(),
+        'ok',
+        JSON.stringify({
+          magazzino_closures: summary.magazzino.count,
+          giro_closures: summary.giro.closed_count,
+          status_counts: summary.orders.counts,
+          critical_count: (summary.orders.counts.sospeso || 0) + (summary.orders.counts.annullato || 0),
+        }),
+      ]
+    );
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Chiusura giornata azienda', data);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

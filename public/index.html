@@ -2403,6 +2403,19 @@
           </div>
         </div>
 
+        <div class="card" id="autista-chiusura-card" style="margin-bottom:16px;display:none;">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div>
+              <div class="card-title">Chiusura Giornata Giro</div>
+              <div id="autista-chiusura-summary" style="font-size:12px;color:var(--text2);margin-top:4px;">Verifica esiti consegna prima della chiusura.</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-outline btn-sm" onclick="refreshDailyClosureSummary()">Aggiorna stato</button>
+              <button class="btn btn-green btn-sm" onclick="chiudiGiornataGiro()">Chiudi giro</button>
+            </div>
+          </div>
+        </div>
+
         <div class="mobile-view" id="autista-orders"></div>
 
 
@@ -2496,6 +2509,8 @@
               <div class="toolbar-actions">
                 <button class="btn btn-outline btn-sm" onclick="resetMagazzinoFilters()">Reset</button>
                 <button class="btn btn-outline btn-sm" onclick="openMagazzinoResidualLogModal()">Motivi residui</button>
+                <button class="btn btn-outline btn-sm" onclick="refreshDailyClosureSummary()">Stato chiusure</button>
+                <button class="btn btn-outline btn-sm" onclick="chiudiGiornataAzienda()">Chiudi azienda</button>
                 <button class="btn btn-outline btn-sm" onclick="openPDFGiornaliero()">PDF</button>
                 <button id="magazzino-undo-btn" class="btn btn-outline btn-sm" onclick="undoMagazzinoLastAction()" disabled style="opacity:0.5;">UNDO</button>
                 <button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="prendiInCaricoTutti()">Prendi in carico tutti</button>
@@ -2505,6 +2520,7 @@
           </div>
           <div class="status-strip" id="magazzino-status-strip"></div>
           <div id="magazzino-cagliate-summary" style="display:none;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);font-size:12px;color:var(--text2);"></div>
+          <div id="daily-closure-summary" style="display:none;margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);font-size:12px;color:var(--text2);"></div>
         </div>
 
         <!-- Tab bar -->
@@ -4627,6 +4643,7 @@ function renderAutistaView() {
       </div>
     </div>`;
   }).join('');
+  refreshDailyClosureSummary();
 }
 
 async function confermaConsegnaRapida(id) {
@@ -5497,6 +5514,7 @@ function renderMagazzino() {
   renderGiacenzeAlerts();
   renderOrdiniPreparati(filterData, filterGiro);
   showPreparazioneTab(state.preparazioneActiveTab || 'preparazione');
+  refreshDailyClosureSummary();
   if (state.magazzinoHighlightOrderId) {
     setTimeout(() => { state.magazzinoHighlightOrderId = null; }, 1400);
   }
@@ -5960,10 +5978,58 @@ function summarizeMissingForAlert(missing = []) {
   return rows.slice(0, 6).join(' | ');
 }
 
+function renderDailyClosureSummaryBox(summary) {
+  const box = document.getElementById('daily-closure-summary');
+  const autistaCard = document.getElementById('autista-chiusura-card');
+  const autistaSummary = document.getElementById('autista-chiusura-summary');
+  if (box) {
+    if (!summary) {
+      box.style.display = 'none';
+    } else {
+      const mag = summary.magazzino?.closed ? `Magazzino chiuso (${summary.magazzino.count})` : 'Magazzino aperto';
+      const giro = `${summary.giro?.closed_count || 0}/${summary.giro?.expected_count || 0} giri chiusi`;
+      const az = summary.azienda?.closed ? `Azienda chiusa da ${summary.azienda.item?.confermata_nome || '-'}` : 'Azienda non chiusa';
+      const crit = `Consegnati ${summary.orders?.counts?.consegnato || 0} · Sospesi ${summary.orders?.counts?.sospeso || 0} · Annullati ${summary.orders?.counts?.annullato || 0} · Aperti ${summary.orders?.open || 0}`;
+      box.style.display = 'block';
+      box.innerHTML = `<b>Chiusure giornata:</b> ${mag} · ${giro} · ${az}<div style="margin-top:4px;">${crit}</div>`;
+    }
+  }
+  if (autistaCard) {
+    const ruolo = state.currentUser?.ruolo || '';
+    autistaCard.style.display = ruolo === 'autista' ? 'block' : 'none';
+  }
+  if (autistaSummary && summary) {
+    const myId = state.currentUser?.id;
+    const t = document.getElementById('autista-data')?.value || today();
+    const ordini = state.ordini.filter(o => o.autistaDiGiro === myId && o.data === t);
+    const aperti = ordini.filter(o => ['attesa', 'preparazione', 'preparato'].includes(o.stato)).length;
+    const chiuso = (summary.giro?.items || []).some(x => Number(x.autista_id) === Number(myId));
+    autistaSummary.textContent = chiuso
+      ? `Giro già chiuso. Ordini del giorno: ${ordini.length}. Criticità: ${summary.orders?.counts?.sospeso || 0} sospesi, ${summary.orders?.counts?.annullato || 0} annullati.`
+      : `Ordini assegnati: ${ordini.length}. Ancora senza esito finale: ${aperti}.`;
+  }
+}
+
+async function refreshDailyClosureSummary() {
+  try {
+    const data = document.getElementById('filter-magazzino-data')?.value
+      || document.getElementById('autista-data')?.value
+      || today();
+    const summary = await api('GET', `/api/chiusure-giornata/summary?data=${encodeURIComponent(data)}`);
+    state.dailyClosureSummary = summary;
+    renderDailyClosureSummaryBox(summary);
+    return summary;
+  } catch (e) {
+    showToast(e.message || 'Errore riepilogo chiusure', 'warning');
+    return null;
+  }
+}
+
 async function chiudiGiornataMagazzino() {
   const data = document.getElementById('filter-magazzino-data')?.value || getNextBusinessDate();
   const giro = document.getElementById('filter-magazzino-giro')?.value || '';
   await _eseguiChiudiGiornata(data, giro);
+  await refreshDailyClosureSummary();
 }
 
 async function _eseguiChiudiGiornata(data, giro, opts = {}) {
@@ -5971,6 +6037,7 @@ async function _eseguiChiudiGiornata(data, giro, opts = {}) {
     const r = await api('POST', '/api/magazzino/giornata/chiudi', { data, giro, ...opts });
     await loadAllData();
     renderMagazzino();
+    await refreshDailyClosureSummary();
     showToast(`Giornata confermata${r?.reloaded?.length ? ` (${r.reloaded.length} riporti creati)` : ''}`, 'success');
   } catch (e) {
     const payload = e?.payload || {};
@@ -5990,6 +6057,7 @@ async function _eseguiChiudiGiornata(data, giro, opts = {}) {
         showToast('Conferma giornata annullata. Puoi ora rifare la chiusura.', 'success');
         await loadAllData();
         renderMagazzino();
+        await refreshDailyClosureSummary();
       } catch (eAnn) {
         showToast(eAnn.message || 'Errore annullamento giornata', 'warning');
       }
@@ -6016,6 +6084,71 @@ async function _eseguiChiudiGiornata(data, giro, opts = {}) {
     }
 
     showToast(e.message || 'Errore chiusura giornata', 'warning');
+  }
+}
+
+async function chiudiGiornataGiro() {
+  const data = document.getElementById('autista-data')?.value || today();
+  const userId = state.currentUser?.id;
+  const giri = [...new Set(state.ordini.filter(o => o.autistaDiGiro === userId && o.data === data).map(o => getOrdineGiroEffettivo(o)).filter(Boolean))];
+  const giro = giri.length === 1 ? giri[0] : '';
+  try {
+    await api('POST', '/api/giro/giornata/chiudi', { data, giro });
+    await loadAllData();
+    await refreshDailyClosureSummary();
+    renderAutistaView();
+    showToast('Giornata giro chiusa', 'success');
+  } catch (e) {
+    const payload = e?.payload || {};
+    if (e?.status === 409 && payload.code === 'GIRO_GIA_CONFERMATO') {
+      const password = prompt(`Giro già confermato da ${payload.confermata_nome || 'un altro utente'}.\nInserisci la password per annullare la chiusura:`, '');
+      if (!password) return;
+      try {
+        await api('POST', '/api/giro/giornata/annulla', { data, giro, password });
+        await refreshDailyClosureSummary();
+        showToast('Chiusura giro annullata', 'success');
+      } catch (eAnn) {
+        showToast(eAnn.message || 'Errore annullamento giro', 'warning');
+      }
+      return;
+    }
+    if (e?.status === 409 && payload.code === 'GIRO_NON_CHIUDIBILE') {
+      const pending = (payload.pending || []).slice(0, 5).map(x => `#${x.id} ${x.cliente} (${x.stato})`).join(' | ');
+      showToast(`Restano ordini senza esito: ${pending}`, 'warning');
+      return;
+    }
+    showToast(e.message || 'Errore chiusura giro', 'warning');
+  }
+}
+
+async function chiudiGiornataAzienda() {
+  const data = document.getElementById('filter-magazzino-data')?.value || today();
+  try {
+    await api('POST', '/api/azienda/giornata/chiudi', { data });
+    await refreshDailyClosureSummary();
+    showToast('Chiusura azienda confermata', 'success');
+  } catch (e) {
+    const payload = e?.payload || {};
+    if (e?.status === 409 && payload.code === 'AZIENDA_GIA_CONFERMATA') {
+      const password = prompt(`Azienda già chiusa da ${payload.confermata_nome || 'un altro utente'}.\nInserisci la password per annullare la chiusura:`, '');
+      if (!password) return;
+      try {
+        await api('POST', '/api/azienda/giornata/annulla', { data, password });
+        await refreshDailyClosureSummary();
+        showToast('Chiusura azienda annullata', 'success');
+      } catch (eAnn) {
+        showToast(eAnn.message || 'Errore annullamento chiusura azienda', 'warning');
+      }
+      return;
+    }
+    if (payload.code === 'MAGAZZINO_NON_CHIUSO') { showToast('Chiudi prima il magazzino', 'warning'); return; }
+    if (payload.code === 'ORDINI_APERTI') { showToast(`Restano ${payload.open_count || 0} ordini senza esito finale`, 'warning'); return; }
+    if (payload.code === 'GIRI_NON_CHIUSI') {
+      const pending = (payload.pending || []).slice(0, 5).map(x => `${x.autista_nome || 'Autista'}${x.giro ? ` (${x.giro})` : ''}`).join(' | ');
+      showToast(`Mancano chiusure giro: ${pending}`, 'warning');
+      return;
+    }
+    showToast(e.message || 'Errore chiusura azienda', 'warning');
   }
 }
 
