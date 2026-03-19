@@ -1555,7 +1555,7 @@ const PERMISSIONS = {
   'onboarding:manage': ['admin', 'amministrazione'],
   'ordini:create': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'ordini:update': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
-  'ordini:delete': ['admin', 'amministrazione', 'direzione'],
+  'ordini:delete': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'ordini:stato': ['admin', 'autista', 'magazzino', 'amministrazione', 'direzione'],
   'scorte:view': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'scorte:manage': ['admin', 'magazzino'],
