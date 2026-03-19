@@ -33,6 +33,7 @@
           { page: 'prodotti', icon: '🧀', label: 'Prodotti' },
           { page: 'utenti', icon: '👥', label: 'Utenti' },
           { page: 'ferie', icon: '🌴', label: 'Ferie' },
+          { page: 'messaggi', icon: '✉️', label: 'Messaggi' },
         ],
       },
       {
@@ -66,6 +67,7 @@
       { page: 'listini', icon: '💶', label: 'Listini' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
       { page: 'report', icon: '📊', label: 'Report' },
+      { page: 'messaggi', icon: '✉️', label: 'Messaggi' },
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
     autista: [
@@ -75,6 +77,7 @@
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'piano', icon: '🚛', label: 'Piano Carico' },
       { page: 'ordini', icon: '📋', label: 'Tutti gli ordini' },
+      { page: 'messaggi', icon: '✉️', label: 'Messaggi' },
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
     magazzino: [
@@ -85,6 +88,7 @@
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'piano', icon: '🚛', label: 'Piano Carico' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
+      { page: 'messaggi', icon: '✉️', label: 'Messaggi' },
       { page: 'report', icon: '📄', label: 'PDF Ordini' },
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
@@ -97,6 +101,7 @@
       { page: 'report', icon: '📊', label: 'Report' },
       { page: 'sperimentale', icon: '🧪', label: 'CLAL' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
+      { page: 'messaggi', icon: '✉️', label: 'Messaggi' },
       { page: 'profilo', icon: '👤', label: 'Il mio profilo' },
     ],
   };
@@ -154,6 +159,9 @@
       const today = typeof window.today === 'function' ? window.today() : '';
       const userId = window.state.currentUser?.id;
       return ordini.filter(o => o.data === today && (o.agenteId === userId || o.autistaDiGiro === userId) && o.stato !== 'annullato').length;
+    }
+    if (page === 'messaggi') {
+      return Number(window.state.messagesUnreadCount || 0);
     }
     return 0;
   }
@@ -335,6 +343,7 @@
   function doLogout() {
     window.stopDevMonitor();
     if (typeof window.stopTopbarNotificationPolling === 'function') window.stopTopbarNotificationPolling();
+    if (typeof window.stopMessaggiPolling === 'function') window.stopMessaggiPolling();
     clearStoredAuth();
     window.state.token = null;
     window.state.currentUser = null;
@@ -362,6 +371,14 @@
     window.state.magazzinoHighlightOrderId = null;
     window.state.magazzinoUndoStack = [];
     window.state.magazzinoResidualLog = [];
+    window.state.messagesInbox = [];
+    window.state.messagesSent = [];
+    window.state.messagesUnreadCount = 0;
+    window.state.messagesRecent = [];
+    window.state.messagesCurrentBox = 'inbox';
+    window.state.messagesSelectedId = null;
+    window.state.messagesLoaded = false;
+    window.state.messagesPoller = null;
     window.state.topbarNotifications = [];
     window.state.orderNotificationSeenId = 0;
     window.state.orderNotificationPoller = null;
@@ -462,6 +479,7 @@
       window.renderMagazzino();
     }
     if (page === 'giacenze') window.renderGiacenzePage();
+    if (page === 'messaggi') window.renderMessaggiPage();
     if (page === 'tentata') window.renderTentataPage();
     if (page === 'piano') window.renderPianoPage();
     if (page === 'ferie') window.renderFeriePage();

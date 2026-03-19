@@ -821,6 +821,21 @@ async function createSchema() {
       ts         TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS messaggi_interni (
+      id                SERIAL PRIMARY KEY,
+      mittente_id       INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      mittente_nome     TEXT NOT NULL,
+      destinatario_tipo TEXT NOT NULL CHECK(destinatario_tipo IN ('user','role')),
+      destinatario_user_id INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      destinatario_ruolo TEXT,
+      oggetto           TEXT DEFAULT '',
+      testo             TEXT NOT NULL,
+      ordine_id         INTEGER REFERENCES ordini(id) ON DELETE SET NULL,
+      cliente_id        INTEGER REFERENCES clienti(id) ON DELETE SET NULL,
+      letto_at          TIMESTAMPTZ,
+      created_at        TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS clienti_onboarding_log (
       id          SERIAL PRIMARY KEY,
       cliente_id  INTEGER NOT NULL REFERENCES clienti(id) ON DELETE CASCADE,
@@ -982,6 +997,9 @@ async function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_ordini_cliente ON ordini(cliente_id);
     CREATE INDEX IF NOT EXISTS idx_linee_ordine   ON ordine_linee(ordine_id);
     CREATE INDEX IF NOT EXISTS idx_activity_ts    ON activity_log(ts);
+    CREATE INDEX IF NOT EXISTS idx_messaggi_dest_user_created ON messaggi_interni(destinatario_user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_messaggi_dest_role_created ON messaggi_interni(destinatario_ruolo, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_messaggi_letto ON messaggi_interni(letto_at, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_listini_prod_cliente ON listini(prodotto_id,cliente_id);
     CREATE INDEX IF NOT EXISTS idx_listini_validita ON listini(valido_dal,valido_al);
     CREATE INDEX IF NOT EXISTS idx_rese_fornitore_created ON rese_fornitori(fornitore_id, created_at DESC);
@@ -1521,6 +1539,42 @@ async function logDB(userId, userName, action, detail = '') {
     );
   } catch(e) { /* non bloccare */ }
 }
+
+function getMessaggiInboxWhere(reqUser, startIndex = 1) {
+  return {
+    clause: `((m.destinatario_tipo='user' AND m.destinatario_user_id=$${startIndex}) OR (m.destinatario_tipo='role' AND m.destinatario_ruolo=$${startIndex + 1}))`,
+    params: [reqUser.id || null, String(reqUser.ruolo || '')],
+  };
+}
+
+function normalizeMessaggioRow(row = {}) {
+  return {
+    id: row.id,
+    mittente_id: row.mittente_id || null,
+    mittente_nome: row.mittente_nome || '',
+    destinatario_tipo: row.destinatario_tipo || 'user',
+    destinatario_user_id: row.destinatario_user_id || null,
+    destinatario_ruolo: row.destinatario_ruolo || '',
+    destinatario_nome: row.destinatario_nome || '',
+    oggetto: row.oggetto || '',
+    testo: row.testo || '',
+    ordine_id: row.ordine_id || null,
+    cliente_id: row.cliente_id || null,
+    cliente_nome: row.cliente_nome || '',
+    letto_at: row.letto_at || null,
+    created_at: row.created_at || null,
+  };
+}
+
+const zMessaggioCreate = z.object({
+  destinatario_tipo: z.enum(['user', 'role']),
+  destinatario_user_id: z.coerce.number().int().positive().optional().nullable(),
+  destinatario_ruolo: z.string().trim().optional().nullable(),
+  oggetto: z.string().trim().max(120).optional().default(''),
+  testo: z.string().trim().min(1).max(4000),
+  ordine_id: z.coerce.number().int().positive().optional().nullable(),
+  cliente_id: z.coerce.number().int().positive().optional().nullable(),
+});
 
 // ─── AUTH ────────────────────────────────────────────────────────
 function authMiddleware(req, res, next) {
@@ -4799,6 +4853,145 @@ app.get('/api/notifiche/ordini', authMiddleware, async (req, res) => {
       [limit]
     );
     res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/messaggi', authMiddleware, async (req, res) => {
+  try {
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 80));
+    const inboxWhere = getMessaggiInboxWhere(req.user, 1);
+    const inboxSql = `
+      SELECT m.*,
+             c.nome AS cliente_nome,
+             COALESCE(du.nome || ' ' || COALESCE(du.cognome,''), '') AS destinatario_nome
+        FROM messaggi_interni m
+        LEFT JOIN clienti c ON c.id = m.cliente_id
+        LEFT JOIN utenti du ON du.id = m.destinatario_user_id
+       WHERE ${inboxWhere.clause}
+       ORDER BY m.created_at DESC
+       LIMIT $3`;
+    const sentSql = `
+      SELECT m.*,
+             c.nome AS cliente_nome,
+             COALESCE(du.nome || ' ' || COALESCE(du.cognome,''), '') AS destinatario_nome
+        FROM messaggi_interni m
+        LEFT JOIN clienti c ON c.id = m.cliente_id
+        LEFT JOIN utenti du ON du.id = m.destinatario_user_id
+       WHERE m.mittente_id = $1
+       ORDER BY m.created_at DESC
+       LIMIT $2`;
+    const unreadSql = `
+      SELECT COUNT(*)::int AS unread_count
+        FROM messaggi_interni m
+       WHERE ${inboxWhere.clause}
+         AND m.letto_at IS NULL`;
+    const [inbox, sent, unread] = await Promise.all([
+      q(inboxSql, [...inboxWhere.params, limit]),
+      q(sentSql, [req.user.id || null, limit]),
+      q(unreadSql, inboxWhere.params),
+    ]);
+    res.json({
+      inbox: inbox.rows.map(normalizeMessaggioRow),
+      sent: sent.rows.map(normalizeMessaggioRow),
+      unread_count: unread.rows[0]?.unread_count || 0,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/messaggi/summary', authMiddleware, async (req, res) => {
+  try {
+    const inboxWhere = getMessaggiInboxWhere(req.user, 1);
+    const [recent, unread] = await Promise.all([
+      q(
+        `SELECT m.id, m.mittente_nome, m.oggetto, m.testo, m.ordine_id, m.cliente_id, m.letto_at, m.created_at
+           FROM messaggi_interni m
+          WHERE ${inboxWhere.clause}
+          ORDER BY m.created_at DESC
+          LIMIT 6`,
+        inboxWhere.params
+      ),
+      q(
+        `SELECT COUNT(*)::int AS unread_count
+           FROM messaggi_interni m
+          WHERE ${inboxWhere.clause}
+            AND m.letto_at IS NULL`,
+        inboxWhere.params
+      ),
+    ]);
+    res.json({
+      unread_count: unread.rows[0]?.unread_count || 0,
+      recent: recent.rows.map(normalizeMessaggioRow),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/messaggi', authMiddleware, async (req, res) => {
+  try {
+    const parsed = zMessaggioCreate.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const payload = parsed.data;
+    const mittenteNome = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || 'Utente';
+    if (payload.destinatario_tipo === 'user') {
+      if (!payload.destinatario_user_id) return res.status(400).json({ error: 'Destinatario utente obbligatorio' });
+      const { rows } = await q('SELECT id FROM utenti WHERE id=$1 LIMIT 1', [payload.destinatario_user_id]);
+      if (!rows.length) return res.status(400).json({ error: 'Utente destinatario non trovato' });
+    } else {
+      const ruolo = String(payload.destinatario_ruolo || '').trim();
+      if (!APP_ROLES.includes(ruolo)) return res.status(400).json({ error: 'Ruolo destinatario non valido' });
+    }
+    if (payload.ordine_id) {
+      const { rows } = await q('SELECT id FROM ordini WHERE id=$1 LIMIT 1', [payload.ordine_id]);
+      if (!rows.length) return res.status(400).json({ error: 'Ordine collegato non trovato' });
+    }
+    if (payload.cliente_id) {
+      const { rows } = await q('SELECT id FROM clienti WHERE id=$1 LIMIT 1', [payload.cliente_id]);
+      if (!rows.length) return res.status(400).json({ error: 'Cliente collegato non trovato' });
+    }
+    const inserted = await q(
+      `INSERT INTO messaggi_interni
+         (mittente_id, mittente_nome, destinatario_tipo, destinatario_user_id, destinatario_ruolo, oggetto, testo, ordine_id, cliente_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING *`,
+      [
+        req.user.id || null,
+        mittenteNome,
+        payload.destinatario_tipo,
+        payload.destinatario_tipo === 'user' ? payload.destinatario_user_id || null : null,
+        payload.destinatario_tipo === 'role' ? String(payload.destinatario_ruolo || '').trim() : null,
+        String(payload.oggetto || '').trim(),
+        String(payload.testo || '').trim(),
+        payload.ordine_id || null,
+        payload.cliente_id || null,
+      ]
+    );
+    await logDB(req.user.id, mittenteNome, 'Messaggio interno', inserted.rows[0].oggetto || `messaggio #${inserted.rows[0].id}`);
+    res.json(normalizeMessaggioRow(inserted.rows[0]));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/messaggi/:id/read', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Messaggio non valido' });
+    const inboxWhere = getMessaggiInboxWhere(req.user, 2);
+    const result = await q(
+      `UPDATE messaggi_interni m
+          SET letto_at = COALESCE(letto_at, NOW())
+        WHERE m.id = $1
+          AND ${inboxWhere.clause}
+        RETURNING m.id, m.letto_at`,
+      [id, ...inboxWhere.params]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Messaggio non trovato' });
+    res.json({ ok: true, id: result.rows[0].id, letto_at: result.rows[0].letto_at });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

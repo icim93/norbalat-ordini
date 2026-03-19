@@ -266,6 +266,22 @@
   .topbar-notify-title { font-size:13px; color: var(--text1); line-height:1.35; }
   .topbar-notify-meta { font-size:11px; color: var(--text3); margin-top:4px; }
   .topbar-notify-empty { padding:16px 14px; font-size:13px; color:var(--text2); }
+  .topbar-msg-btn {
+    position: relative;
+    background: rgba(220,238,250,0.12);
+    border: 1px solid rgba(220,238,250,0.28);
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    color: #e4f2fb;
+    transition: all 0.2s;
+  }
+  .topbar-msg-btn:hover {
+    background: rgba(220,238,250,0.2);
+    border-color: rgba(220,238,250,0.42);
+  }
 
   .app-layout { display: flex; min-height: calc(100vh - 60px); }
 
@@ -1810,6 +1826,9 @@
     #page-profilo > div[style*="max-width:800px"] > div[style*="display:grid;grid-template-columns:1fr 1fr"] {
       grid-template-columns: 1fr !important;
     }
+    .messaggi-layout {
+      grid-template-columns: 1fr;
+    }
     .profile-layout {
       grid-template-columns: 1fr;
     }
@@ -1989,6 +2008,12 @@
     border-color: var(--accent);
     font-weight: 700;
   }
+  .messaggi-layout {
+    display:grid;
+    grid-template-columns:minmax(320px,380px) minmax(0,1fr);
+    gap:16px;
+    align-items:start;
+  }
 </style>
 </head>
 <body>
@@ -2037,6 +2062,10 @@
     <div class="topbar-user">
       <span id="topbar-username" style="font-size:14px;font-weight:500;color:#c8dff0;"></span>
       <span id="topbar-role" class="topbar-role"></span>
+      <button class="topbar-msg-btn" onclick="goTo('messaggi')" aria-label="Messaggi interni">
+        Messaggi
+        <span class="topbar-notify-badge" id="topbar-msg-badge"></span>
+      </button>
       <div class="topbar-notify-wrap" id="topbar-notify-wrap">
         <button class="topbar-notify" id="topbar-notify-btn" onclick="toggleTopbarNotifications()" aria-label="Notifiche ordini">
           Notifiche
@@ -2684,6 +2713,77 @@
         </div>
 
         <div id="tentata-rientro-container"></div>
+      </div>
+
+      <div class="page" id="page-messaggi">
+        <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div class="page-title">Messaggi Interni</div>
+            <div class="page-sub" id="messaggi-sub">Inbox personale e invio a utente o ruolo</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" onclick="loadMessaggiPageData()">Aggiorna</button>
+          </div>
+        </div>
+        <div class="messaggi-layout">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Nuovo messaggio</div></div>
+            <div style="padding:0 16px 16px;">
+              <div class="field">
+                <label>Destinazione</label>
+                <select id="msg-dest-type" onchange="renderMessaggiComposeDestinations()">
+                  <option value="user">Utente singolo</option>
+                  <option value="role">Ruolo / reparto</option>
+                </select>
+              </div>
+              <div class="field" id="msg-dest-user-wrap">
+                <label>Utente</label>
+                <select id="msg-dest-user"></select>
+              </div>
+              <div class="field" id="msg-dest-role-wrap" style="display:none;">
+                <label>Ruolo</label>
+                <select id="msg-dest-role"></select>
+              </div>
+              <div class="field">
+                <label>Oggetto</label>
+                <input type="text" id="msg-subject" maxlength="120" placeholder="Oggetto breve">
+              </div>
+              <div class="field">
+                <label>Messaggio</label>
+                <textarea id="msg-body" rows="6" placeholder="Scrivi qui il messaggio"></textarea>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="field">
+                  <label>Ordine collegato</label>
+                  <input type="number" id="msg-order-id" min="1" placeholder="es. 123">
+                </div>
+                <div class="field">
+                  <label>Cliente collegato</label>
+                  <select id="msg-client-id"></select>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;">
+                <button class="btn btn-green" onclick="sendInternalMessage()">Invia messaggio</button>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="card">
+              <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                <div class="card-title">Inbox</div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <button class="tab-btn active" id="msg-tab-inbox" onclick="setMessaggiBox('inbox')">Ricevuti</button>
+                  <button class="tab-btn" id="msg-tab-sent" onclick="setMessaggiBox('sent')">Inviati</button>
+                </div>
+              </div>
+              <div id="messaggi-list" style="padding:0 16px 16px;"></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">Dettaglio messaggio</div></div>
+              <div id="messaggi-detail" style="padding:0 16px 16px;font-size:13px;color:var(--text2);">Seleziona un messaggio per leggere il contenuto.</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ─── PAGE: Report ─── -->
@@ -4238,6 +4338,14 @@ let state = {
   pianoData: '',
   giriCalendario: [],
   activityLog: [],
+  messagesInbox: [],
+  messagesSent: [],
+  messagesUnreadCount: 0,
+  messagesRecent: [],
+  messagesCurrentBox: 'inbox',
+  messagesSelectedId: null,
+  messagesLoaded: false,
+  messagesPoller: null,
   topbarNotifications: [],
   orderNotificationSeenId: 0,
   orderNotificationPoller: null,
@@ -4400,6 +4508,8 @@ async function loadAllData() {
     // Alerts giacenze
     state.giacenzeAlerts = await api('GET', '/api/giacenze/alerts').catch(() => ({ sotto_soglia: [], in_scadenza: [] }));
     if (typeof loadCrmSummary === 'function') await loadCrmSummary();
+    if (typeof loadMessaggiSummary === 'function') await loadMessaggiSummary();
+    if (typeof startMessaggiPolling === 'function') startMessaggiPolling();
     if (typeof loadTopbarNotifications === 'function') await loadTopbarNotifications();
     if (typeof startTopbarNotificationPolling === 'function') startTopbarNotificationPolling();
     if (typeof refreshNavBadges === 'function') refreshNavBadges();
@@ -9462,6 +9572,7 @@ function renderGiacenzeAlerts() {
 <script src="/js/modules/rese-ui.js"></script>
 <script src="/js/modules/crm.js"></script>
 <script src="/js/modules/documenti-ui.js"></script>
+<script src="/js/modules/messaggi-ui.js"></script>
 <script src="/js/modules/help-assistant.js"></script>
 <script>
 function updateEsitoConsegnaFields() {
