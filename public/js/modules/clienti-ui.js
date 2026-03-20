@@ -65,6 +65,9 @@ function renderClientiTable() {
     sospeso: 'badge-red',
   };
   const canManageOnboarding = canApproveOnboarding();
+  const ruolo = state.currentUser?.ruolo;
+  const canEditCliente = ['admin', 'amministrazione', 'direzione'].includes(ruolo);
+  const canDeleteCliente = ruolo === 'admin';
 
   if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">-</div><p>Nessun cliente trovato</p></div></td></tr>';
@@ -117,8 +120,8 @@ function renderClientiTable() {
           ${canManageOnboarding ? `<button class="btn btn-danger btn-sm" title="Rifiuta onboarding" aria-label="Rifiuta onboarding" onclick="setClienteOnboardingStatus(${c.id},'rifiutato')">Rifiuta</button>` : ''}
           ${canManageOnboarding ? `<button class="btn btn-orange btn-sm" title="Sospendi onboarding" aria-label="Sospendi onboarding" onclick="setClienteOnboardingStatus(${c.id},'sospeso')">Sospendi</button>` : ''}
           <button class="btn btn-outline btn-sm" title="Apri CRM cliente" aria-label="Apri CRM cliente" onclick="openCrmCliente(${c.id})">CRM</button>
-          <button class="btn btn-outline btn-sm" title="Modifica cliente" aria-label="Modifica cliente" onclick="openEditCliente(${c.id})">Mod</button>
-          <button class="btn btn-danger btn-sm" title="Elimina cliente" aria-label="Elimina cliente" onclick="deleteCliente(${c.id})">Del</button>
+          ${canEditCliente ? `<button class="btn btn-outline btn-sm" title="Modifica cliente" aria-label="Modifica cliente" onclick="openEditCliente(${c.id})">Mod</button>` : ''}
+          ${canDeleteCliente ? `<button class="btn btn-danger btn-sm" title="Elimina cliente" aria-label="Elimina cliente" onclick="deleteCliente(${c.id})">Del</button>` : ''}
         </div>
       </td>
     </tr>`;

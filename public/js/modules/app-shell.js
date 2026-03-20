@@ -94,6 +94,7 @@
     ],
     direzione: [
       { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
+      { page: 'clienti', icon: '🏢', label: 'Clienti' },
       { page: 'ferie', icon: '🌴', label: 'Ferie' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
