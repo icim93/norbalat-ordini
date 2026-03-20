@@ -1018,6 +1018,8 @@ async function createSchema() {
       created_by        INTEGER REFERENCES utenti(id) ON DELETE SET NULL
     );
 
+    ALTER TABLE messaggi_interni ADD COLUMN IF NOT EXISTS conversation_id INTEGER REFERENCES messaggi_conversazioni(id) ON DELETE CASCADE;
+
     CREATE INDEX IF NOT EXISTS idx_ordini_data    ON ordini(data);
     CREATE INDEX IF NOT EXISTS idx_ordini_stato   ON ordini(stato);
     CREATE INDEX IF NOT EXISTS idx_ordini_agente  ON ordini(agente_id);
@@ -1096,7 +1098,6 @@ async function createSchema() {
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS stato_cliente TEXT DEFAULT '';
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS followup_date DATE;
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS priorita TEXT DEFAULT 'media';
-    ALTER TABLE messaggi_interni ADD COLUMN IF NOT EXISTS conversation_id INTEGER REFERENCES messaggi_conversazioni(id) ON DELETE CASCADE;
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_nome TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_mime TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_data BYTEA;
