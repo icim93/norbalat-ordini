@@ -2065,6 +2065,18 @@ const zPreparazioneLineaPayload = z.object({
   lotto: z.string().max(120).optional(),
 });
 
+const zOrdineLineaCreatePayload = z.object({
+  prodotto_id: z.coerce.number().int().positive().nullable().optional().default(null),
+  prodotto_nome_libero: z.string().max(255).optional().default(''),
+  qty: z.coerce.number().positive(),
+  qty_base: z.coerce.number().positive().nullable().optional().default(null),
+  prezzo_unitario: z.coerce.number().nullable().optional().default(null),
+  is_pedana: z.coerce.boolean().optional().default(false),
+  nota_riga: z.string().max(1000).optional().default(''),
+  unita_misura: z.string().max(40).optional().default('pezzi'),
+  lotto: z.string().max(120).optional().default(''),
+});
+
 const zChiudiGiornataPayload = z.object({
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   giro: z.string().max(120).optional().default(''),
@@ -4229,6 +4241,66 @@ app.delete('/api/ordini/:ordineId/linee/:lineaId', authMiddleware, requireRole('
     }
     await client.query('COMMIT');
     res.json({ ok: true, ordine_annullato: ordineAnnullato });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/ordini/:ordineId/linee', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const ordineId = parseInt(req.params.ordineId, 10);
+    const parsed = zOrdineLineaCreatePayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const body = parsed.data;
+    await client.query('BEGIN');
+    const { rows: ordRows } = await client.query(
+      `SELECT id, stato
+         FROM ordini
+        WHERE id = $1
+        FOR UPDATE`,
+      [ordineId]
+    );
+    if (!ordRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Ordine non trovato' });
+    }
+    const ordine = ordRows[0];
+    if (!['attesa', 'preparazione', 'preparato'].includes(String(ordine.stato || ''))) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Non puoi aggiungere righe a questo ordine' });
+    }
+    if (!body.prodotto_id && !String(body.prodotto_nome_libero || '').trim()) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Prodotto obbligatorio' });
+    }
+    const inserted = await client.query(
+      `INSERT INTO ordine_linee
+        (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10)
+       RETURNING *`,
+      [
+        ordineId,
+        body.prodotto_id || null,
+        String(body.prodotto_nome_libero || '').trim(),
+        body.qty,
+        body.qty_base ?? null,
+        body.prezzo_unitario ?? null,
+        !!body.is_pedana,
+        String(body.nota_riga || '').trim(),
+        String(body.unita_misura || 'pezzi').trim() || 'pezzi',
+        String(body.lotto || '').trim(),
+      ]
+    );
+    if (String(ordine.stato || '') === 'attesa') {
+      await client.query(`UPDATE ordini SET stato='preparazione', updated_at=NOW() WHERE id=$1`, [ordineId]);
+    }
+    await client.query('COMMIT');
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Aggiunta riga preparazione', `ordine #${ordineId}`);
+    res.json(inserted.rows[0]);
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     res.status(500).json({ error: e.message });

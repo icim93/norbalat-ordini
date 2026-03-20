@@ -2544,6 +2544,16 @@
           </div>
         </div>
 
+        <div class="card" id="autista-bulk-toolbar" style="margin-bottom:16px;display:none;padding:12px 14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div id="autista-bulk-count" style="font-size:13px;color:var(--text2);font-weight:700;"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-outline btn-sm" onclick="clearAutistaSelection()">Deseleziona</button>
+              <button class="btn btn-green btn-sm" onclick="bulkConfermaConsegnaAutista()">Conferma scarico selezionati</button>
+            </div>
+          </div>
+        </div>
+
         <div class="mobile-view" id="autista-orders"></div>
 
 
@@ -3909,6 +3919,43 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-preparazione-add-linea">
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Aggiungi riga ordine</div>
+        <div id="prep-add-line-subtitle" style="font-size:12px;color:var(--text2);margin-top:4px;"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-preparazione-add-linea')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="prep-add-line-ordine-id">
+      <div class="form-row">
+        <div class="field form-full">
+          <label>Prodotto</label>
+          <select id="prep-add-line-prod" onchange="refreshPreparazioneNuovaLineaUnits()"></select>
+        </div>
+        <div class="field">
+          <label>Quantità</label>
+          <input type="number" id="prep-add-line-qty" min="0.01" step="0.01" value="1">
+        </div>
+        <div class="field">
+          <label>Unità</label>
+          <select id="prep-add-line-um"></select>
+        </div>
+        <div class="field form-full">
+          <label>Nota riga</label>
+          <input type="text" id="prep-add-line-note" placeholder="Opzionale">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-preparazione-add-linea')">Annulla</button>
+      <button class="btn btn-green" onclick="submitPreparazioneNuovaLinea()">Aggiungi riga</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Utente -->
 <div class="modal-overlay" id="modal-utente">
   <div class="modal" style="max-width:540px;">
@@ -4484,6 +4531,7 @@ let state = {
   magazzinoHighlightOrderId: null,
   magazzinoUndoStack: [],
 };
+let autistaSelectedOrders = new Set();
 window.state = state;
 
 function canApproveOnboarding() {
@@ -5090,6 +5138,8 @@ function renderAutistaView() {
   const container = document.getElementById('autista-orders');
   refreshDailyClosureSummary();
   if (!ordini.length) {
+    autistaSelectedOrders.clear();
+    updateAutistaBulkToolbar();
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">🎉</div><p>Nessun ordine assegnato per ${formatDate(t)}.</p></div>`;
     return;
   }
@@ -5100,9 +5150,13 @@ function renderAutistaView() {
     return (rank[a.stato]||0) - (rank[b.stato]||0);
   });
 
+  syncAutistaSelection(sorted.map(o => o.id));
   container.innerHTML = sorted.map(o => {
     const c = getCliente(o.clienteId);
     const isConsegnato = o.stato === 'consegnato';
+    const isTentata = typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c);
+    const canSelect = o.stato === 'preparato' && !isTentata;
+    const checked = autistaSelectedOrders.has(Number(o.id)) ? 'checked' : '';
     return `
     <div class="mobile-order-card" style="${isConsegnato ? 'opacity:0.65;' : ''}">
       <div class="mob-header">
@@ -5115,6 +5169,13 @@ function renderAutistaView() {
           <div class="mob-time" style="margin-top:4px;">#${o.id}</div>
         </div>
       </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:${canSelect ? 'var(--text2)' : 'var(--text3)'};">
+          <input type="checkbox" ${checked} ${canSelect ? '' : 'disabled'} onchange="toggleAutistaOrderSelection(${o.id}, this.checked)" style="width:16px;height:16px;accent-color:var(--accent);">
+          Seleziona
+        </label>
+        ${canSelect ? '<span style="font-size:11px;color:var(--text3);">Scarico rapido</span>' : ''}
+      </div>
       <div class="mob-lines">
         ${o.linee.map(l => {
           const p = l.prodId ? getProdotto(l.prodId) : null;
@@ -5125,19 +5186,74 @@ function renderAutistaView() {
       </div>
       ${o.note ? `<div style="font-size:12px;color:var(--text2);padding:6px 8px;background:var(--surface2);border-radius:6px;margin-bottom:8px;">📝 ${o.note}</div>` : ''}
       <div class="mob-actions">
-        ${o.stato === 'preparato'
-          ? `<button class="btn btn-green" onclick="openEsitoConsegna(${o.id})">✅ Esito consegna</button>`
+        ${o.stato === 'preparato' && !isTentata
+          ? `<button class="btn btn-green" onclick="consegnaDirettaAutista(${o.id})">Consegnato</button>`
           : `<button class="btn btn-outline" ${isConsegnato ? 'disabled style="opacity:0.5;"' : 'disabled style="opacity:0.5;"'}>${isConsegnato ? '✅ Consegnato' : '⏳ Non pronto'}</button>`
         }
+        ${o.stato === 'preparato' && !isTentata ? `<button class="btn btn-outline" onclick="openEsitoConsegna(${o.id}, 'failed')">Non scaricato</button>` : ''}
         <button class="btn btn-outline" onclick="openDettaglio(${o.id})">👁️ Dettagli</button>
         <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id})" title="Elimina ordine">🗑️</button>
       </div>
     </div>`;
   }).join('');
+  updateAutistaBulkToolbar();
 }
 
 async function confermaConsegnaRapida(id) {
   return openEsitoConsegna(id);
+}
+
+function syncAutistaSelection(validIds) {
+  const allowed = new Set((validIds || []).map(Number));
+  autistaSelectedOrders = new Set([...autistaSelectedOrders].filter(id => allowed.has(Number(id))));
+}
+
+function toggleAutistaOrderSelection(orderId, checked) {
+  if (checked) autistaSelectedOrders.add(Number(orderId));
+  else autistaSelectedOrders.delete(Number(orderId));
+  updateAutistaBulkToolbar();
+}
+
+function clearAutistaSelection() {
+  autistaSelectedOrders.clear();
+  renderAutistaView();
+}
+
+function updateAutistaBulkToolbar() {
+  const card = document.getElementById('autista-bulk-toolbar');
+  const count = document.getElementById('autista-bulk-count');
+  if (!card || !count) return;
+  const total = autistaSelectedOrders.size;
+  card.style.display = total ? 'block' : 'none';
+  count.textContent = total ? `${total} ordine${total !== 1 ? 'i' : ''} selezionato${total !== 1 ? 'i' : ''}` : '';
+}
+
+async function consegnaDirettaAutista(orderId) {
+  try {
+    await api('POST', `/api/ordini/${orderId}/esito-consegna`, { outcome: 'delivered', note: '' });
+    autistaSelectedOrders.delete(Number(orderId));
+    await loadAllData();
+    renderAutistaView();
+    showToast('Ordine consegnato', 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore conferma scarico', 'warning');
+  }
+}
+
+async function bulkConfermaConsegnaAutista() {
+  const ids = [...autistaSelectedOrders];
+  if (!ids.length) return;
+  let ok = 0;
+  for (const id of ids) {
+    try {
+      await api('POST', `/api/ordini/${id}/esito-consegna`, { outcome: 'delivered', note: '' });
+      ok++;
+    } catch (_) { /* continua */ }
+  }
+  autistaSelectedOrders.clear();
+  await loadAllData();
+  renderAutistaView();
+  showToast(`${ok} ordine${ok !== 1 ? 'i' : ''} scaricato${ok !== 1 ? 'i' : ''}`, ok ? 'success' : 'warning');
 }
 
 // ═══════════════════════════════════════════════
@@ -5995,7 +6111,10 @@ function renderMagazzino() {
           ? `<span style="font-size:12px;color:var(--accent);margin-top:4px;">Completato</span>`
           : !inPrep
             ? `<button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="setOrdinePrepara(${o.id})">Preso in carico</button>`
-            : `<button class="btn btn-green btn-sm" data-pronto-ordine="${o.id}" ${prontoDisabled} style="${prontoStyle}" onclick="markOrdinePreparato(${o.id})">Caricato</button>`
+            : `<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+                <button class="btn btn-outline btn-sm" onclick="openPreparazioneNuovaLinea(${o.id})">+ Riga</button>
+                <button class="btn btn-green btn-sm" data-pronto-ordine="${o.id}" ${prontoDisabled} style="${prontoStyle}" onclick="markOrdinePreparato(${o.id})">Caricato</button>
+              </div>`
         }
       </div>
     </div>`;
@@ -6502,9 +6621,9 @@ function renderDailyClosureSummaryBox(summary) {
 
 async function refreshDailyClosureSummary() {
   try {
-    const data = document.getElementById('filter-magazzino-data')?.value
-      || document.getElementById('autista-data')?.value
-      || today();
+    const data = state.currentPage === 'autista'
+      ? (document.getElementById('autista-data')?.value || today())
+      : (document.getElementById('filter-magazzino-data')?.value || document.getElementById('autista-data')?.value || today());
     const summary = await api('GET', `/api/chiusure-giornata/summary?data=${encodeURIComponent(data)}`);
     state.dailyClosureSummary = summary;
     renderDailyClosureSummaryBox(summary);
@@ -7233,6 +7352,74 @@ async function deleteLineaOrdinePreparazione(ordineId, lineIdx) {
     showToast('Riga eliminata', 'success');
   } catch (e) {
     showToast(e.message || 'Errore eliminazione riga', 'warning');
+  }
+}
+
+function refreshPreparazioneNuovaLineaUnits() {
+  const prodottoId = parseInt(document.getElementById('prep-add-line-prod')?.value || '0', 10) || null;
+  const umSel = document.getElementById('prep-add-line-um');
+  if (!umSel) return;
+  const prodotto = prodottoId ? getProdotto(prodottoId) : null;
+  const units = prodotto && typeof getProductOrderUnits === 'function' ? getProductOrderUnits(prodotto) : ['Pezzi'];
+  umSel.innerHTML = units.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+}
+
+function openPreparazioneNuovaLinea(ordineId) {
+  const ordine = state.ordini.find(o => Number(o.id) === Number(ordineId));
+  if (!ordine) return;
+  const cliente = getCliente(ordine.clienteId);
+  const prodSel = document.getElementById('prep-add-line-prod');
+  if (!prodSel) return;
+  prodSel.innerHTML = '<option value="">- Seleziona prodotto -</option>' + [...state.prodotti]
+    .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' }))
+    .map(p => `<option value="${p.id}">[${escapeHtml(p.codice || '')}] ${escapeHtml(p.nome || '')}</option>`)
+    .join('');
+  document.getElementById('prep-add-line-ordine-id').value = String(ordineId);
+  document.getElementById('prep-add-line-subtitle').textContent = `Ordine #${ordine.id} - ${cliente.nome}`;
+  document.getElementById('prep-add-line-qty').value = '1';
+  document.getElementById('prep-add-line-note').value = '';
+  refreshPreparazioneNuovaLineaUnits();
+  openModal('modal-preparazione-add-linea');
+}
+
+async function submitPreparazioneNuovaLinea() {
+  const ordineId = parseInt(document.getElementById('prep-add-line-ordine-id')?.value || '0', 10);
+  const prodottoId = parseInt(document.getElementById('prep-add-line-prod')?.value || '0', 10) || null;
+  const qty = Number(document.getElementById('prep-add-line-qty')?.value || 0);
+  const unitaMisura = document.getElementById('prep-add-line-um')?.value || '';
+  const notaRiga = (document.getElementById('prep-add-line-note')?.value || '').trim();
+  const prodotto = prodottoId ? getProdotto(prodottoId) : null;
+  if (!ordineId || !prodottoId || !prodotto) {
+    showToast('Seleziona un prodotto', 'warning');
+    return;
+  }
+  if (!Number.isFinite(qty) || qty <= 0) {
+    showToast('Quantità non valida', 'warning');
+    return;
+  }
+  const qtyBase = typeof getKgPerSelectedUnita === 'function'
+    ? (() => {
+        const factor = getKgPerSelectedUnita(prodotto, unitaMisura);
+        if (Number.isFinite(factor) && factor > 0) return Math.round(qty * factor * 100) / 100;
+        if (String(unitaMisura || '').toLowerCase() === String(prodotto.um || '').toLowerCase()) return qty;
+        return null;
+      })()
+    : null;
+  try {
+    await api('POST', `/api/ordini/${ordineId}/linee`, {
+      prodotto_id: prodottoId,
+      qty,
+      qty_base: qtyBase,
+      unita_misura: unitaMisura,
+      is_pedana: String(unitaMisura || '').toLowerCase() === 'pedana',
+      nota_riga: notaRiga,
+    });
+    await reloadOrdineState(ordineId);
+    closeModal('modal-preparazione-add-linea');
+    renderMagazzino();
+    showToast('Riga aggiunta all\'ordine', 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore aggiunta riga', 'warning');
   }
 }
 
@@ -9700,6 +9887,10 @@ function openEsitoConsegna(id, forcedOutcome = '') {
     return;
   }
   const cliente = getCliente(ordine.clienteId);
+  if ((forcedOutcome === '' || forcedOutcome === 'delivered') && typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(cliente)) {
+    showToast('Per tentata vendita non usare conferma consegna', 'warning');
+    return;
+  }
   document.getElementById('esito-consegna-ordine-id').value = String(id);
   document.getElementById('esito-consegna-subtitle').textContent = `Ordine #${ordine.id} - ${cliente?.nome || 'Cliente'}`;
   document.getElementById('esito-consegna-outcome').value = forcedOutcome || 'delivered';
@@ -9806,9 +9997,10 @@ function openDettaglio(id) {
 
   const footer = document.getElementById('det-footer');
   const canEsito = o.stato === 'preparato';
+  const isTentata = typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c);
   footer.innerHTML = `
     <button class="btn btn-outline" onclick="closeModal('modal-dettaglio')">Chiudi</button>
-    ${canEsito ? `<button class="btn btn-green" onclick="openEsitoConsegna(${o.id})">Esito consegna</button>` : ''}
+    ${canEsito && !isTentata ? `<button class="btn btn-green" onclick="openEsitoConsegna(${o.id})">Esito consegna</button>` : ''}
     <button class="btn btn-orange" onclick="closeModal('modal-dettaglio');openEditOrder(${o.id})">Modifica</button>
   `;
 
