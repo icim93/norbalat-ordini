@@ -825,6 +825,7 @@ async function createSchema() {
       id                SERIAL PRIMARY KEY,
       mittente_id       INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
       mittente_nome     TEXT NOT NULL,
+      conversation_id   INTEGER,
       destinatario_tipo TEXT NOT NULL CHECK(destinatario_tipo IN ('user','role')),
       destinatario_user_id INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
       destinatario_ruolo TEXT,
@@ -834,6 +835,32 @@ async function createSchema() {
       cliente_id        INTEGER REFERENCES clienti(id) ON DELETE SET NULL,
       letto_at          TIMESTAMPTZ,
       created_at        TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS messaggi_conversazioni (
+      id                  SERIAL PRIMARY KEY,
+      created_by          INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      created_by_name     TEXT NOT NULL DEFAULT 'Utente',
+      destinatario_tipo   TEXT NOT NULL CHECK(destinatario_tipo IN ('user','role')),
+      destinatario_user_id INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      destinatario_ruolo  TEXT,
+      oggetto             TEXT DEFAULT '',
+      stato               TEXT NOT NULL DEFAULT 'nuovo' CHECK (stato IN ('nuovo','preso_in_carico','in_attesa','chiuso')),
+      priorita            TEXT NOT NULL DEFAULT 'media' CHECK (priorita IN ('bassa','media','alta','urgente')),
+      assegnato_user_id   INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      cliente_id          INTEGER REFERENCES clienti(id) ON DELETE SET NULL,
+      ordine_id           INTEGER REFERENCES ordini(id) ON DELETE SET NULL,
+      last_message_at     TIMESTAMPTZ DEFAULT NOW(),
+      closed_at           TIMESTAMPTZ,
+      created_at          TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS messaggi_conversazione_letture (
+      conversation_id      INTEGER NOT NULL REFERENCES messaggi_conversazioni(id) ON DELETE CASCADE,
+      user_id              INTEGER NOT NULL REFERENCES utenti(id) ON DELETE CASCADE,
+      last_read_message_id INTEGER REFERENCES messaggi_interni(id) ON DELETE SET NULL,
+      last_read_at         TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (conversation_id, user_id)
     );
 
     CREATE TABLE IF NOT EXISTS clienti_onboarding_log (
@@ -1000,6 +1027,11 @@ async function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_messaggi_dest_user_created ON messaggi_interni(destinatario_user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_messaggi_dest_role_created ON messaggi_interni(destinatario_ruolo, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_messaggi_letto ON messaggi_interni(letto_at, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_messaggi_conversation_created ON messaggi_interni(conversation_id, created_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_msg_conv_dest_user_last ON messaggi_conversazioni(destinatario_user_id, last_message_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_msg_conv_dest_role_last ON messaggi_conversazioni(destinatario_ruolo, last_message_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_msg_conv_created_by_last ON messaggi_conversazioni(created_by, last_message_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_msg_conv_assigned_last ON messaggi_conversazioni(assegnato_user_id, last_message_at DESC);
     CREATE INDEX IF NOT EXISTS idx_listini_prod_cliente ON listini(prodotto_id,cliente_id);
     CREATE INDEX IF NOT EXISTS idx_listini_validita ON listini(valido_dal,valido_al);
     CREATE INDEX IF NOT EXISTS idx_rese_fornitore_created ON rese_fornitori(fornitore_id, created_at DESC);
@@ -1064,6 +1096,7 @@ async function createSchema() {
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS stato_cliente TEXT DEFAULT '';
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS followup_date DATE;
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS priorita TEXT DEFAULT 'media';
+    ALTER TABLE messaggi_interni ADD COLUMN IF NOT EXISTS conversation_id INTEGER REFERENCES messaggi_conversazioni(id) ON DELETE CASCADE;
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_nome TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_mime TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_data BYTEA;
@@ -1542,29 +1575,64 @@ async function logDB(userId, userName, action, detail = '') {
 
 function getMessaggiInboxWhere(reqUser, startIndex = 1) {
   return {
-    clause: `((m.destinatario_tipo='user' AND m.destinatario_user_id=$${startIndex}) OR (m.destinatario_tipo='role' AND m.destinatario_ruolo=$${startIndex + 1}))`,
+    clause: `(
+      (${startIndex ? `m.destinatario_tipo='user' AND m.destinatario_user_id=$${startIndex}` : 'FALSE'})
+      OR (m.destinatario_tipo='role' AND m.destinatario_ruolo=$${startIndex + 1})
+      OR (m.assegnato_user_id=$${startIndex})
+    )`,
     params: [reqUser.id || null, String(reqUser.ruolo || '')],
+  };
+}
+
+function getMessaggiAccessWhere(reqUser, startIndex = 1) {
+  const inbox = getMessaggiInboxWhere(reqUser, startIndex);
+  return {
+    clause: `(${inbox.clause} OR m.created_by=$${startIndex})`,
+    params: inbox.params,
   };
 }
 
 function normalizeMessaggioRow(row = {}) {
   return {
     id: row.id,
+    conversation_id: row.conversation_id || null,
     mittente_id: row.mittente_id || null,
     mittente_nome: row.mittente_nome || '',
+    testo: row.testo || '',
+    created_at: row.created_at || null,
+  };
+}
+
+function normalizeMessaggioConversationRow(row = {}) {
+  return {
+    id: row.id,
+    created_by: row.created_by || null,
+    created_by_name: row.created_by_name || '',
     destinatario_tipo: row.destinatario_tipo || 'user',
     destinatario_user_id: row.destinatario_user_id || null,
     destinatario_ruolo: row.destinatario_ruolo || '',
     destinatario_nome: row.destinatario_nome || '',
     oggetto: row.oggetto || '',
-    testo: row.testo || '',
-    ordine_id: row.ordine_id || null,
+    stato: row.stato || 'nuovo',
+    priorita: row.priorita || 'media',
+    assegnato_user_id: row.assegnato_user_id || null,
+    assegnato_nome: row.assegnato_nome || '',
     cliente_id: row.cliente_id || null,
     cliente_nome: row.cliente_nome || '',
-    letto_at: row.letto_at || null,
+    ordine_id: row.ordine_id || null,
+    last_message_id: row.last_message_id || null,
+    last_message_text: row.last_message_text || '',
+    last_message_sender: row.last_message_sender || '',
+    last_message_at: row.last_message_at || row.created_at || null,
     created_at: row.created_at || null,
+    closed_at: row.closed_at || null,
+    unread: !!row.unread,
+    message_count: Number(row.message_count || 0),
   };
 }
+
+const zMessaggioPriority = z.enum(['bassa', 'media', 'alta', 'urgente']);
+const zMessaggioStatus = z.enum(['nuovo', 'preso_in_carico', 'in_attesa', 'chiuso']);
 
 const zMessaggioCreate = z.object({
   destinatario_tipo: z.enum(['user', 'role']),
@@ -1574,6 +1642,17 @@ const zMessaggioCreate = z.object({
   testo: z.string().trim().min(1).max(4000),
   ordine_id: z.coerce.number().int().positive().optional().nullable(),
   cliente_id: z.coerce.number().int().positive().optional().nullable(),
+  priorita: zMessaggioPriority.optional().default('media'),
+});
+
+const zMessaggioReply = z.object({
+  testo: z.string().trim().min(1).max(4000),
+});
+
+const zMessaggioConversationUpdate = z.object({
+  stato: zMessaggioStatus.optional(),
+  priorita: zMessaggioPriority.optional(),
+  assegnato_user_id: z.coerce.number().int().positive().optional().nullable(),
 });
 
 // ─── AUTH ────────────────────────────────────────────────────────
@@ -1639,6 +1718,166 @@ function hasFullDocumentAccess(role) {
 function normalizeAllowedRoles(raw) {
   const arr = Array.isArray(raw) ? raw : [];
   return [...new Set(arr.map(r => String(r || '').trim()).filter(r => APP_ROLES.includes(r)))];
+}
+
+function buildMessaggiConversationListSql(whereClause, userIdPlaceholder, limitPlaceholder) {
+  return `
+    WITH last_messages AS (
+      SELECT DISTINCT ON (m.conversation_id)
+             m.conversation_id,
+             m.id AS last_message_id,
+             m.mittente_nome AS last_message_sender,
+             m.testo AS last_message_text,
+             m.created_at AS last_message_at
+        FROM messaggi_interni m
+       WHERE m.conversation_id IS NOT NULL
+       ORDER BY m.conversation_id, m.created_at DESC, m.id DESC
+    ),
+    message_counts AS (
+      SELECT conversation_id, COUNT(*)::int AS message_count
+        FROM messaggi_interni
+       WHERE conversation_id IS NOT NULL
+       GROUP BY conversation_id
+    )
+    SELECT m.*,
+           c.nome AS cliente_nome,
+           COALESCE(du.nome || ' ' || COALESCE(du.cognome,''), '') AS destinatario_nome,
+           COALESCE(au.nome || ' ' || COALESCE(au.cognome,''), '') AS assegnato_nome,
+           lm.last_message_id,
+           lm.last_message_sender,
+           lm.last_message_text,
+           lm.last_message_at,
+           COALESCE(mc.message_count, 0) AS message_count,
+           CASE
+             WHEN lm.last_message_id IS NULL THEN FALSE
+             WHEN ml.last_read_message_id IS NULL THEN TRUE
+             ELSE ml.last_read_message_id < lm.last_message_id
+           END AS unread
+      FROM messaggi_conversazioni m
+      LEFT JOIN clienti c ON c.id = m.cliente_id
+      LEFT JOIN utenti du ON du.id = m.destinatario_user_id
+      LEFT JOIN utenti au ON au.id = m.assegnato_user_id
+      LEFT JOIN last_messages lm ON lm.conversation_id = m.id
+      LEFT JOIN message_counts mc ON mc.conversation_id = m.id
+      LEFT JOIN messaggi_conversazione_letture ml
+        ON ml.conversation_id = m.id
+       AND ml.user_id = $${userIdPlaceholder}
+     WHERE ${whereClause}
+     ORDER BY COALESCE(lm.last_message_at, m.last_message_at, m.created_at) DESC, m.id DESC
+     LIMIT $${limitPlaceholder}`;
+}
+
+async function getMessaggioConversationSummaryById(id, reqUser) {
+  const access = getMessaggiAccessWhere(reqUser, 2);
+  const sql = `
+    WITH last_messages AS (
+      SELECT DISTINCT ON (mi.conversation_id)
+             mi.conversation_id,
+             mi.id AS last_message_id,
+             mi.mittente_nome AS last_message_sender,
+             mi.testo AS last_message_text,
+             mi.created_at AS last_message_at
+        FROM messaggi_interni mi
+       WHERE mi.conversation_id IS NOT NULL
+       ORDER BY mi.conversation_id, mi.created_at DESC, mi.id DESC
+    ),
+    message_counts AS (
+      SELECT conversation_id, COUNT(*)::int AS message_count
+        FROM messaggi_interni
+       WHERE conversation_id IS NOT NULL
+       GROUP BY conversation_id
+    )
+    SELECT m.*,
+           c.nome AS cliente_nome,
+           COALESCE(du.nome || ' ' || COALESCE(du.cognome,''), '') AS destinatario_nome,
+           COALESCE(au.nome || ' ' || COALESCE(au.cognome,''), '') AS assegnato_nome,
+           lm.last_message_id,
+           lm.last_message_sender,
+           lm.last_message_text,
+           lm.last_message_at,
+           COALESCE(mc.message_count, 0) AS message_count,
+           CASE
+             WHEN lm.last_message_id IS NULL THEN FALSE
+             WHEN ml.last_read_message_id IS NULL THEN TRUE
+             ELSE ml.last_read_message_id < lm.last_message_id
+           END AS unread
+      FROM messaggi_conversazioni m
+      LEFT JOIN clienti c ON c.id = m.cliente_id
+      LEFT JOIN utenti du ON du.id = m.destinatario_user_id
+      LEFT JOIN utenti au ON au.id = m.assegnato_user_id
+      LEFT JOIN last_messages lm ON lm.conversation_id = m.id
+      LEFT JOIN message_counts mc ON mc.conversation_id = m.id
+      LEFT JOIN messaggi_conversazione_letture ml
+        ON ml.conversation_id = m.id
+       AND ml.user_id = $2
+     WHERE m.id = $1
+       AND ${access.clause}
+     LIMIT 1`;
+  const { rows } = await q(sql, [id, ...access.params]);
+  return rows[0] ? normalizeMessaggioConversationRow(rows[0]) : null;
+}
+
+async function markConversationReadForUser(conversationId, userId) {
+  const { rows } = await q(
+    `SELECT id
+       FROM messaggi_interni
+      WHERE conversation_id = $1
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1`,
+    [conversationId]
+  );
+  const lastMessageId = rows[0]?.id || null;
+  if (!lastMessageId) return null;
+  await q(
+    `INSERT INTO messaggi_conversazione_letture (conversation_id, user_id, last_read_message_id, last_read_at)
+     VALUES ($1,$2,$3,NOW())
+     ON CONFLICT (conversation_id, user_id)
+     DO UPDATE SET last_read_message_id = EXCLUDED.last_read_message_id,
+                   last_read_at = EXCLUDED.last_read_at`,
+    [conversationId, userId, lastMessageId]
+  );
+  return lastMessageId;
+}
+
+async function migrateLegacyMessaggiToConversations() {
+  const { rows } = await q(
+    `SELECT *
+       FROM messaggi_interni
+      WHERE conversation_id IS NULL
+      ORDER BY id ASC`
+  );
+  for (const row of rows) {
+    const inserted = await q(
+      `INSERT INTO messaggi_conversazioni
+        (created_by, created_by_name, destinatario_tipo, destinatario_user_id, destinatario_ruolo, oggetto, stato, priorita, cliente_id, ordine_id, last_message_at, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'nuovo','media',$7,$8,$9,$10)
+       RETURNING id`,
+      [
+        row.mittente_id || null,
+        row.mittente_nome || 'Utente',
+        row.destinatario_tipo || 'user',
+        row.destinatario_user_id || null,
+        row.destinatario_ruolo || null,
+        row.oggetto || '',
+        row.cliente_id || null,
+        row.ordine_id || null,
+        row.created_at || new Date().toISOString(),
+        row.created_at || new Date().toISOString(),
+      ]
+    );
+    const conversationId = inserted.rows[0].id;
+    await q(`UPDATE messaggi_interni SET conversation_id=$1 WHERE id=$2`, [conversationId, row.id]);
+    if (row.letto_at && row.destinatario_user_id) {
+      await q(
+        `INSERT INTO messaggi_conversazione_letture (conversation_id, user_id, last_read_message_id, last_read_at)
+         VALUES ($1,$2,$3,$4)
+         ON CONFLICT (conversation_id, user_id)
+         DO UPDATE SET last_read_message_id = EXCLUDED.last_read_message_id,
+                       last_read_at = EXCLUDED.last_read_at`,
+        [conversationId, row.destinatario_user_id, row.id, row.letto_at]
+      );
+    }
+  }
 }
 
 function userCanViewDocFolder(userRole, allowedRolesRaw) {
@@ -4862,39 +5101,33 @@ app.get('/api/messaggi', authMiddleware, async (req, res) => {
   try {
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 80));
     const inboxWhere = getMessaggiInboxWhere(req.user, 1);
-    const inboxSql = `
-      SELECT m.*,
-             c.nome AS cliente_nome,
-             COALESCE(du.nome || ' ' || COALESCE(du.cognome,''), '') AS destinatario_nome
-        FROM messaggi_interni m
-        LEFT JOIN clienti c ON c.id = m.cliente_id
-        LEFT JOIN utenti du ON du.id = m.destinatario_user_id
-       WHERE ${inboxWhere.clause}
-       ORDER BY m.created_at DESC
-       LIMIT $3`;
-    const sentSql = `
-      SELECT m.*,
-             c.nome AS cliente_nome,
-             COALESCE(du.nome || ' ' || COALESCE(du.cognome,''), '') AS destinatario_nome
-        FROM messaggi_interni m
-        LEFT JOIN clienti c ON c.id = m.cliente_id
-        LEFT JOIN utenti du ON du.id = m.destinatario_user_id
-       WHERE m.mittente_id = $1
-       ORDER BY m.created_at DESC
-       LIMIT $2`;
+    const inboxSql = buildMessaggiConversationListSql(inboxWhere.clause, 1, 3);
+    const sentSql = buildMessaggiConversationListSql('m.created_by = $1', 2, 3);
     const unreadSql = `
+      WITH last_messages AS (
+        SELECT DISTINCT ON (mi.conversation_id)
+               mi.conversation_id,
+               mi.id AS last_message_id
+          FROM messaggi_interni mi
+         WHERE mi.conversation_id IS NOT NULL
+         ORDER BY mi.conversation_id, mi.created_at DESC, mi.id DESC
+      )
       SELECT COUNT(*)::int AS unread_count
-        FROM messaggi_interni m
+        FROM messaggi_conversazioni m
+        JOIN last_messages lm ON lm.conversation_id = m.id
+        LEFT JOIN messaggi_conversazione_letture ml
+          ON ml.conversation_id = m.id
+         AND ml.user_id = $1
        WHERE ${inboxWhere.clause}
-         AND m.letto_at IS NULL`;
+         AND (ml.last_read_message_id IS NULL OR ml.last_read_message_id < lm.last_message_id)`;
     const [inbox, sent, unread] = await Promise.all([
       q(inboxSql, [...inboxWhere.params, limit]),
-      q(sentSql, [req.user.id || null, limit]),
+      q(sentSql, [req.user.id || null, req.user.id || null, limit]),
       q(unreadSql, inboxWhere.params),
     ]);
     res.json({
-      inbox: inbox.rows.map(normalizeMessaggioRow),
-      sent: sent.rows.map(normalizeMessaggioRow),
+      inbox: inbox.rows.map(normalizeMessaggioConversationRow),
+      sent: sent.rows.map(normalizeMessaggioConversationRow),
       unread_count: unread.rows[0]?.unread_count || 0,
     });
   } catch (e) {
@@ -4906,25 +5139,30 @@ app.get('/api/messaggi/summary', authMiddleware, async (req, res) => {
   try {
     const inboxWhere = getMessaggiInboxWhere(req.user, 1);
     const [recent, unread] = await Promise.all([
+      q(buildMessaggiConversationListSql(inboxWhere.clause, 1, 3), [...inboxWhere.params, 6]),
       q(
-        `SELECT m.id, m.mittente_nome, m.oggetto, m.testo, m.ordine_id, m.cliente_id, m.letto_at, m.created_at
-           FROM messaggi_interni m
+        `WITH last_messages AS (
+           SELECT DISTINCT ON (mi.conversation_id)
+                  mi.conversation_id,
+                  mi.id AS last_message_id
+             FROM messaggi_interni mi
+            WHERE mi.conversation_id IS NOT NULL
+            ORDER BY mi.conversation_id, mi.created_at DESC, mi.id DESC
+         )
+         SELECT COUNT(*)::int AS unread_count
+           FROM messaggi_conversazioni m
+           JOIN last_messages lm ON lm.conversation_id = m.id
+           LEFT JOIN messaggi_conversazione_letture ml
+             ON ml.conversation_id = m.id
+            AND ml.user_id = $1
           WHERE ${inboxWhere.clause}
-          ORDER BY m.created_at DESC
-          LIMIT 6`,
-        inboxWhere.params
-      ),
-      q(
-        `SELECT COUNT(*)::int AS unread_count
-           FROM messaggi_interni m
-          WHERE ${inboxWhere.clause}
-            AND m.letto_at IS NULL`,
+            AND (ml.last_read_message_id IS NULL OR ml.last_read_message_id < lm.last_message_id)`,
         inboxWhere.params
       ),
     ]);
     res.json({
       unread_count: unread.rows[0]?.unread_count || 0,
-      recent: recent.rows.map(normalizeMessaggioRow),
+      recent: recent.rows.map(normalizeMessaggioConversationRow),
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -4953,12 +5191,30 @@ app.post('/api/messaggi', authMiddleware, async (req, res) => {
       const { rows } = await q('SELECT id FROM clienti WHERE id=$1 LIMIT 1', [payload.cliente_id]);
       if (!rows.length) return res.status(400).json({ error: 'Cliente collegato non trovato' });
     }
-    const inserted = await q(
-      `INSERT INTO messaggi_interni
-         (mittente_id, mittente_nome, destinatario_tipo, destinatario_user_id, destinatario_ruolo, oggetto, testo, ordine_id, cliente_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-       RETURNING *`,
+    const conv = await q(
+      `INSERT INTO messaggi_conversazioni
+        (created_by, created_by_name, destinatario_tipo, destinatario_user_id, destinatario_ruolo, oggetto, stato, priorita, cliente_id, ordine_id, last_message_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'nuovo',$7,$8,$9,NOW())
+       RETURNING id`,
       [
+        req.user.id || null,
+        mittenteNome,
+        payload.destinatario_tipo,
+        payload.destinatario_tipo === 'user' ? payload.destinatario_user_id || null : null,
+        payload.destinatario_tipo === 'role' ? String(payload.destinatario_ruolo || '').trim() : null,
+        String(payload.oggetto || '').trim(),
+        payload.priorita || 'media',
+        payload.cliente_id || null,
+        payload.ordine_id || null,
+      ]
+    );
+    const conversationId = conv.rows[0].id;
+    await q(
+      `INSERT INTO messaggi_interni
+         (conversation_id, mittente_id, mittente_nome, destinatario_tipo, destinatario_user_id, destinatario_ruolo, oggetto, testo, ordine_id, cliente_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [
+        conversationId,
         req.user.id || null,
         mittenteNome,
         payload.destinatario_tipo,
@@ -4970,8 +5226,134 @@ app.post('/api/messaggi', authMiddleware, async (req, res) => {
         payload.cliente_id || null,
       ]
     );
-    await logDB(req.user.id, mittenteNome, 'Messaggio interno', inserted.rows[0].oggetto || `messaggio #${inserted.rows[0].id}`);
-    res.json(normalizeMessaggioRow(inserted.rows[0]));
+    await markConversationReadForUser(conversationId, req.user.id || 0);
+    await logDB(req.user.id, mittenteNome, 'Messaggio interno', String(payload.oggetto || '').trim() || `conversazione #${conversationId}`);
+    const summary = await getMessaggioConversationSummaryById(conversationId, req.user);
+    res.json(summary);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/messaggi/:id', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Conversazione non valida' });
+    const summary = await getMessaggioConversationSummaryById(id, req.user);
+    if (!summary) return res.status(404).json({ error: 'Conversazione non trovata' });
+    const messages = await q(
+      `SELECT id, conversation_id, mittente_id, mittente_nome, testo, created_at
+         FROM messaggi_interni
+        WHERE conversation_id = $1
+        ORDER BY created_at ASC, id ASC`,
+      [id]
+    );
+    res.json({
+      conversation: summary,
+      messages: messages.rows.map(normalizeMessaggioRow),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/messaggi/:id/reply', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Conversazione non valida' });
+    const parsed = zMessaggioReply.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const summary = await getMessaggioConversationSummaryById(id, req.user);
+    if (!summary) return res.status(404).json({ error: 'Conversazione non trovata' });
+    const mittenteNome = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || 'Utente';
+    await q(
+      `INSERT INTO messaggi_interni
+         (conversation_id, mittente_id, mittente_nome, destinatario_tipo, destinatario_user_id, destinatario_ruolo, oggetto, testo, ordine_id, cliente_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [
+        id,
+        req.user.id || null,
+        mittenteNome,
+        summary.destinatario_tipo,
+        summary.destinatario_user_id || null,
+        summary.destinatario_ruolo || null,
+        summary.oggetto || '',
+        parsed.data.testo,
+        summary.ordine_id || null,
+        summary.cliente_id || null,
+      ]
+    );
+    await q(
+      `UPDATE messaggi_conversazioni
+          SET last_message_at = NOW(),
+              stato = CASE WHEN stato = 'chiuso' THEN 'in_attesa' ELSE stato END,
+              closed_at = CASE WHEN stato = 'chiuso' THEN NULL ELSE closed_at END
+        WHERE id = $1`,
+      [id]
+    );
+    await markConversationReadForUser(id, req.user.id || 0);
+    const updated = await getMessaggioConversationSummaryById(id, req.user);
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.patch('/api/messaggi/:id', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Conversazione non valida' });
+    const parsed = zMessaggioConversationUpdate.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const current = await getMessaggioConversationSummaryById(id, req.user);
+    if (!current) return res.status(404).json({ error: 'Conversazione non trovata' });
+    const next = parsed.data || {};
+    if (next.assegnato_user_id) {
+      const { rows } = await q('SELECT id FROM utenti WHERE id=$1 LIMIT 1', [next.assegnato_user_id]);
+      if (!rows.length) return res.status(400).json({ error: 'Assegnatario non trovato' });
+    }
+    const { rows } = await q(
+      `UPDATE messaggi_conversazioni
+          SET stato = COALESCE($1, stato),
+              priorita = COALESCE($2, priorita),
+              assegnato_user_id = $3,
+              closed_at = CASE
+                WHEN COALESCE($1, stato) = 'chiuso' THEN COALESCE(closed_at, NOW())
+                ELSE NULL
+              END
+        WHERE id = $4
+        RETURNING id`,
+      [
+        next.stato || null,
+        next.priorita || null,
+        next.assegnato_user_id === undefined ? current.assegnato_user_id : (next.assegnato_user_id || null),
+        id,
+      ]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Conversazione non trovata' });
+    const updated = await getMessaggioConversationSummaryById(id, req.user);
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/messaggi/:id/take', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Conversazione non valida' });
+    const summary = await getMessaggioConversationSummaryById(id, req.user);
+    if (!summary) return res.status(404).json({ error: 'Conversazione non trovata' });
+    await q(
+      `UPDATE messaggi_conversazioni
+          SET assegnato_user_id = $1,
+              stato = CASE WHEN stato = 'chiuso' THEN 'in_attesa' ELSE 'preso_in_carico' END,
+              closed_at = NULL
+        WHERE id = $2`,
+      [req.user.id || null, id]
+    );
+    const updated = await getMessaggioConversationSummaryById(id, req.user);
+    res.json(updated);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -4980,18 +5362,19 @@ app.post('/api/messaggi', authMiddleware, async (req, res) => {
 app.post('/api/messaggi/:id/read', authMiddleware, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    if (!id) return res.status(400).json({ error: 'Messaggio non valido' });
+    if (!id) return res.status(400).json({ error: 'Conversazione non valida' });
     const inboxWhere = getMessaggiInboxWhere(req.user, 2);
-    const result = await q(
-      `UPDATE messaggi_interni m
-          SET letto_at = COALESCE(letto_at, NOW())
+    const { rows } = await q(
+      `SELECT m.id
+         FROM messaggi_conversazioni m
         WHERE m.id = $1
           AND ${inboxWhere.clause}
-        RETURNING m.id, m.letto_at`,
+        LIMIT 1`,
       [id, ...inboxWhere.params]
     );
-    if (!result.rows.length) return res.status(404).json({ error: 'Messaggio non trovato' });
-    res.json({ ok: true, id: result.rows[0].id, letto_at: result.rows[0].letto_at });
+    if (!rows.length) return res.status(404).json({ error: 'Conversazione non trovata' });
+    const lastReadMessageId = await markConversationReadForUser(id, req.user.id || 0);
+    res.json({ ok: true, id, last_read_message_id: lastReadMessageId });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -6462,6 +6845,7 @@ async function start() {
     await pool.query('SELECT 1'); // test connessione
     console.log('✅ Connesso a PostgreSQL');
     await createSchema();
+    await migrateLegacyMessaggiToConversations();
     await seed();
     startEmailNotificationsScheduler();
     startExperimentalScheduler();

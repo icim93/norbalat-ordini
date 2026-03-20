@@ -378,6 +378,8 @@
     window.state.messagesRecent = [];
     window.state.messagesCurrentBox = 'inbox';
     window.state.messagesSelectedId = null;
+    window.state.messagesDetail = null;
+    window.state.messagesFilters = { q: '', stato: '', priorita: '', onlyUnread: false, assignedToMe: false };
     window.state.messagesLoaded = false;
     window.state.messagesPoller = null;
     window.state.topbarNotifications = [];
