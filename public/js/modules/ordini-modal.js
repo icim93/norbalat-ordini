@@ -1418,15 +1418,6 @@ function openDettaglio(id) {
     ${o.note ? `<div style="margin-top:14px;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px;color:var(--text2);"><b>Note:</b> ${o.note}</div>` : ''}
   `;
 
-  const footer = document.getElementById('det-footer');
-  const canConferma = o.stato === 'preparato';
-  footer.innerHTML = `
-    <button class="btn btn-outline" onclick="closeModal('modal-dettaglio')">Chiudi</button>
-    ${canConferma ? `<button class="btn btn-green" onclick="confermaConsegna(${o.id})">✅ Conferma Consegna</button>` : ''}
-    ${canConferma ? `<button class="btn btn-outline" onclick="consegnaParziale(${o.id})">↪️ Consegna parziale</button>` : ''}
-    <button class="btn btn-orange" onclick="closeModal('modal-dettaglio');openEditOrder(${o.id})">✏️ Modifica</button>
-  `;
-
   footer.innerHTML = `
     <button class="btn btn-outline" onclick="closeModal('modal-dettaglio')">Chiudi</button>
     ${canConferma ? `<button class="btn btn-green" onclick="openEsitoConsegna(${o.id})">Esito consegna</button>` : ''}
