@@ -2249,6 +2249,7 @@
                 <button class="btn btn-outline" onclick="resetClientiFilters()">Reset</button>
                 <button class="btn btn-outline" onclick="document.getElementById('import-clienti-file').click()" title="Importa o aggiorna clienti da Excel">Excel</button>
                 <button class="btn btn-green" onclick="openNewCliente()">+ Nuovo Cliente</button>
+                <button class="btn btn-outline" onclick="openNewOnboarding()">+ Nuovo Onboarding</button>
                 <input type="file" id="import-clienti-file" accept=".xlsx,.xls" style="display:none" onchange="importClientiExcel(this)">
               </div>
             </div>
@@ -3486,8 +3487,16 @@
           </select>
         </div>
         <div class="field">
-          <label>Partita IVA</label>
+          <label>Partita IVA *</label>
           <input type="text" id="cl-piva" placeholder="es. 01234567890" maxlength="16">
+        </div>
+        <div class="field">
+          <label>Contatto</label>
+          <input type="text" id="cl-contatto-nome" placeholder="es. Mario Rossi">
+        </div>
+        <div class="field">
+          <label>Telefono</label>
+          <input type="text" id="cl-telefono" placeholder="es. 0801234567">
         </div>
         <div class="field">
           <label>&nbsp;</label>
@@ -3806,6 +3815,14 @@
     </div>
     <div class="modal-body">
       <div class="form-row">
+        <div class="field form-full">
+          <label>Cliente / Lead</label>
+          <input type="text" id="crm-lead-nome" placeholder="Nome cliente da ricontattare">
+        </div>
+        <div class="field">
+          <label>Località</label>
+          <input type="text" id="crm-localita" placeholder="es. Bari">
+        </div>
         <div class="field">
           <label>Tipo</label>
           <select id="crm-tipo">
@@ -3836,6 +3853,19 @@
           <input type="date" id="crm-followup-date">
         </div>
         <div class="field form-full">
+          <label>Contatti</label>
+          <div style="display:grid;grid-template-columns:1fr 180px;gap:8px;">
+            <input type="text" id="crm-contatto-nome" placeholder="Nome contatto">
+            <input type="text" id="crm-telefono" placeholder="Telefono">
+          </div>
+        </div>
+        <div class="field form-full">
+          <label>Incaricato da avvisare</label>
+          <select id="crm-incaricato-user">
+            <option value="">- Nessuno -</option>
+          </select>
+        </div>
+        <div class="field form-full">
           <label>Richiesta / Dettaglio</label>
           <input type="text" id="crm-richiesta" placeholder="es. richiesta prodotto X">
         </div>
@@ -3848,8 +3878,12 @@
           <textarea id="crm-note" placeholder="Note operative..." style="min-height:72px;"></textarea>
         </div>
       </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:8px;">
-        <button class="btn btn-green btn-sm" onclick="saveCrmEvento()">Aggiungi evento CRM</button>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin-top:8px;flex-wrap:wrap;">
+        <div id="crm-compiler-meta" style="font-size:11px;color:var(--text3);text-align:right;flex:1;min-width:220px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="saveCrmEvento(true)">Salva + messaggio</button>
+          <button class="btn btn-green btn-sm" onclick="saveCrmEvento(false)">Salva CRM</button>
+        </div>
       </div>
       <div style="margin-top:12px;border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:320px;">
         <table>
@@ -3859,8 +3893,9 @@
               <th>Tipo</th>
               <th>Esito</th>
               <th>Stato/FU</th>
+              <th>Contatto</th>
               <th>Richiesta</th>
-              <th>Motivo</th>
+              <th>Incaricato</th>
               <th>Utente</th>
             </tr>
           </thead>
@@ -4431,6 +4466,7 @@ let state = {
   emailNotifications: null,
   emailNotificationsLoaded: false,
   crmClienteId: null,
+  crmLeadMode: false,
   crmEventi: [],
   crmSummary: {},
   docFolders: [],
@@ -9142,7 +9178,7 @@ function printGiacenzeInventario() {
     <h1>Inventario giacenze</h1>
     <div class="meta">Stampa del ${new Date().toLocaleString('it-IT')} · filtro: ${filter || 'tutti'} · ricerca: ${search || 'nessuna'}</div>
     <table>
-      <thead><tr><th>Codice</th><th>Prodotto</th><th>Lotto</th><th>Scadenza</th><th class="right">Quantità</th><th>U.M.</th><th>Assortimento</th><th>Note</th></tr></thead>
+      <thead><tr><th>Codice</th><th>Prodotto</th><th>Lotto</th><th>Peso</th><th class="right">Quantità</th><th>U.M.</th><th>Assortimento</th><th>Note</th></tr></thead>
       <tbody>
         ${rows.map(g => {
           const prodotto = state.prodotti.find(p => p.id === g.prodotto_id);
@@ -9151,7 +9187,7 @@ function printGiacenzeInventario() {
             <td>${escapeHtml(g.codice || '')}</td>
             <td>${escapeHtml(g.nome || '')}</td>
             <td>${escapeHtml(g.lotto || '')}</td>
-            <td>${g.scadenza ? escapeHtml(String(g.scadenza).substring(0, 10)) : ''}</td>
+            <td></td>
             <td class="right">${Number(g.quantita || 0).toFixed(2)}</td>
             <td>${escapeHtml(g.um || '')}</td>
             <td>${escapeHtml(assortimento.replaceAll('_', ' '))}</td>

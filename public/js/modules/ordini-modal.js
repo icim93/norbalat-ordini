@@ -350,6 +350,7 @@ document.addEventListener('click', function(e) {
 function getDefaultUM(prodotto) {
   if (!prodotto) return 'Pezzi';
   if (isSacco25KgProduct(prodotto)) return 'Sacchi';
+  if (isSecchioProduct(prodotto)) return 'Secchi';
   if (isCartoniOnlyPackagingProduct(prodotto)) return 'Cartoni';
   if (supportsVariableWeightPieceOrders(prodotto)) return 'Pezzi';
   const packaging = String(prodotto.packaging || '').toLowerCase();
@@ -367,6 +368,7 @@ function umPlurale(um, qty) {
     'Pezzi':   q === 1 ? 'Pezzo'    : 'Pezzi',
     'Cartoni': q === 1 ? 'Cartone'  : 'Cartoni',
     'Sacchi':  q === 1 ? 'Sacco'    : 'Sacchi',
+    'Secchi':  q === 1 ? 'Secchio'  : 'Secchi',
     'Litri':   'Litri',
     'Kg':      'Kg',
     'Pedana':  q === 1 ? 'Pedana'   : 'Pedane',
@@ -390,6 +392,13 @@ function isCartoniOnlyPackagingProduct(prodotto) {
   return nome.includes('VASCONE') || nome.includes('VASCHETTA') || codice.startsWith('VAS');
 }
 
+function isSecchioProduct(prodotto) {
+  if (!prodotto) return false;
+  const nome = String(prodotto.nome || '').toUpperCase();
+  const packaging = String(prodotto.packaging || '').toLowerCase().replace(/\s+/g, '');
+  return nome.includes('RICOTTA FORTE') || packaging.includes('1secchio=5kg');
+}
+
 function supportsVariableWeightPieceOrders(prodotto) {
   if (!prodotto) return false;
   const categoria = String(prodotto.categoria || '').trim().toUpperCase();
@@ -411,6 +420,7 @@ function supportsLegacyPedanaOrder(prodotto) {
 function getProductOrderUnits(prodotto) {
   if (!prodotto) return ['Pezzi'];
   if (isSacco25KgProduct(prodotto)) return ['Sacchi', 'Kg'];
+  if (isSecchioProduct(prodotto)) return ['Secchi', 'Kg'];
   if (isCartoniOnlyPackagingProduct(prodotto)) return ['Cartoni'];
   const units = [];
   const base = String(prodotto.um || '').toLowerCase();
@@ -442,6 +452,11 @@ function getLegacyBaseQtyFromPackaging(prodotto, qty, um) {
     const factor = Number(String(saccoMatch[1]).replace(',', '.'));
     return Number.isFinite(factor) && factor > 0 ? qty * factor : null;
   }
+  const secchioMatch = packaging.match(/1secchio=([\d.,]+)kg/i);
+  if (secchioMatch && current === 'secchi') {
+    const factor = Number(String(secchioMatch[1]).replace(',', '.'));
+    return Number.isFinite(factor) && factor > 0 ? qty * factor : null;
+  }
   const pieceMatch = packaging.match(/1pz=([\d.,]+)(kg|lt|l)/i);
   if (pieceMatch && current === 'pezzi') {
     const factor = Number(String(pieceMatch[1]).replace(',', '.'));
@@ -462,7 +477,7 @@ function getLineBaseQty(line) {
   const qty = Number(line.qty || 0);
   if (!Number.isFinite(qty) || qty <= 0) return null;
   const um = String(line.unitaMisura || getDefaultUM(p)).trim().toLowerCase();
-  if (um === 'sacchi') {
+  if (um === 'sacchi' || um === 'secchi') {
     const legacy = getLegacyBaseQtyFromPackaging(p, qty, um);
     if (Number.isFinite(legacy) && legacy > 0) return legacy;
     return null;
@@ -629,6 +644,10 @@ function getKgPerSelectedUnita(prodotto, unitaMisura) {
     const kgPerSacco = getLegacyBaseQtyFromPackaging(prodotto, 1, 'sacchi');
     return Number.isFinite(kgPerSacco) && kgPerSacco > 0 ? kgPerSacco : null;
   }
+  if (um === 'secchi') {
+    const kgPerSecchio = getLegacyBaseQtyFromPackaging(prodotto, 1, 'secchi');
+    return Number.isFinite(kgPerSecchio) && kgPerSecchio > 0 ? kgPerSecchio : null;
+  }
   if (um === 'cartoni' && String(prodotto?.um || '').toLowerCase() === 'kg' && Number.isFinite(Number(prodotto?.unitaPerCartone)) && Number(prodotto.unitaPerCartone) > 0) {
     return Number(prodotto.unitaPerCartone);
   }
@@ -676,6 +695,16 @@ function estimateLineKg(line) {
   const qty = Number(line.qty || 0);
   if (!Number.isFinite(kgPer) || !Number.isFinite(qty) || qty <= 0) return null;
   return Math.round(kgPer * qty * 100) / 100;
+}
+
+function getLineTotalStock(line) {
+  if (!line?.prodId || !window.state?.giacenzeLotti) return null;
+  const total = (window.state.giacenzeLotti[line.prodId] || []).reduce((sum, row) => {
+    const qty = Number(row?.quantita || 0);
+    return sum + (Number.isFinite(qty) && qty > 0 ? qty : 0);
+  }, 0);
+  if (!Number.isFinite(total)) return null;
+  return Math.round(total * 100) / 100;
 }
 
 function toggleOrderLinePesoApprox(i) {
@@ -805,6 +834,7 @@ function renderOrderLines() {
     const isPedana = curUM === 'Pedana';
     const showNota = !!l.showNota;
     const approxKg = estimateLineKg(l);
+    const stockTotal = getLineTotalStock(l);
     const prezzoListino = p ? getListinoPrezzo(p.id, clienteId, dataOrdine) : null;
     const prezzo = Number.isFinite(Number(l.prezzoUnitario)) ? Number(l.prezzoUnitario) : null;
     const qty = Number(l.qty || 0);
@@ -864,6 +894,7 @@ function renderOrderLines() {
         </div>` : ''}
       ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">${p.packaging}${isPedana ? ' - PEDANA INTERA' : ''}</div>` : (isPedana ? `<div style="font-size:11px;color:var(--accent);font-weight:600;">PEDANA INTERA</div>` : '')}
       ${getLineBaseQtyLabel(l) ? `<div style="font-size:11px;color:var(--accent);padding-left:2px;">Conversione: <b>${Number(l.qty || 0).toFixed(2).replace(/\.00$/, '')} ${umPlurale(curUM, l.qty || 1)}</b> = <b>${getLineBaseQtyLabel(l)}</b></div>` : ''}
+      ${stockTotal !== null && p ? `<div style="font-size:11px;color:var(--text2);padding-left:2px;">Giacenza complessiva: <b>${Number(stockTotal).toFixed(2).replace(/\.00$/, '')} ${p.um || ''}</b></div>` : ''}
       ${approxKg !== null ? `<div style="font-size:11px;color:var(--accent);padding-left:2px;">Stima peso: <b>${approxKg.toFixed(2)} kg</b></div>` : ''}
       ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">${p.note}</div>` : ''}
       ${(p || l.prodottoNomeLibero) ? `<div style="font-size:11px;color:var(--text2);padding-left:2px;">${p ? `Listino: ${prezzoListino !== null ? eur(prezzoListino) : 'n.d.'}` : 'Prodotto libero'}${subtot !== null ? ` - Subtotale: <b>${eur(subtot)}</b>` : ''}</div>` : ''}
@@ -1334,6 +1365,8 @@ async function deleteOrder(id) {
   try {
     await api('DELETE', `/api/ordini/${id}`);
     state.ordini = state.ordini.filter(x => x.id !== id);
+    selectedOrders.delete(id);
+    if (state.currentOrderId === id) state.currentOrderId = null;
     showToast('Ordine eliminato');
     renderPage(state.currentPage);
   } catch(e) { showToast(e.message, 'warning'); }

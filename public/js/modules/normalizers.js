@@ -29,6 +29,8 @@
       pec: c.pec || '',
       classificazione: c.classificazione || '',
       condPagamento: c.cond_pagamento || '',
+      contattoNome: c.contatto_nome || c.contattoNome || '',
+      telefono: c.telefono || '',
       eFornitore: !!c.e_fornitore,
       onboardingStato: c.onboarding_stato || 'in_attesa',
       onboardingChecklist: (c.onboarding_checklist && typeof c.onboarding_checklist === 'object') ? c.onboarding_checklist : {},

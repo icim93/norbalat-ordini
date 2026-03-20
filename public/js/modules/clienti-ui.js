@@ -137,6 +137,8 @@ function openNewCliente() {
   document.getElementById('cl-giro').value = '';
   document.getElementById('cl-note').value = '';
   document.getElementById('cl-piva').value = '';
+  document.getElementById('cl-contatto-nome').value = '';
+  document.getElementById('cl-telefono').value = '';
   document.getElementById('cl-cf').value = '';
   document.getElementById('cl-codice-univoco').value = '';
   document.getElementById('cl-pec').value = '';
@@ -146,6 +148,12 @@ function openNewCliente() {
   document.getElementById('cl-efornitore').checked = false;
   populateAgenteSelect('cl-agente', null);
   openModal('modal-cliente');
+}
+
+function openNewOnboarding() {
+  if (typeof openCrmLead === 'function') {
+    openCrmLead();
+  }
 }
 
 function openEditCliente(id) {
@@ -158,6 +166,8 @@ function openEditCliente(id) {
   document.getElementById('cl-giro').value = c.giro;
   document.getElementById('cl-note').value = c.note || '';
   document.getElementById('cl-piva').value = c.piva || '';
+  document.getElementById('cl-contatto-nome').value = c.contattoNome || '';
+  document.getElementById('cl-telefono').value = c.telefono || '';
   document.getElementById('cl-cf').value = c.codiceFiscale || '';
   document.getElementById('cl-codice-univoco').value = c.codiceUnivoco || '';
   document.getElementById('cl-pec').value = c.pec || '';
@@ -224,6 +234,11 @@ async function saveCliente() {
     showToast('Inserisci il nome del cliente', 'warning');
     return;
   }
+  const piva = document.getElementById('cl-piva').value.trim();
+  if (!piva) {
+    showToast('Inserisci la Partita IVA', 'warning');
+    return;
+  }
   const body = {
     nome,
     alias: document.getElementById('cl-alias').value.trim(),
@@ -231,7 +246,9 @@ async function saveCliente() {
     giro: document.getElementById('cl-giro').value,
     agente_id: parseInt(document.getElementById('cl-agente').value) || null,
     note: document.getElementById('cl-note').value.trim(),
-    piva: document.getElementById('cl-piva').value.trim(),
+    piva,
+    contatto_nome: document.getElementById('cl-contatto-nome').value.trim(),
+    telefono: document.getElementById('cl-telefono').value.trim(),
     codice_fiscale: document.getElementById('cl-cf').value.trim(),
     codice_univoco: document.getElementById('cl-codice-univoco').value.trim(),
     pec: document.getElementById('cl-pec').value.trim(),
@@ -264,6 +281,8 @@ async function saveCliente() {
     showToast(e.message, 'warning');
   }
 }
+
+window.openNewOnboarding = openNewOnboarding;
 
 function applyOnboardingResponse(id, r) {
   const idx = state.clienti.findIndex(x => x.id === id);
