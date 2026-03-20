@@ -1795,6 +1795,39 @@
     #modal-ordine .order-line-advanced-grid {
       grid-template-columns: 1fr;
     }
+    #modal-crm-cliente .field > div[style*="grid-template-columns:1fr 180px"] {
+      grid-template-columns: 1fr !important;
+    }
+    #modal-crm-cliente > .modal,
+    #modal-preparazione-add-linea > .modal,
+    #modal-esito-consegna > .modal {
+      width: min(100%, 100vw - 16px);
+    }
+    #modal-crm-cliente .modal-body > div[style*="display:flex;justify-content:space-between;align-items:flex-end"],
+    #page-autista #autista-bulk-toolbar > div {
+      flex-direction: column;
+      align-items: stretch !important;
+    }
+    #crm-compiler-meta {
+      text-align: left !important;
+      min-width: 0 !important;
+    }
+    #page-autista #autista-bulk-toolbar button {
+      width: 100%;
+      justify-content: center;
+    }
+    #page-autista .mob-line {
+      align-items: flex-start;
+    }
+    #page-autista .mob-line span:first-child {
+      flex: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    #page-autista .mobile-order-card label {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
     #modal-pdf-giornaliero .field[style*="min-width:140px"],
     #modal-pdf-giornaliero .field[style*="min-width:180px"],
     #modal-pdf-giornaliero .field[style*="min-width:200px"] {
@@ -1887,6 +1920,18 @@
     .table-scroll-wrap table { min-width: 520px; }
     .warehouse-card {
       padding: 14px;
+    }
+    #page-autista .mobile-order-card {
+      padding: 14px;
+    }
+    #page-autista .mob-client {
+      font-size: 15px;
+    }
+    #modal-crm-cliente .modal-title,
+    #modal-preparazione-add-linea .modal-title,
+    #modal-esito-consegna .modal-title {
+      font-size: 16px;
+      line-height: 1.25;
     }
     #modal-ordine .order-line-header {
       align-items: flex-start;
