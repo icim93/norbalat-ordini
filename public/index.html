@@ -1645,16 +1645,22 @@
       min-height: 62px;
       height: auto;
       gap: 10px;
+      align-items: flex-start;
+      flex-wrap: wrap;
     }
     .topbar > div:first-child {
       min-width: 0;
       flex: 1;
+      width: 100%;
     }
     .topbar-brand { font-size: 15px; }
     .topbar-user {
       gap: 8px;
-      flex-shrink: 0;
+      flex-shrink: 1;
       min-width: 0;
+      width: 100%;
+      justify-content: flex-end;
+      flex-wrap: wrap;
     }
     #topbar-username { display: none; }
     .topbar-logout { padding: 6px 10px; }
@@ -1890,6 +1896,28 @@
     .page-title { font-size: 19px; }
     .stat-value { font-size: 24px; }
     .topbar-role { display: none; }
+    .topbar-user {
+      gap: 6px;
+      justify-content: space-between;
+    }
+    .topbar-msg-btn,
+    .topbar-help,
+    .topbar-logout,
+    .topbar-notify-wrap {
+      flex: 1 1 calc(50% - 6px);
+      min-width: 0;
+    }
+    .topbar-msg-btn,
+    .topbar-help,
+    .topbar-logout,
+    .topbar-notify {
+      width: 100%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      white-space: nowrap;
+    }
     .topbar-logout {
       padding-left: 8px;
       padding-right: 8px;
