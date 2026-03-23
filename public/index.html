@@ -8756,12 +8756,24 @@ function updatePDFPreview() {
     return au ? (au.nome + ' ' + (au.cognome||'')).trim() : '';
   }
 
+  function getReportLineNomeHtml(linea, prodotto) {
+    const nomeLibero = String(linea?.prodottoNomeLibero || '').trim();
+    if (nomeLibero) return escapeHtml(nomeLibero);
+    if (!prodotto) return 'Prodotto libero';
+    const codice = String(prodotto.codice || '').trim();
+    const nome = String(prodotto.nome || 'Prodotto libero').trim() || 'Prodotto libero';
+    const packaging = String(prodotto.packaging || '').trim();
+    const label = codice ? `[${codice}] ${nome}` : nome;
+    if (!packaging) return escapeHtml(label);
+    return `${escapeHtml(label)} <span style="color:#888;font-size:10px;">· ${escapeHtml(packaging)}</span>`;
+  }
+
   // ── REPORT MAGAZZINO: nome prodotto + qtà + unità ──
   function ordineHtmlMag(o) {
     const cl = getCliente(o.clienteId);
     const linee = o.linee.map(l => {
       const p = l.prodId ? getProdotto(l.prodId) : null;
-      const nome = l.prodottoNomeLibero || p?.nome || 'Prodotto libero';
+      const nome = getReportLineNomeHtml(l, p);
       const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
       const qty = l.qty || 1;
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
@@ -8782,7 +8794,7 @@ function updatePDFPreview() {
         <span>Prodotto</span>
         <span>Ordine</span>
         <span>Lotto</span>
-        <span>Scad.</span>
+        <span>Q.tà</span>
       </div>
       ${linee || '<div style="font-size:11px;color:#aaa;">nessun prodotto</div>'}
     </div>`;
@@ -8793,7 +8805,7 @@ function updatePDFPreview() {
     const cl = getCliente(o.clienteId);
     const linee = o.linee.map(l => {
       const p = l.prodId ? getProdotto(l.prodId) : null;
-      const nome = l.prodottoNomeLibero || p?.nome || 'Prodotto libero';
+      const nome = getReportLineNomeHtml(l, p);
       const qty = l.qty || 1;
       const qtyBase = Number(l.qtyBase);
       const colliEffettivi = Number(l.colliEffettivi);
