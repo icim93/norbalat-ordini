@@ -4683,6 +4683,10 @@ async function loadAllData() {
         linee: Array.isArray(template.linee) ? template.linee.map(line => ({
           prodId: Number(line.prodId),
           qty: Number(line.qty || 0),
+          unitaMisura: (() => {
+            const prodotto = getProdotto(Number(line.prodId));
+            return String(line.unitaMisura || line.unita_misura || (typeof getDefaultUM === 'function' ? getDefaultUM(prodotto) : 'Pezzi')).trim() || 'Pezzi';
+          })(),
         })).filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0) : [],
       })) : [{
         id: `default-${Number(entry.userId)}`,
@@ -4691,6 +4695,10 @@ async function loadAllData() {
         linee: Array.isArray(entry.linee) ? entry.linee.map(line => ({
           prodId: Number(line.prodId),
           qty: Number(line.qty || 0),
+          unitaMisura: (() => {
+            const prodotto = getProdotto(Number(line.prodId));
+            return String(line.unitaMisura || line.unita_misura || (typeof getDefaultUM === 'function' ? getDefaultUM(prodotto) : 'Pezzi')).trim() || 'Pezzi';
+          })(),
         })).filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0) : [],
       }],
       assegnazioni: (entry.assegnazioni && typeof entry.assegnazioni === 'object') ? entry.assegnazioni : {},
@@ -7486,10 +7494,16 @@ function renderTentataConfigList() {
       const lineeHtml = (tpl.linee || []).map((l, li) => {
         const p = getProdotto(l.prodId);
         if (!p) return '';
+        const umOpts = typeof getProductOrderUnits === 'function' ? getProductOrderUnits(p) : ['Pezzi'];
+        const currentUm = umOpts.includes(l.unitaMisura) ? l.unitaMisura : (umOpts[0] || 'Pezzi');
         return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px;">
           <span style="flex:1;">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</span>
-          <input type="number" value="${l.qty}" min="1" style="width:70px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:12px;"
-            onchange="updateCaricoTentata(${a.id},'${tpl.id}',${li},'qty',parseInt(this.value)||1)">
+          <input type="number" value="${l.qty}" min="0.01" step="0.01" style="width:70px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:12px;"
+            onchange="updateCaricoTentata(${a.id},'${tpl.id}',${li},'qty',parseFloat(this.value)||1)">
+          <select style="width:110px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:12px;"
+            onchange="updateCaricoTentata(${a.id},'${tpl.id}',${li},'unitaMisura',this.value)">
+            ${umOpts.map(um => `<option value="${escapeHtml(um)}" ${um === currentUm ? 'selected' : ''}>${escapeHtml(um)}</option>`).join('')}
+          </select>
           <button onclick="removeCaricoTentataLine(${a.id},'${tpl.id}',${li})" style="background:none;border:none;cursor:pointer;color:var(--danger);">✕</button>
         </div>`;
       }).join('');
@@ -7577,7 +7591,7 @@ function renderTentataPage() {
           if (!p) return '';
           return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
             <span style="flex:1;">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</span>
-            <span style="font-size:12px;color:var(--text2);">${Number(l.qty)} pz</span>
+            <span style="font-size:12px;color:var(--text2);">${Number(l.qty)} ${escapeHtml(l.unitaMisura || 'Pezzi')}</span>
           </div>`;
         }).join('') : '<div style="padding:8px 0;color:var(--text3);font-size:13px;">Nessun carico TV configurato per oggi.</div>'}
       `;
@@ -7741,7 +7755,14 @@ function addCaricoTentataLine(userId, templateId, prodId) {
   const template = getTentataTemplate(userId, templateId);
   const existing = template.linee.find(l => l.prodId === prodId);
   if (existing) existing.qty++;
-  else template.linee.push({ prodId, qty: 1 });
+  else {
+    const prodotto = getProdotto(prodId);
+    template.linee.push({
+      prodId,
+      qty: 1,
+      unitaMisura: typeof getDefaultUM === 'function' ? getDefaultUM(prodotto) : 'Pezzi',
+    });
+  }
   renderTentataConfigList();
 }
 
@@ -7821,7 +7842,11 @@ async function saveTentataConfig() {
           nome: String(template.nome || '').trim() || 'Profilo TV',
           giorni: Array.isArray(template.giorni) ? template.giorni : [],
           linee: sortTentataLines(template.linee || [])
-            .map(line => ({ prodId: line.prodId, qty: Number(line.qty || 0) }))
+            .map(line => ({
+              prodId: line.prodId,
+              qty: Number(line.qty || 0),
+              unitaMisura: String(line.unitaMisura || (typeof getDefaultUM === 'function' ? getDefaultUM(getProdotto(line.prodId)) : 'Pezzi')).trim() || 'Pezzi',
+            }))
             .filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0),
         })),
         assegnazioni: entry.assegnazioni || {},
@@ -7845,7 +7870,7 @@ let tentataTemplateId = null;
 let tentataUserId = null;
 
 function createEmptyTentataLine() {
-  return { prodId: null, qty: 1 };
+  return { prodId: null, qty: 1, unitaMisura: 'Pezzi' };
 }
 
 async function openTentataVendita(userId = null) {
@@ -7890,6 +7915,12 @@ function renderTentataLines() {
   tentataLines = sortTentataLines(tentataLines);
   container.innerHTML = tentataLines.map((l, i) => {
     const p = getProdotto(l.prodId);
+    const umOpts = p && typeof getProductOrderUnits === 'function' ? getProductOrderUnits(p) : ['Pezzi'];
+    const currentUm = umOpts.includes(l.unitaMisura) ? l.unitaMisura : (p && typeof getDefaultUM === 'function' ? getDefaultUM(p) : 'Pezzi');
+    if (tentataLines[i]) tentataLines[i].unitaMisura = currentUm;
+    const approxKg = p && typeof estimateLineKg === 'function'
+      ? estimateLineKg({ prodId: l.prodId, qty: l.qty, unitaMisura: currentUm })
+      : null;
     return `<div class="order-line" id="tentata-line-${i}">
       <div class="order-line-header">
         <div class="ac-wrap order-line-search">
@@ -7906,9 +7937,14 @@ function renderTentataLines() {
         </div>
         <button class="line-delete order-line-delete-btn" onclick="removeTentataLine(${i})" style="border-radius:6px;border:none;background:transparent;cursor:pointer;font-size:16px;color:var(--text3);display:flex;align-items:center;justify-content:center;" title="Rimuovi">x</button>
       </div>
-      <div class="order-line-row">
-        <input type="number" class="qty-input" value="${l.qty || 1}" min="1" onchange="tentataLines[${i}].qty=parseFloat(this.value)||1" placeholder="Quantita" style="width:100%;">
+      <div class="order-line-row" style="display:flex;gap:8px;align-items:center;">
+        <input type="number" class="qty-input" value="${l.qty || 1}" min="0.01" step="0.01" onchange="tentataLines[${i}].qty=parseFloat(this.value)||1" placeholder="Quantita" style="flex:1;">
+        <select style="width:120px;font-size:12px;padding:8px 10px;border:1.5px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text1);"
+          onchange="tentataLines[${i}].unitaMisura=this.value">
+          ${umOpts.map(um => `<option value="${escapeHtml(um)}" ${um === currentUm ? 'selected' : ''}>${escapeHtml(um)}</option>`).join('')}
+        </select>
       </div>
+      ${approxKg !== null ? `<div style="font-size:11px;color:var(--accent);padding-left:2px;">Stima peso: <b>${approxKg.toFixed(2)} kg</b></div>` : ''}
       ${p && p.packaging ? `<div style="font-size:11px;color:var(--text3);padding-left:2px;">${escapeHtml(p.packaging)}</div>` : ''}
       ${p && p.note ? `<div style="font-size:11px;color:var(--blue);padding-left:2px;">${escapeHtml(p.note)}</div>` : ''}
     </div>`;
@@ -7919,7 +7955,14 @@ function addTentataLine(prodId = null) {
   if (prodId) {
     const existing = tentataLines.find(line => line.prodId === prodId);
     if (existing) existing.qty++;
-    else tentataLines.push({ prodId, qty: 1 });
+    else {
+      const prodotto = getProdotto(prodId);
+      tentataLines.push({
+        prodId,
+        qty: 1,
+        unitaMisura: typeof getDefaultUM === 'function' ? getDefaultUM(prodotto) : 'Pezzi',
+      });
+    }
   } else {
     tentataLines.push(createEmptyTentataLine());
   }
@@ -8012,6 +8055,8 @@ function acTentataProdOpen(i) {
 
 function acTentataProdSelect(i, prodId) {
   tentataLines[i].prodId = prodId;
+  const prodotto = getProdotto(prodId);
+  tentataLines[i].unitaMisura = typeof getDefaultUM === 'function' ? getDefaultUM(prodotto) : 'Pezzi';
   const p = getProdotto(prodId);
   const inp = document.getElementById(`ac-tentata-prod-input-${i}`);
   if (inp) {
@@ -8067,7 +8112,12 @@ async function saveTentataVendita() {
     data: dataTentata,
     stato: 'attesa',
     note: note ? `[TENTATA VENDITA] ${note}` : '[TENTATA VENDITA]',
-    linee: sortTentataLines(validLines).map(l => ({ prodotto_id: l.prodId, qty: l.qty })),
+    linee: sortTentataLines(validLines).map(l => ({
+      prodotto_id: l.prodId,
+      qty: l.qty,
+      unita_misura: String(l.unitaMisura || 'Pezzi').trim() || 'Pezzi',
+      is_pedana: String(l.unitaMisura || '').trim().toLowerCase() === 'pedana',
+    })),
   };
   try {
     const result = await createOrderWithMergePrompt(body);
@@ -9799,10 +9849,10 @@ async function caricaRientroTV() {
               <tr>
                 <td>${escapeHtml(r.nome)}<br><span style="font-size:11px;color:var(--text3);">${escapeHtml(r.codice)}</span></td>
                 <td style="font-family:'DM Mono',monospace;font-size:12px;">${escapeHtml(r.lotto)}</td>
-                <td style="text-align:right;">${Number(r.qty_totale)} ${escapeHtml(r.um)}</td>
+                <td style="text-align:right;">${Number(r.qty_totale)} ${escapeHtml(r.unita_misura || r.um || 'pezzi')}</td>
                 <td style="text-align:right;">${r.peso_totale !== null ? Number(r.peso_totale).toFixed(2) : '—'}</td>
                 <td style="text-align:right;">
-                  <input type="number" step="0.01" min="0" value="${r.peso_totale !== null ? Number(r.peso_totale).toFixed(2) : 0}"
+                  <input type="number" step="0.01" min="0" value="${Number(r.qty_totale || 0).toFixed(2)}"
                     id="rientro-qty-${i}" style="width:80px;padding:3px 6px;font-size:12px;border:1.5px solid var(--border);border-radius:5px;text-align:right;">
                 </td>
                 <td>
@@ -9823,6 +9873,7 @@ async function confermaRientroTV() {
   const righe = (window._rientroTVRighe || []).map((r, i) => ({
     prodotto_id: r.prodotto_id,
     lotto: r.lotto,
+    unita_misura: r.unita_misura || r.um || 'pezzi',
     quantita_rientro: parseFloat(document.getElementById(`rientro-qty-${i}`)?.value || 0) || 0,
     note: document.getElementById(`rientro-note-${i}`)?.value?.trim() || '',
   })).filter(r => r.quantita_rientro > 0);

@@ -361,6 +361,7 @@ async function getTentataVenditaSettings() {
             linee: Array.isArray(template?.linee) ? template.linee.map(line => ({
               prodId: Number(line?.prodId),
               qty: Number(line?.qty || 0),
+              unitaMisura: String(line?.unitaMisura || line?.unita_misura || 'pezzi').trim() || 'pezzi',
             })).filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0) : [],
           }));
         })(),
@@ -387,6 +388,7 @@ async function saveTentataVenditaSettings(next) {
         linee: Array.isArray(template?.linee) ? template.linee.map(line => ({
           prodId: Number(line?.prodId),
           qty: Number(line?.qty || 0),
+          unitaMisura: String(line?.unitaMisura || line?.unita_misura || 'pezzi').trim() || 'pezzi',
         })).filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0) : [],
       })).filter(template => template.id) : [],
       assegnazioni: (entry?.assegnazioni && typeof entry.assegnazioni === 'object')
@@ -6932,15 +6934,15 @@ app.get('/api/giacenze/rientro-tv', authMiddleware, requireRole('admin', 'magazz
     if (!data) return res.status(400).json({ error: 'data obbligatoria' });
     const { rows } = await q(
       `SELECT ol.prodotto_id, p.nome, p.codice, p.um, ol.lotto,
-              SUM(ol.qty) as qty_totale, SUM(ol.peso_effettivo) as peso_totale
+              ol.unita_misura, SUM(ol.qty) as qty_totale, SUM(ol.peso_effettivo) as peso_totale
        FROM ordine_linee ol
        JOIN ordini o ON o.id = ol.ordine_id
        JOIN prodotti p ON p.id = ol.prodotto_id
        WHERE o.data = $1 AND ol.preparato = true AND ol.lotto != ''
          AND COALESCE(p.gestione_giacenza, TRUE) = TRUE
          AND ($2 = '' OR COALESCE(NULLIF(o.giro_override,''), (SELECT giro FROM clienti WHERE id=o.cliente_id), '') = $2)
-       GROUP BY ol.prodotto_id, p.nome, p.codice, p.um, ol.lotto
-       ORDER BY p.nome, ol.lotto`,
+       GROUP BY ol.prodotto_id, p.nome, p.codice, p.um, ol.lotto, ol.unita_misura
+       ORDER BY p.nome, ol.lotto, ol.unita_misura`,
       [data, giro]
     );
     res.json(rows);
@@ -6961,22 +6963,36 @@ app.post('/api/giacenze/rientro-tv', authMiddleware, requireRole('admin', 'magaz
       const qty = Number(r.quantita_rientro || 0);
       if (!Number.isFinite(qty) || qty <= 0) continue;
       const lottoVal = String(r.lotto || '').trim();
+      const prodottoId = Number(r.prodotto_id || 0);
+      if (!Number.isFinite(prodottoId) || prodottoId <= 0) continue;
+      const { rows: prodotti } = await client.query(
+        `SELECT id, um, cartoni_attivi, peso_medio_pezzo_kg, pezzi_per_cartone, unita_per_cartone, pedane_attive, cartoni_per_pedana
+         FROM prodotti
+         WHERE id=$1
+         LIMIT 1`,
+        [prodottoId]
+      );
+      const prodotto = prodotti[0];
+      if (!prodotto) continue;
+      const unitaMisura = String(r.unita_misura || prodotto.um || 'pezzi').trim() || 'pezzi';
+      const qtyBase = calcolaQtyBaseRiga({ qty, unitaMisura, prodotto });
+      const qtyMagazzino = Number.isFinite(qtyBase) && qtyBase > 0 ? qtyBase : qty;
       const { rows: existing } = await client.query(
         'SELECT id, quantita FROM giacenze WHERE prodotto_id=$1 AND lotto=$2 LIMIT 1',
-        [r.prodotto_id, lottoVal]
+        [prodottoId, lottoVal]
       );
       let giacenzaId, oldQty, newQty;
       if (existing.length) {
         giacenzaId = existing[0].id;
         oldQty = Number(existing[0].quantita);
-        newQty = oldQty + qty;
+        newQty = oldQty + qtyMagazzino;
         await client.query('UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2', [newQty, giacenzaId]);
       } else {
         oldQty = 0;
-        newQty = qty;
+        newQty = qtyMagazzino;
         const ins = await client.query(
           `INSERT INTO giacenze (prodotto_id,lotto,quantita,note) VALUES ($1,$2,$3,$4) RETURNING id`,
-          [r.prodotto_id, lottoVal, newQty, r.note || '']
+          [prodottoId, lottoVal, newQty, r.note || '']
         );
         giacenzaId = ins.rows[0].id;
       }
@@ -6984,7 +7000,7 @@ app.post('/api/giacenze/rientro-tv', authMiddleware, requireRole('admin', 'magaz
         `INSERT INTO movimenti_giacenza
           (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
          VALUES ($1,$2,$3,'tentata_vendita',$4,$5,$6,$7,$8,$9)`,
-        [giacenzaId, r.prodotto_id, lottoVal, qty, oldQty, newQty, req.user.id || null, utenteName, r.note || '']
+        [giacenzaId, prodottoId, lottoVal, qtyMagazzino, oldQty, newQty, req.user.id || null, utenteName, r.note || '']
       );
     }
     await client.query('COMMIT');
