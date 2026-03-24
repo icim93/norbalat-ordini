@@ -3997,6 +3997,7 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
     const c = await q('SELECT id, sbloccato, onboarding_stato FROM clienti WHERE id=$1', [cliente_id]);
     if (!c.rows.length) return res.status(400).json({ error: 'Cliente non trovato' });
     if (!c.rows[0].sbloccato || c.rows[0].onboarding_stato !== 'approvato') return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
+    const isTentataVenditaOrder = Number(cliente_id) > 0 && Number(c.rows[0].id) === Number(await ensureTentataVenditaCliente(client).then(row => row.id).catch(() => null));
     await client.query('BEGIN');
     const preparedLines = await prepareOrderLinesForSave({
       linee,
@@ -4004,16 +4005,23 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
       data,
       client,
     });
+    const existingOrderParams = [cliente_id, data];
+    let existingOrderWhere = `
+        WHERE cliente_id=$1
+          AND data=$2
+          AND stato NOT IN ('annullato', 'consegnato')`;
+    if (isTentataVenditaOrder) {
+      existingOrderParams.push(autista_di_giro || null);
+      existingOrderWhere += ` AND autista_di_giro IS NOT DISTINCT FROM $3`;
+    }
     const { rows: existingOrderRows } = await client.query(
       `SELECT id, note
          FROM ordini
-        WHERE cliente_id=$1
-          AND data=$2
-          AND stato NOT IN ('annullato', 'consegnato')
+         ${existingOrderWhere}
         ORDER BY id DESC
         LIMIT 1
         FOR UPDATE`,
-      [cliente_id, data]
+      existingOrderParams
     );
 
     let oid;
