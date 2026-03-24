@@ -9187,6 +9187,7 @@ function updatePDFPreview() {
   const ORDER_TABLE_HEADER_HEIGHT = 18;
   const ORDER_LINE_HEIGHT = 22;
   const PAGE_FOOTER_HEIGHT = 26;
+  const COLUMN_TOLERANCE = 4;
   const AVAILABLE_COLUMN_HEIGHT = PAGE_HEIGHT - PAGE_HEADER_HEIGHT - PAGE_FOOTER_HEIGHT;
 
   function buildOrderSegments(order) {
@@ -9230,64 +9231,63 @@ function updatePDFPreview() {
     </div>`;
   }
 
-  function paginateGiroColumn(giroName, giroOrders, autistaName) {
-    const segments = giroOrders.map(buildOrderSegments);
-    const pages = [];
-    let segmentIndex = 0;
-    let lineIndex = 0;
-    let firstPage = true;
-    while (segmentIndex < segments.length) {
-      let remaining = AVAILABLE_COLUMN_HEIGHT - COLUMN_HEADER_HEIGHT;
-      let html = `<div style="background:#f0f4f0;padding:6px 10px;margin-bottom:8px;border-radius:4px;border-left:3px solid #2e7d32;">
-        <div style="font-weight:700;font-size:13px;text-transform:uppercase;">${escapeHtml(giroName)}${firstPage ? '' : ' <span style="font-weight:400;font-size:10px;color:#666;">(CONTINUA)</span>'}</div>
-        ${autistaName ? `<div style="font-size:11px;color:#555;">👤 ${escapeHtml(autistaName)}</div>` : ''}
-        <div style="font-size:11px;color:#777;">${giroOrders.length} ordini</div>
-      </div>`;
-      while (segmentIndex < segments.length) {
-        const segment = segments[segmentIndex];
-        const noteHeight = segment.note ? ORDER_NOTE_HEIGHT : 0;
-        const fixedHeight = ORDER_HEADER_HEIGHT + noteHeight + ORDER_TABLE_HEADER_HEIGHT;
-        const linesPerChunk = Math.max(1, Math.floor((remaining - fixedHeight) / ORDER_LINE_HEIGHT));
-        if (remaining <= fixedHeight + ORDER_LINE_HEIGHT) break;
-        const lineSlice = segment.lines.slice(lineIndex, lineIndex + linesPerChunk);
-        if (!lineSlice.length) break;
-        html += buildOrderChunkHtml(segment, lineSlice, lineIndex > 0);
-        remaining -= fixedHeight + (lineSlice.length * ORDER_LINE_HEIGHT) + 8;
-        lineIndex += lineSlice.length;
-        if (lineIndex >= segment.lines.length) {
-          segmentIndex += 1;
-          lineIndex = 0;
-        }
-      }
-      pages.push(html);
-      firstPage = false;
-    }
-    return pages.length ? pages : [`<div style="background:#f0f4f0;padding:6px 10px;margin-bottom:8px;border-radius:4px;border-left:3px solid #2e7d32;">
-      <div style="font-weight:700;font-size:13px;text-transform:uppercase;">${escapeHtml(giroName)}</div>
-      ${autistaName ? `<div style="font-size:11px;color:#555;">👤 ${escapeHtml(autistaName)}</div>` : ''}
-      <div style="font-size:11px;color:#777;">0 ordini</div>
-    </div>`];
+  function createGiroState(giroName, giroOrders, autistaName) {
+    return {
+      giro: giroName,
+      autista: autistaName,
+      orderCount: giroOrders.length,
+      segments: giroOrders.map(buildOrderSegments),
+      segmentIndex: 0,
+      lineIndex: 0,
+      pageCount: 0,
+    };
   }
 
-  const giroEntries = giri.map(g => ({
-    giro: g,
-    autista: autistaGiro(g),
-    ordini: giriMap[g] || [],
-  }));
-  const pages = [];
-  for (let batchStart = 0; batchStart < giroEntries.length; batchStart += MAX_COLUMNS) {
-    const batch = giroEntries.slice(batchStart, batchStart + MAX_COLUMNS);
-    const columnPages = batch.map(entry => paginateGiroColumn(entry.giro, entry.ordini, entry.autista));
-    const pageCount = Math.max(...columnPages.map(col => col.length));
-    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
-      pages.push({
-        columns: batch.map((entry, idx) => ({
-          giro: entry.giro,
-          html: columnPages[idx][pageIndex] || '',
-        })),
-        columnCount: batch.length,
-      });
+  function isGiroStateActive(stateItem) {
+    return stateItem.segmentIndex < stateItem.segments.length;
+  }
+
+  function renderGiroPageChunk(stateItem) {
+    let remaining = AVAILABLE_COLUMN_HEIGHT - COLUMN_HEADER_HEIGHT;
+    let html = `<div style="background:#f0f4f0;padding:6px 10px;margin-bottom:8px;border-radius:4px;border-left:3px solid #2e7d32;">
+      <div style="font-weight:700;font-size:13px;text-transform:uppercase;">${escapeHtml(stateItem.giro)}${stateItem.pageCount === 0 ? '' : ' <span style="font-weight:400;font-size:10px;color:#666;">(CONTINUA)</span>'}</div>
+      ${stateItem.autista ? `<div style="font-size:11px;color:#555;">👤 ${escapeHtml(stateItem.autista)}</div>` : ''}
+      <div style="font-size:11px;color:#777;">${stateItem.orderCount} ordini</div>
+    </div>`;
+
+    while (stateItem.segmentIndex < stateItem.segments.length) {
+      const segment = stateItem.segments[stateItem.segmentIndex];
+      const noteHeight = segment.note ? ORDER_NOTE_HEIGHT : 0;
+      const fixedHeight = ORDER_HEADER_HEIGHT + noteHeight + ORDER_TABLE_HEADER_HEIGHT;
+      const usableForLines = remaining - fixedHeight - COLUMN_TOLERANCE;
+      if (usableForLines < ORDER_LINE_HEIGHT) break;
+      const linesPerChunk = Math.max(1, Math.floor(usableForLines / ORDER_LINE_HEIGHT));
+      const lineSlice = segment.lines.slice(stateItem.lineIndex, stateItem.lineIndex + linesPerChunk);
+      if (!lineSlice.length) break;
+      html += buildOrderChunkHtml(segment, lineSlice, stateItem.lineIndex > 0);
+      remaining -= fixedHeight + (lineSlice.length * ORDER_LINE_HEIGHT) + 8;
+      stateItem.lineIndex += lineSlice.length;
+      if (stateItem.lineIndex >= segment.lines.length) {
+        stateItem.segmentIndex += 1;
+        stateItem.lineIndex = 0;
+      }
     }
+
+    stateItem.pageCount += 1;
+    return html;
+  }
+
+  const giroStates = giri.map(g => createGiroState(g, giriMap[g] || [], autistaGiro(g)));
+  const pages = [];
+  while (giroStates.some(isGiroStateActive)) {
+    const activeStates = giroStates.filter(isGiroStateActive).slice(0, MAX_COLUMNS);
+    pages.push({
+      columnCount: activeStates.length,
+      columns: activeStates.map(stateItem => ({
+        giro: stateItem.giro,
+        html: renderGiroPageChunk(stateItem),
+      })),
+    });
   }
 
   const cagliataSummaryHtml = buildReportCagliataSummaryHtml(ordini);
