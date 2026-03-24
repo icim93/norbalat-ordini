@@ -505,6 +505,8 @@
   document.addEventListener('DOMContentLoaded', () => {
     const rememberEl = document.getElementById('login-remember');
     if (rememberEl) rememberEl.checked = !!localStorage.getItem(AUTH_STORAGE_KEY);
+    if (typeof window.initGlobalUppercaseEnforcer === 'function') window.initGlobalUppercaseEnforcer();
+    if (typeof window.initEntitySelectAutocomplete === 'function') window.initEntitySelectAutocomplete();
     tryRestoreSession();
   });
 })();

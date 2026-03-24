@@ -4692,6 +4692,186 @@ async function api(method, path, body = null) {
   return data;
 }
 
+// ─── MAIUSCOLO GLOBALE + AUTOCOMPLETE ENTITY SELECT ──────────────
+function shouldForceUppercaseField(el) {
+  if (!el || el.disabled || el.readOnly) return false;
+  const tag = String(el.tagName || '').toUpperCase();
+  const type = String(el.type || '').toLowerCase();
+  const idName = `${el.id || ''} ${el.name || ''}`.toLowerCase();
+  if (tag === 'TEXTAREA') return !/(password|username|token)/.test(idName);
+  if (tag !== 'INPUT') return false;
+  if (['password', 'hidden', 'date', 'datetime-local', 'time', 'number', 'file', 'checkbox', 'radio', 'range'].includes(type)) return false;
+  if (/(password|username|token|login-user|login-pass|profilo-username|ut-username)/.test(idName)) return false;
+  return ['text', 'search', 'email', 'tel', ''].includes(type);
+}
+
+function forceUppercaseFieldValue(el) {
+  if (!shouldForceUppercaseField(el)) return;
+  const current = String(el.value ?? '');
+  const next = current.toUpperCase();
+  if (current === next) return;
+  const start = typeof el.selectionStart === 'number' ? el.selectionStart : null;
+  const end = typeof el.selectionEnd === 'number' ? el.selectionEnd : null;
+  el.value = next;
+  if (start !== null && end !== null && typeof el.setSelectionRange === 'function') {
+    el.setSelectionRange(start, end);
+  }
+}
+
+function initGlobalUppercaseEnforcer() {
+  if (window._globalUppercaseEnforcerInit) return;
+  window._globalUppercaseEnforcerInit = true;
+  document.addEventListener('input', e => forceUppercaseFieldValue(e.target), true);
+  document.addEventListener('change', e => forceUppercaseFieldValue(e.target), true);
+  document.addEventListener('blur', e => forceUppercaseFieldValue(e.target), true);
+}
+
+const ENTITY_SELECT_AUTOCOMPLETE_CONFIG = {
+  'msg-client-id': { placeholder: 'Cerca cliente...' },
+  'ls-prodotto': { placeholder: 'Cerca prodotto...' },
+  'ls-cliente': { placeholder: 'Cerca cliente...' },
+  'prep-add-line-prod': { placeholder: 'Cerca prodotto...' },
+  'giacenza-carico-prodotto': { placeholder: 'Cerca prodotto...' },
+  'ls-prodotti-multi': { placeholder: 'Filtra prodotti...', multiple: true },
+  'ls-clienti-multi': { placeholder: 'Filtra clienti...', multiple: true },
+  'ls-clienti-excluded': { placeholder: 'Filtra clienti...', multiple: true },
+};
+
+function entitySelectOptions(select) {
+  return [...(select?.options || [])].filter(opt => opt && !opt.disabled && String(opt.value || '').trim() !== '');
+}
+
+function updateEntitySelectSingleAutocomplete(select) {
+  const wrap = select?._entityAcWrap;
+  const input = select?._entityAcInput;
+  const dd = select?._entityAcDropdown;
+  if (!wrap || !input || !dd) return;
+  const selected = select.options[select.selectedIndex] || null;
+  if (document.activeElement !== input) {
+    input.value = selected && selected.value ? selected.textContent.trim() : '';
+  }
+  const query = String(input.value || '').trim().toLowerCase();
+  const options = entitySelectOptions(select).filter(opt => {
+    if (!query) return true;
+    return String(opt.textContent || '').toLowerCase().includes(query);
+  }).slice(0, 12);
+  dd.innerHTML = options.length
+    ? options.map(opt => `<div class="ac-item" data-value="${escapeHtml(String(opt.value))}">${escapeHtml(String(opt.textContent || '').trim())}</div>`).join('')
+    : '<div class="ac-empty">Nessun risultato</div>';
+}
+
+function bindEntitySingleSelectAutocomplete(select, config) {
+  if (!select || select.dataset.entityAutocompleteBound === 'single') return;
+  select.dataset.entityAutocompleteBound = 'single';
+  const wrap = document.createElement('div');
+  wrap.className = 'ac-wrap';
+  wrap.style.marginBottom = '8px';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'ac-input';
+  input.placeholder = config.placeholder || 'Cerca...';
+  input.autocomplete = 'off';
+  const dd = document.createElement('div');
+  dd.className = 'ac-dropdown';
+  wrap.appendChild(input);
+  wrap.appendChild(dd);
+  select.parentNode?.insertBefore(wrap, select);
+  select._entityAcWrap = wrap;
+  select._entityAcInput = input;
+  select._entityAcDropdown = dd;
+
+  const close = () => dd.classList.remove('open');
+  const open = () => {
+    updateEntitySelectSingleAutocomplete(select);
+    dd.classList.add('open');
+  };
+
+  input.addEventListener('focus', open);
+  input.addEventListener('input', () => {
+    forceUppercaseFieldValue(input);
+    updateEntitySelectSingleAutocomplete(select);
+    dd.classList.add('open');
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      close();
+      return;
+    }
+    if (e.key !== 'Enter') return;
+    const first = dd.querySelector('.ac-item');
+    if (!first) return;
+    e.preventDefault();
+    const value = first.getAttribute('data-value') || '';
+    select.value = value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    updateEntitySelectSingleAutocomplete(select);
+    close();
+  });
+  dd.addEventListener('mousedown', e => {
+    const item = e.target.closest('.ac-item');
+    if (!item) return;
+    const value = item.getAttribute('data-value') || '';
+    select.value = value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    updateEntitySelectSingleAutocomplete(select);
+    close();
+  });
+  select.addEventListener('change', () => updateEntitySelectSingleAutocomplete(select));
+  document.addEventListener('click', e => {
+    if (!wrap.contains(e.target) && e.target !== select) close();
+  });
+  const observer = new MutationObserver(() => updateEntitySelectSingleAutocomplete(select));
+  observer.observe(select, { childList: true, subtree: true, attributes: true });
+  updateEntitySelectSingleAutocomplete(select);
+}
+
+function applyEntityMultiSelectFilter(select, input) {
+  const query = String(input?.value || '').trim().toLowerCase();
+  [...(select?.options || [])].forEach(opt => {
+    if (!opt || String(opt.value || '').trim() === '') return;
+    const match = !query || String(opt.textContent || '').toLowerCase().includes(query);
+    opt.hidden = !match && !opt.selected;
+  });
+}
+
+function bindEntityMultiSelectFilter(select, config) {
+  if (!select || select.dataset.entityAutocompleteBound === 'multi') return;
+  select.dataset.entityAutocompleteBound = 'multi';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'search-input';
+  input.placeholder = config.placeholder || 'Filtra...';
+  input.style.marginBottom = '8px';
+  select.parentNode?.insertBefore(input, select);
+  input.addEventListener('input', () => {
+    forceUppercaseFieldValue(input);
+    applyEntityMultiSelectFilter(select, input);
+  });
+  const observer = new MutationObserver(() => applyEntityMultiSelectFilter(select, input));
+  observer.observe(select, { childList: true, subtree: true, attributes: true });
+  applyEntityMultiSelectFilter(select, input);
+}
+
+function ensureEntitySelectAutocomplete() {
+  Object.entries(ENTITY_SELECT_AUTOCOMPLETE_CONFIG).forEach(([id, config]) => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    if (config.multiple || select.multiple) bindEntityMultiSelectFilter(select, config);
+    else bindEntitySingleSelectAutocomplete(select, config);
+  });
+}
+
+function initEntitySelectAutocomplete() {
+  if (window._entitySelectAutocompleteInit) return;
+  window._entitySelectAutocompleteInit = true;
+  ensureEntitySelectAutocomplete();
+  const observer = new MutationObserver(() => ensureEntitySelectAutocomplete());
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
+window.initGlobalUppercaseEnforcer = initGlobalUppercaseEnforcer;
+window.initEntitySelectAutocomplete = initEntitySelectAutocomplete;
+
 // ─── CARICAMENTO DATI INIZIALI ────────────────────────────────────
 async function loadAllData() {
   try {
