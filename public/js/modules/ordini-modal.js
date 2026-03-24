@@ -43,6 +43,7 @@ function openEditOrder(id) {
   const o = state.ordini.find(x => x.id === id);
   state.editingId = id;
   orderLines = o.linee.map(l => ({
+    id: l.id,
     prodId: l.prodId,
     prodottoNomeLibero: l.prodottoNomeLibero || '',
     qty: l.qty,
@@ -50,6 +51,7 @@ function openEditOrder(id) {
     isPedana: !!l.isPedana,
     notaRiga: l.notaRiga||'',
     unitaMisura: l.unitaMisura||'pezzi',
+    colliEffettivi: l.colliEffettivi ?? null,
     pesoEffettivo: l.pesoEffettivo||null,
     preparato: !!l.preparato,
     lotto: l.lotto || '',
@@ -1307,6 +1309,7 @@ async function saveOrder() {
       const draftName = document.getElementById(`ac-prod-input-${idx}`)?.value || '';
       const prodottoNomeLibero = l.prodId ? '' : String(l.prodottoNomeLibero || draftName || '').trim();
       return {
+      id: l.id || null,
       prodotto_id: l.prodId || null,
       prodotto_nome_libero: prodottoNomeLibero,
       qty: l.qty,
@@ -1314,6 +1317,8 @@ async function saveOrder() {
       is_pedana: !!l.isPedana,
       nota_riga: l.notaRiga||'',
       unita_misura: l.unitaMisura||'pezzi',
+      colli_effettivi: l.colliEffettivi ?? null,
+      peso_effettivo: l.pesoEffettivo ?? null,
       preparato: !!l.preparato,
       lotto: l.lotto || '',
     };})

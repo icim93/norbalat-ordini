@@ -4005,7 +4005,9 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
        note=$6,data_non_certa=$7,stef=$8,altro_vettore=$9,giro_override=$10,updated_at=NOW() WHERE id=$11`,
       [cliente_id, agente_id||null, autista_di_giro||null, data, stato, note, data_non_certa, stef, !!altro_vettore, String(giro_override || ''), id]
     );
-    await client.query('DELETE FROM ordine_linee WHERE ordine_id=$1', [id]);
+    const { rows: existingLines } = await client.query('SELECT * FROM ordine_linee WHERE ordine_id=$1 ORDER BY id', [id]);
+    const existingLinesById = new Map(existingLines.map(row => [Number(row.id), row]));
+    const keptLineIds = new Set();
     for (const l of linee) {
       const prodottoId = l.prodotto_id ? parseInt(l.prodotto_id, 10) : null;
       const prodottoNomeLibero = String(l.prodotto_nome_libero || '').trim();
@@ -4025,11 +4027,88 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
       const qtyBase = prodottoRow
         ? calcolaQtyBaseRiga({ qty: l.qty, unitaMisura: l.unita_misura || 'pezzi', prodotto: prodottoRow })
         : null;
-      await client.query(
-        `INSERT INTO ordine_linee (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [id, prodottoId, prodottoNomeLibero, l.qty, qtyBase, prezzoUnitario, !!l.is_pedana, l.nota_riga||'', l.unita_misura||'pezzi', !!l.preparato, String(l.lotto || '').trim()]
+      const incomingLineId = Number.parseInt(l.id, 10);
+      const existingLine = Number.isFinite(incomingLineId) ? existingLinesById.get(incomingLineId) || null : null;
+      const incomingMatchKey = normalizeOrderLineMatchKey({
+        prodotto_id: prodottoId,
+        prodotto_nome_libero: prodottoNomeLibero,
+        unita_misura: l.unita_misura || 'pezzi',
+      });
+      const sameIdentity = existingLine && normalizeOrderLineMatchKey(existingLine) === incomingMatchKey;
+      const nextPreparato = l.preparato !== undefined
+        ? !!l.preparato
+        : (sameIdentity ? !!existingLine?.preparato : false);
+      const nextLotto = l.lotto !== undefined
+        ? String(l.lotto || '').trim()
+        : (sameIdentity ? String(existingLine?.lotto || '').trim() : '');
+      const nextPesoEffettivo = l.peso_effettivo !== undefined
+        ? (l.peso_effettivo === null || l.peso_effettivo === '' ? null : Number(l.peso_effettivo))
+        : (sameIdentity ? (existingLine?.peso_effettivo ?? null) : null);
+      const nextColliEffettivi = l.colli_effettivi !== undefined
+        ? (l.colli_effettivi === null || l.colli_effettivi === '' ? null : Number(l.colli_effettivi))
+        : (sameIdentity ? (existingLine?.colli_effettivi ?? null) : null);
+      if (existingLine) {
+        await client.query(
+          `UPDATE ordine_linee
+              SET prodotto_id=$1,
+                  prodotto_nome_libero=$2,
+                  qty=$3,
+                  qty_base=$4,
+                  prezzo_unitario=$5,
+                  is_pedana=$6,
+                  nota_riga=$7,
+                  unita_misura=$8,
+                  preparato=$9,
+                  lotto=$10,
+                  peso_effettivo=$11,
+                  colli_effettivi=$12
+            WHERE id=$13 AND ordine_id=$14`,
+          [
+            prodottoId,
+            prodottoNomeLibero,
+            l.qty,
+            qtyBase,
+            prezzoUnitario,
+            !!l.is_pedana,
+            l.nota_riga || '',
+            l.unita_misura || 'pezzi',
+            nextPreparato,
+            nextLotto,
+            nextPesoEffettivo,
+            nextColliEffettivi,
+            existingLine.id,
+            id,
+          ]
+        );
+        keptLineIds.add(existingLine.id);
+        continue;
+      }
+      const inserted = await client.query(
+        `INSERT INTO ordine_linee
+          (ordine_id,prodotto_id,prodotto_nome_libero,qty,qty_base,prezzo_unitario,is_pedana,nota_riga,unita_misura,preparato,lotto,peso_effettivo,colli_effettivi)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         RETURNING id`,
+        [
+          id,
+          prodottoId,
+          prodottoNomeLibero,
+          l.qty,
+          qtyBase,
+          prezzoUnitario,
+          !!l.is_pedana,
+          l.nota_riga || '',
+          l.unita_misura || 'pezzi',
+          nextPreparato,
+          nextLotto,
+          nextPesoEffettivo,
+          nextColliEffettivi,
+        ]
       );
+      keptLineIds.add(inserted.rows[0].id);
+    }
+    for (const existingLine of existingLines) {
+      if (keptLineIds.has(existingLine.id)) continue;
+      await client.query('DELETE FROM ordine_linee WHERE id=$1 AND ordine_id=$2', [existingLine.id, id]);
     }
     await client.query('COMMIT');
     const u = req.user;
