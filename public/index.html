@@ -9042,7 +9042,7 @@ function updatePDFPreview() {
     return escapeHtml(String(prodotto.nome || 'Prodotto libero').trim() || 'Prodotto libero');
   }
 
-  function buildReportCagliataSummaryHtml(reportOrdini) {
+  function buildReportCagliataSummary(reportOrdini) {
     const totals = new Map();
     (reportOrdini || []).forEach(o => {
       (o.linee || []).forEach(l => {
@@ -9058,18 +9058,22 @@ function updatePDFPreview() {
         totals.set(key, entry);
       });
     });
-    if (!totals.size) return '';
-    const parts = Array.from(totals.values())
+    if (!totals.size) return { html: '', height: 0, count: 0 };
+    const values = Array.from(totals.values())
       .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' }))
-      .map(entry => {
+    const parts = values.map(entry => {
         const chunks = [];
         if (entry.pedane > 0) chunks.push(`${Number(entry.pedane).toFixed(2).replace(/\.00$/, '')} ${entry.pedane === 1 ? 'PEDANA' : 'PEDANE'}`);
         if (entry.pezzi > 0) chunks.push(`${Number(entry.pezzi).toFixed(2).replace(/\.00$/, '')} ${entry.pezzi === 1 ? 'PEZZO' : 'PEZZI'}`);
         return `<div style="padding:4px 0;border-bottom:1px dotted #ddd;"><b>${escapeHtml(entry.nome)}</b> ${chunks.join(' + ')}</div>`;
       }).join('');
-    return `
+    return {
+      html: `
       <div style="font-weight:700;font-size:14px;margin-bottom:8px;text-transform:uppercase;">Cagliate da uscire dalla cella</div>
-      <div style="font-size:11px;color:#333;">${parts}</div>`;
+      <div style="font-size:11px;color:#333;">${parts}</div>`,
+      height: 38 + (values.length * 24),
+      count: values.length,
+    };
   }
 
   // ── REPORT MAGAZZINO: nome prodotto + qtà + unità ──
@@ -9179,6 +9183,7 @@ function updatePDFPreview() {
   }
 
   const MAX_COLUMNS = 3;
+  const FIXED_COLUMN_COUNT = Math.min(MAX_COLUMNS, Math.max(1, giri.length));
   const PAGE_HEIGHT = 980;
   const PAGE_HEADER_HEIGHT = 58;
   const COLUMN_HEADER_HEIGHT = 64;
@@ -9189,6 +9194,7 @@ function updatePDFPreview() {
   const PAGE_FOOTER_HEIGHT = 26;
   const COLUMN_TOLERANCE = 4;
   const AVAILABLE_COLUMN_HEIGHT = PAGE_HEIGHT - PAGE_HEADER_HEIGHT - PAGE_FOOTER_HEIGHT;
+  const SUMMARY_GAP_HEIGHT = 12;
 
   function buildOrderSegments(order) {
     const cl = getCliente(order.clienteId);
@@ -9247,8 +9253,8 @@ function updatePDFPreview() {
     return stateItem.segmentIndex < stateItem.segments.length;
   }
 
-  function renderGiroPageChunk(stateItem) {
-    let remaining = AVAILABLE_COLUMN_HEIGHT - COLUMN_HEADER_HEIGHT;
+  function renderGiroPageChunk(stateItem, availableHeight) {
+    let remaining = availableHeight - COLUMN_HEADER_HEIGHT;
     let html = `<div style="background:#f0f4f0;padding:6px 10px;margin-bottom:8px;border-radius:4px;border-left:3px solid #2e7d32;">
       <div style="font-weight:700;font-size:13px;text-transform:uppercase;">${escapeHtml(stateItem.giro)}${stateItem.pageCount === 0 ? '' : ' <span style="font-weight:400;font-size:10px;color:#666;">(CONTINUA)</span>'}</div>
       ${stateItem.autista ? `<div style="font-size:11px;color:#555;">👤 ${escapeHtml(stateItem.autista)}</div>` : ''}
@@ -9274,47 +9280,70 @@ function updatePDFPreview() {
     }
 
     stateItem.pageCount += 1;
-    return html;
+    return {
+      html,
+      usedHeight: availableHeight - remaining,
+    };
   }
 
-  const giroStates = giri.map(g => createGiroState(g, giriMap[g] || [], autistaGiro(g)));
-  const pages = [];
-  while (giroStates.some(isGiroStateActive)) {
-    const activeStates = giroStates.filter(isGiroStateActive).slice(0, MAX_COLUMNS);
-    pages.push({
-      columnCount: activeStates.length,
-      columns: activeStates.map(stateItem => ({
-        giro: stateItem.giro,
-        html: renderGiroPageChunk(stateItem),
-      })),
-    });
+  function paginateMagazzinoPages({ introHeight = 0 } = {}) {
+    const giroStates = giri.map(g => createGiroState(g, giriMap[g] || [], autistaGiro(g)));
+    const pages = [];
+    for (let batchStart = 0; batchStart < giroStates.length; batchStart += FIXED_COLUMN_COUNT) {
+      const batchStates = giroStates.slice(batchStart, batchStart + FIXED_COLUMN_COUNT);
+      let pageInBatch = 0;
+      while (batchStates.some(isGiroStateActive)) {
+        const columnAvailableHeight = AVAILABLE_COLUMN_HEIGHT - (pages.length === 0 ? introHeight : 0);
+        const columns = [];
+        for (let idx = 0; idx < FIXED_COLUMN_COUNT; idx += 1) {
+          const stateItem = batchStates[idx] || null;
+          if (!stateItem || !isGiroStateActive(stateItem)) {
+            columns.push({ giro: stateItem?.giro || '', html: '', usedHeight: 0 });
+            continue;
+          }
+          const chunk = renderGiroPageChunk(stateItem, columnAvailableHeight);
+          columns.push({ giro: stateItem.giro, html: chunk.html, usedHeight: chunk.usedHeight });
+        }
+        pages.push({
+          columnCount: FIXED_COLUMN_COUNT,
+          columns,
+          maxUsedHeight: Math.max(...columns.map(col => Number(col.usedHeight || 0)), 0),
+          batchIndex: Math.floor(batchStart / FIXED_COLUMN_COUNT),
+          pageInBatch,
+        });
+        pageInBatch += 1;
+      }
+    }
+    return pages;
   }
 
-  const cagliataSummaryHtml = buildReportCagliataSummaryHtml(ordini);
+  const cagliataSummary = buildReportCagliataSummary(ordini);
+  let summaryAtTop = false;
+  let pages = paginateMagazzinoPages();
+  if (cagliataSummary.html && pages.length) {
+    const lastPage = pages[pages.length - 1];
+    const remainingOnLastPage = AVAILABLE_COLUMN_HEIGHT - Number(lastPage.maxUsedHeight || 0);
+    if (remainingOnLastPage < (cagliataSummary.height + SUMMARY_GAP_HEIGHT)) {
+      summaryAtTop = true;
+      pages = paginateMagazzinoPages({ introHeight: cagliataSummary.height + SUMMARY_GAP_HEIGHT });
+    }
+  }
+
   const pagesHtml = pages.map((page, pageIndex) => `
     <section class="print-page">
       <div class="print-page-header">
         <div style="font-weight:700;font-size:14px;text-transform:uppercase;">NORBALAT — ${titoloTipo} ${formatDate(data)}${giriSel ? ' · ' + giriSel.map(g=>g.toUpperCase()).join(', ') : ''}</div>
         <div style="font-size:11px;color:#666;">Pagina ${pageIndex + 1}</div>
       </div>
+      ${summaryAtTop && pageIndex === 0 && cagliataSummary.html ? `<div style="margin-bottom:${SUMMARY_GAP_HEIGHT}px;">${cagliataSummary.html}</div>` : ''}
       <div class="print-columns print-columns-${page.columnCount}">
         ${page.columns.map(col => `<div class="print-column">${col.html}</div>`).join('')}
       </div>
+      ${!summaryAtTop && cagliataSummary.html && pageIndex === pages.length - 1 ? `<div style="margin-top:${SUMMARY_GAP_HEIGHT}px;">${cagliataSummary.html}</div>` : ''}
       <div class="print-page-footer">Ordini: <b>${totOrdini}</b> · Righe prodotto: <b>${totLinee}</b> · ${printTimestamp}</div>
     </section>`).join('');
 
-  const cagliataPageHtml = cagliataSummaryHtml
-    ? `<section class="print-page print-page-summary">
-        <div class="print-page-header">
-          <div style="font-weight:700;font-size:14px;text-transform:uppercase;">NORBALAT — ${titoloTipo} ${formatDate(data)}</div>
-          <div style="font-size:11px;color:#666;">Riepilogo finale</div>
-        </div>
-        <div style="padding-top:6px;">${cagliataSummaryHtml}</div>
-        <div class="print-page-footer">${printTimestamp}</div>
-      </section>`
-    : '';
-
-  preview.innerHTML = `<div class="print-document">${pagesHtml}${cagliataPageHtml}</div>`;
+  preview.innerHTML = `<div class="print-document" data-fixed-columns="${FIXED_COLUMN_COUNT}" data-summary-position="${summaryAtTop ? 'top' : 'bottom'}">${pagesHtml}</div>`;
 }
 
 function stampaPDFGiornaliero() {
