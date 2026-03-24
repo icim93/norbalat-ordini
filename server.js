@@ -274,25 +274,71 @@ function calcolaQtyBaseRiga({ qty, unitaMisura, prodotto }) {
   return qtyNum;
 }
 
-async function ensureTentataVenditaCliente(client = null) {
+function buildTentataVenditaClienteName(user = null) {
+  const suffix = String(user?.cognome || user?.nome || '').trim().toUpperCase();
+  return suffix ? `${TENTATA_VENDITA_CLIENT_NAME} ${suffix}` : TENTATA_VENDITA_CLIENT_NAME;
+}
+
+async function ensureTentataVenditaCliente(client = null, userId = null) {
   const db = client || pool;
-  const existing = await db.query(
-    `SELECT id FROM clienti WHERE UPPER(TRIM(nome)) = UPPER(TRIM($1)) ORDER BY id LIMIT 1`,
-    [TENTATA_VENDITA_CLIENT_NAME]
-  );
+  let user = null;
+  let giro = 'variabile';
+  const normalizedUserId = Number.parseInt(userId, 10);
+  if (Number.isFinite(normalizedUserId) && normalizedUserId > 0) {
+    const userRes = await db.query(
+      `SELECT id, nome, cognome, giri_consegna
+         FROM utenti
+        WHERE id=$1
+        LIMIT 1`,
+      [normalizedUserId]
+    );
+    if (userRes.rows.length) {
+      user = userRes.rows[0];
+      const giri = Array.isArray(user.giri_consegna)
+        ? user.giri_consegna
+        : (user.giri_consegna ? JSON.parse(user.giri_consegna) : []);
+      giro = String(giri[0] || 'variabile').trim() || 'variabile';
+    }
+  }
+  const nomeCliente = buildTentataVenditaClienteName(user);
+  const existing = user
+    ? await db.query(
+      `SELECT id
+         FROM clienti
+        WHERE classificazione = $1
+          AND autista_di_giro = $2
+        ORDER BY id
+        LIMIT 1`,
+      [TENTATA_VENDITA_CLIENT_CLASS, user.id]
+    )
+    : await db.query(
+      `SELECT id
+         FROM clienti
+        WHERE UPPER(TRIM(nome)) = UPPER(TRIM($1))
+        ORDER BY id
+        LIMIT 1`,
+      [TENTATA_VENDITA_CLIENT_NAME]
+    );
   if (existing.rows.length) {
-    await db.query(
+    const updated = await db.query(
       `UPDATE clienti
          SET nome = $1,
              localita = COALESCE(NULLIF(localita, ''), 'SISTEMA'),
-             giro = COALESCE(NULLIF(giro, ''), 'variabile'),
-             classificazione = $2,
+             giro = COALESCE(NULLIF(giro, ''), $2),
+             autista_di_giro = COALESCE($3, autista_di_giro),
+             note = CASE
+                      WHEN COALESCE(note, '') = '' THEN 'Cliente tecnico generato automaticamente per le tentate vendite'
+                      ELSE note
+                    END,
+             piva = '',
+             classificazione = $4,
              onboarding_stato = 'approvato',
              sbloccato = TRUE
-       WHERE id = $3`,
-      [TENTATA_VENDITA_CLIENT_NAME, TENTATA_VENDITA_CLIENT_CLASS, existing.rows[0].id]
+         WHERE id = $5
+         RETURNING *`,
+      [nomeCliente, giro, user?.id || null, TENTATA_VENDITA_CLIENT_CLASS, existing.rows[0].id]
     );
-    return existing.rows[0].id;
+    return updated.rows?.[0] || { id: existing.rows[0].id, nome: nomeCliente, autista_di_giro: user?.id || null, classificazione: TENTATA_VENDITA_CLIENT_CLASS };
   }
   const inserted = await db.query(
     `INSERT INTO clienti (
@@ -300,13 +346,13 @@ async function ensureTentataVenditaCliente(client = null) {
         codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore,
         classificazione, onboarding_stato, onboarding_checklist, fido, sbloccato
       ) VALUES (
-        $1, '', 'SISTEMA', 'variabile', NULL, NULL, 'Cliente tecnico generato automaticamente per le tentate vendite',
-        '', '', '', '', '', FALSE, $2, 'approvato', $3::jsonb, 0, TRUE
+        $1, '', 'SISTEMA', $2, NULL, $3, 'Cliente tecnico generato automaticamente per le tentate vendite',
+        '', '', '', '', '', FALSE, $4, 'approvato', $5::jsonb, 0, TRUE
       )
-      RETURNING id`,
-    [TENTATA_VENDITA_CLIENT_NAME, TENTATA_VENDITA_CLIENT_CLASS, JSON.stringify({})]
+      RETURNING *`,
+    [nomeCliente, giro, user?.id || null, TENTATA_VENDITA_CLIENT_CLASS, JSON.stringify({})]
   );
-  return inserted.rows[0].id;
+  return inserted.rows[0];
 }
 
 function normalizePiva(raw) {
@@ -2797,6 +2843,17 @@ app.post('/api/clienti/lookup-piva', authMiddleware, requirePermission('clienti:
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/clienti/tentata/:userId', authMiddleware, async (req, res) => {
+  try {
+    const userId = Number.parseInt(req.params.userId, 10);
+    if (!Number.isFinite(userId) || userId <= 0) return res.status(400).json({ error: 'Autista non valido' });
+    const cliente = await ensureTentataVenditaCliente(null, userId);
+    res.json(cliente);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.patch('/api/clienti/:id/onboarding', authMiddleware, requirePermission('onboarding:manage'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -3994,10 +4051,10 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
       const err = nextDayOrderCutoffError(data);
       return res.status(err.status).json(err.payload);
     }
-    const c = await q('SELECT id, sbloccato, onboarding_stato FROM clienti WHERE id=$1', [cliente_id]);
+    const c = await q('SELECT id, sbloccato, onboarding_stato, classificazione FROM clienti WHERE id=$1', [cliente_id]);
     if (!c.rows.length) return res.status(400).json({ error: 'Cliente non trovato' });
     if (!c.rows[0].sbloccato || c.rows[0].onboarding_stato !== 'approvato') return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
-    const isTentataVenditaOrder = Number(cliente_id) > 0 && Number(c.rows[0].id) === Number(await ensureTentataVenditaCliente(client).then(row => row.id).catch(() => null));
+    const isTentataVenditaOrder = String(c.rows[0].classificazione || '').trim().toLowerCase() === TENTATA_VENDITA_CLIENT_CLASS;
     await client.query('BEGIN');
     const preparedLines = await prepareOrderLinesForSave({
       linee,

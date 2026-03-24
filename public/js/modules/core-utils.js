@@ -26,7 +26,7 @@
     if (!cliente) return false;
     const nome = String(cliente.nome || '').trim().toUpperCase();
     const classificazione = String(cliente.classificazione || '').trim().toLowerCase();
-    return classificazione === TENTATA_VENDITA_CLIENT_CLASS || nome === TENTATA_VENDITA_CLIENT_NAME;
+    return classificazione === TENTATA_VENDITA_CLIENT_CLASS || nome.startsWith(TENTATA_VENDITA_CLIENT_NAME);
   }
 
   function today() {

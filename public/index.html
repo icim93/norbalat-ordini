@@ -4622,12 +4622,31 @@ function clientiOrdinabili() {
   return state.clienti.filter(c => isClienteSbloccato(c) && !(typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c)));
 }
 
-async function ensureTentataVenditaClienteLoaded() {
-  let cliente = state.clienti.find(c => typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c));
+async function ensureTentataVenditaClienteLoaded(userId = null) {
+  const targetUserId = Number(userId) || state.currentUser?.id || null;
+  let cliente = state.clienti.find(c =>
+    typeof isTentataVenditaCliente === 'function'
+    && isTentataVenditaCliente(c)
+    && Number(c.autistaDiGiro || 0) === Number(targetUserId || 0)
+  );
   if (cliente) return cliente;
+  if (targetUserId) {
+    const saved = await api('GET', `/api/clienti/tentata/${targetUserId}`);
+    if (saved) {
+      const normalized = typeof normalizeCliente === 'function' ? normalizeCliente(saved) : saved;
+      const idx = state.clienti.findIndex(c => c.id === normalized.id);
+      if (idx >= 0) state.clienti[idx] = normalized;
+      else state.clienti.push(normalized);
+      return normalized;
+    }
+  }
   const rows = await api('GET', '/api/clienti');
   state.clienti = (rows || []).map(row => typeof normalizeCliente === 'function' ? normalizeCliente(row) : row);
-  cliente = state.clienti.find(c => typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c));
+  cliente = state.clienti.find(c =>
+    typeof isTentataVenditaCliente === 'function'
+    && isTentataVenditaCliente(c)
+    && Number(c.autistaDiGiro || 0) === Number(targetUserId || 0)
+  );
   return cliente || null;
 }
 
@@ -7984,7 +8003,7 @@ function createEmptyTentataLine() {
 async function openTentataVendita(userId = null) {
   userId = Number(userId) || state.currentUser.id;
   tentataUserId = userId;
-  const tentataCliente = await ensureTentataVenditaClienteLoaded();
+  const tentataCliente = await ensureTentataVenditaClienteLoaded(userId);
   if (!tentataCliente) {
     showToast('Cliente tecnico tentata vendita non disponibile', 'warning');
     return;
@@ -8205,7 +8224,7 @@ async function saveTentataVendita() {
   const note = document.getElementById('tentata-note').value.trim();
   const validLines = tentataLines.filter(l => l.prodId);
   if (!clienteId) {
-    const tentataCliente = await ensureTentataVenditaClienteLoaded();
+    const tentataCliente = await ensureTentataVenditaClienteLoaded(tentataUserId || state.currentUser.id);
     clienteId = tentataCliente?.id || null;
     if (clienteId) document.getElementById('tentata-cliente').value = clienteId;
   }
