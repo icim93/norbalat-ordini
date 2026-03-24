@@ -4912,6 +4912,9 @@ function buildOrderMergePromptMessage(payload = {}) {
 }
 
 async function createOrderWithMergePrompt(body) {
+  if (typeof ensureNextDayOrderCutoffAllowed === 'function' && !ensureNextDayOrderCutoffAllowed(body?.data)) {
+    return { saved: null, merged: false, cancelled: true };
+  }
   try {
     const saved = await api('POST', '/api/ordini', body);
     return { saved, merged: !!saved?.merged_into_existing, cancelled: false };

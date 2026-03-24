@@ -43,6 +43,31 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
+  function getNextDayOrderCutoffInfo(targetDate = '') {
+    const now = new Date();
+    const minutes = (now.getHours() * 60) + now.getMinutes();
+    const nextBusinessDate = getNextBusinessDate();
+    const selectedDate = String(targetDate || '').slice(0, 10);
+    const isAdmin = window.state?.currentUser?.ruolo === 'admin';
+    return {
+      targetDate: selectedDate,
+      nextBusinessDate,
+      afterCutoff: minutes >= (13 * 60 + 30),
+      blocked: !isAdmin && minutes >= (13 * 60 + 30) && selectedDate === nextBusinessDate,
+      isAdmin,
+    };
+  }
+
+  function ensureNextDayOrderCutoffAllowed(targetDate = '') {
+    const info = getNextDayOrderCutoffInfo(targetDate);
+    if (!info.blocked) return true;
+    const label = typeof formatDate === 'function' ? formatDate(info.nextBusinessDate) : info.nextBusinessDate;
+    if (typeof showToast === 'function') {
+      showToast(`Dopo le 13:30 non si possono piu aggiungere ordini per ${label}. Serve un admin per sbloccare il caso.`, 'warning');
+    }
+    return false;
+  }
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -101,6 +126,8 @@
   window.TENTATA_VENDITA_CLIENT_CLASS = TENTATA_VENDITA_CLIENT_CLASS;
   window.today = today;
   window.getNextBusinessDate = getNextBusinessDate;
+  window.getNextDayOrderCutoffInfo = getNextDayOrderCutoffInfo;
+  window.ensureNextDayOrderCutoffAllowed = ensureNextDayOrderCutoffAllowed;
   window.escapeHtml = escapeHtml;
   window.statoBadge = statoBadge;
   window.lineeResume = lineeResume;

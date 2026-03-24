@@ -105,6 +105,97 @@ function normalizeOrdineUm(raw) {
   return src;
 }
 
+function getDatePartsInTimezone(date = new Date(), timeZone = 'Europe/Rome') {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    formatter
+      .formatToParts(date)
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value])
+  );
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    hour: Number(parts.hour || 0),
+    minute: Number(parts.minute || 0),
+  };
+}
+
+function getNextBusinessDateFromDateString(dateStr) {
+  const base = String(dateStr || '').slice(0, 10);
+  const d = new Date(`${base}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + 1);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getNextDayOrderCutoffState(now = new Date(), timeZone = NOTIFY_TIMEZONE || 'Europe/Rome') {
+  const { date, hour, minute } = getDatePartsInTimezone(now, timeZone);
+  const minutes = (hour * 60) + minute;
+  return {
+    today: date,
+    nextBusinessDate: getNextBusinessDateFromDateString(date),
+    afterCutoff: minutes >= (13 * 60 + 30),
+    currentMinutes: minutes,
+  };
+}
+
+function isNextDayOrderCutoffLocked(targetDate, now = new Date(), timeZone = NOTIFY_TIMEZONE || 'Europe/Rome') {
+  const normalizedTargetDate = String(targetDate || '').slice(0, 10);
+  if (!normalizedTargetDate) return false;
+  const state = getNextDayOrderCutoffState(now, timeZone);
+  return state.afterCutoff && normalizedTargetDate === state.nextBusinessDate;
+}
+
+function buildOrderCommercialSignature(lines = []) {
+  return JSON.stringify(
+    (Array.isArray(lines) ? lines : [])
+      .map(line => ({
+        prodotto_id: line?.prodotto_id ? Number.parseInt(line.prodotto_id, 10) : null,
+        prodotto_nome_libero: String(line?.prodotto_nome_libero || '').trim().toLowerCase(),
+        qty: Number(line?.qty || 0),
+        unita_misura: normalizeOrdineUm(line?.unita_misura || 'pezzi'),
+        is_pedana: !!line?.is_pedana,
+      }))
+      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b), 'it', { sensitivity: 'base' }))
+  );
+}
+
+function buildStoredOrderCommercialSignature(lines = []) {
+  return JSON.stringify(
+    (Array.isArray(lines) ? lines : [])
+      .map(line => ({
+        prodotto_id: line?.prodotto_id ? Number.parseInt(line.prodotto_id, 10) : null,
+        prodotto_nome_libero: String(line?.prodotto_nome_libero || '').trim().toLowerCase(),
+        qty: Number(line?.qty || 0),
+        unita_misura: normalizeOrdineUm(line?.unita_misura || 'pezzi'),
+        is_pedana: !!line?.is_pedana,
+      }))
+      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b), 'it', { sensitivity: 'base' }))
+  );
+}
+
+function nextDayOrderCutoffError(targetDate) {
+  return {
+    status: 403,
+    payload: {
+      error: `Dopo le 13:30 non si possono piu aggiungere ordini per il ${String(targetDate || '').slice(0, 10)}. Solo un admin puo sbloccare il caso.`,
+      code: 'NEXT_DAY_ORDER_CUTOFF',
+      target_date: String(targetDate || '').slice(0, 10),
+      cutoff_time: '13:30',
+      override_role: 'admin',
+    },
+  };
+}
+
 function normalizeProdottoConversioni(raw = {}) {
   const cartoniAttivi = !!raw.cartoni_attivi;
   const pedaneAttive = !!raw.pedane_attive;
@@ -3899,6 +3990,10 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
             data, stato='attesa', note='', data_non_certa=false, stef=false, altro_vettore=false, giro_override='', linee=[], merge_duplicate=false } = req.body;
     if (!cliente_id||!data) return res.status(400).json({ error: 'Campi obbligatori mancanti' });
     if (!linee.length) return res.status(400).json({ error: 'Almeno un prodotto richiesto' });
+    if (req.user?.ruolo !== 'admin' && isNextDayOrderCutoffLocked(data)) {
+      const err = nextDayOrderCutoffError(data);
+      return res.status(err.status).json(err.payload);
+    }
     const c = await q('SELECT id, sbloccato, onboarding_stato FROM clienti WHERE id=$1', [cliente_id]);
     if (!c.rows.length) return res.status(400).json({ error: 'Cliente non trovato' });
     if (!c.rows[0].sbloccato || c.rows[0].onboarding_stato !== 'approvato') return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
@@ -4000,12 +4095,34 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
     if (!c.rows.length) return res.status(400).json({ error: 'Cliente non trovato' });
     if (!c.rows[0].sbloccato || c.rows[0].onboarding_stato !== 'approvato') return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
     await client.query('BEGIN');
+    const { rows: orderRows } = await client.query(
+      `SELECT id, cliente_id, data
+         FROM ordini
+        WHERE id=$1
+        FOR UPDATE`,
+      [id]
+    );
+    if (!orderRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Ordine non trovato' });
+    }
+    const { rows: existingLines } = await client.query('SELECT * FROM ordine_linee WHERE ordine_id=$1 ORDER BY id', [id]);
+    if (req.user?.ruolo !== 'admin' && isNextDayOrderCutoffLocked(data)) {
+      const current = orderRows[0];
+      const isCommercialChange = Number(current.cliente_id || 0) !== Number(cliente_id || 0)
+        || String(current.data || '').slice(0, 10) !== String(data || '').slice(0, 10)
+        || buildStoredOrderCommercialSignature(existingLines) !== buildOrderCommercialSignature(linee);
+      if (isCommercialChange) {
+        const err = nextDayOrderCutoffError(data);
+        await client.query('ROLLBACK');
+        return res.status(err.status).json(err.payload);
+      }
+    }
     await client.query(
       `UPDATE ordini SET cliente_id=$1,agente_id=$2,autista_di_giro=$3,data=$4,stato=$5,
        note=$6,data_non_certa=$7,stef=$8,altro_vettore=$9,giro_override=$10,updated_at=NOW() WHERE id=$11`,
       [cliente_id, agente_id||null, autista_di_giro||null, data, stato, note, data_non_certa, stef, !!altro_vettore, String(giro_override || ''), id]
     );
-    const { rows: existingLines } = await client.query('SELECT * FROM ordine_linee WHERE ordine_id=$1 ORDER BY id', [id]);
     const existingLinesById = new Map(existingLines.map(row => [Number(row.id), row]));
     const keptLineIds = new Set();
     for (const l of linee) {
