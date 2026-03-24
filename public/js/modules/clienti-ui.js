@@ -6,6 +6,32 @@ function resetClientiFilters() {
   renderClientiTable();
 }
 
+function getAvailableClientiGiri(extraValues = []) {
+  const configured = (state.giriCalendario || []).map(g => String(g.giro || '').trim()).filter(Boolean);
+  const usedByClienti = (state.clienti || []).map(c => String(c.giro || '').trim()).filter(Boolean);
+  const extras = extraValues.map(v => String(v || '').trim()).filter(Boolean);
+  return [...new Set([...configured, ...usedByClienti, ...extras])].sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+}
+
+function renderClientiGiroSelects(selectedClienteGiro = '') {
+  const selectedFilter = document.getElementById('filter-giro')?.value || '';
+  const giri = getAvailableClientiGiri([selectedClienteGiro, selectedFilter]);
+
+  const filterSel = document.getElementById('filter-giro');
+  if (filterSel) {
+    filterSel.innerHTML = '<option value="">Tutti i giri</option>' +
+      giri.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+    filterSel.value = giri.includes(selectedFilter) ? selectedFilter : '';
+  }
+
+  const clienteSel = document.getElementById('cl-giro');
+  if (clienteSel) {
+    clienteSel.innerHTML = '<option value="">— Non assegnato —</option>' +
+      giri.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+    clienteSel.value = giri.includes(selectedClienteGiro) ? selectedClienteGiro : '';
+  }
+}
+
 function renderClientiStatusStrip(list) {
   const strip = document.getElementById('clienti-status-strip');
   if (!strip) return;
@@ -24,6 +50,7 @@ function renderClientiStatusStrip(list) {
 }
 
 function renderClientiTable() {
+  renderClientiGiroSelects();
   const q = (document.getElementById('search-clienti')?.value || '').toLowerCase();
   const filterGiro = document.getElementById('filter-giro')?.value || '';
   let list = state.clienti.filter(c => !(typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c)));
@@ -130,6 +157,7 @@ function renderClientiTable() {
 
 function openNewCliente() {
   state.editingId = null;
+  renderClientiGiroSelects('');
   document.getElementById('modal-cliente-title').textContent = 'Nuovo Cliente';
   document.getElementById('cl-nome').value = '';
   document.getElementById('cl-alias').value = '';
@@ -158,6 +186,7 @@ function openNewOnboarding() {
 
 function openEditCliente(id) {
   const c = state.clienti.find(x => x.id === id);
+  renderClientiGiroSelects(c?.giro || '');
   state.editingId = id;
   document.getElementById('modal-cliente-title').textContent = 'Modifica Cliente';
   document.getElementById('cl-nome').value = c.nome;
