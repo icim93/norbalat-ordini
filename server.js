@@ -2086,6 +2086,11 @@ const zChiudiGiornataPayload = z.object({
   action_if_residual: z.enum(['reload', 'delete']).optional(),
 });
 
+const zGiroCalendarioPayload = z.object({
+  giro: z.string().trim().min(1).max(120),
+  giorni: z.array(z.coerce.number().int().min(0).max(6)).optional().default([]),
+});
+
 const zScortaPayload = z.object({
   prodotto_id: z.coerce.number().int().positive().nullable().optional().default(null),
   prodotto_nome: z.string().min(2).max(160),
@@ -5237,10 +5242,80 @@ app.get('/api/giri', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.post('/api/giri', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const parsed = zGiroCalendarioPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const giro = String(parsed.data.giro || '').trim();
+    const giorni = [...new Set((parsed.data.giorni || []).map(Number))].sort((a, b) => a - b);
+    const { rows: existing } = await q('SELECT id FROM giri_calendario WHERE LOWER(giro)=LOWER($1) LIMIT 1', [giro]);
+    if (existing.length) {
+      return res.status(409).json({ error: 'Esiste gia un giro con questo nome' });
+    }
+    const { rows } = await q(
+      `INSERT INTO giri_calendario (giro, giorni)
+       VALUES ($1, $2)
+       RETURNING *`,
+      [giro, JSON.stringify(giorni)]
+    );
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Calendario giri', `Creato giro: ${giro}`);
+    res.status(201).json(rows[0]);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.put('/api/giri/:id', authMiddleware, requireRole('admin'), async (req, res) => {
   try {
-    await q('UPDATE giri_calendario SET giorni=$1 WHERE id=$2',
-      [JSON.stringify(req.body.giorni||[]), parseInt(req.params.id)]);
+    const parsed = z.object({
+      giorni: z.array(z.coerce.number().int().min(0).max(6)).optional().default([]),
+    }).safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const giorni = [...new Set((parsed.data.giorni || []).map(Number))].sort((a, b) => a - b);
+    const { rows } = await q(
+      'UPDATE giri_calendario SET giorni=$1 WHERE id=$2 RETURNING giro',
+      [JSON.stringify(giorni), parseInt(req.params.id)]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Giro non trovato' });
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Calendario giri', `Aggiorna giro: ${rows[0].giro}`);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/giri/:id', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const giroId = parseInt(req.params.id);
+    const { rows } = await q('SELECT id, giro FROM giri_calendario WHERE id=$1 LIMIT 1', [giroId]);
+    if (!rows.length) return res.status(404).json({ error: 'Giro non trovato' });
+    const giro = String(rows[0].giro || '').trim();
+
+    const dependencyChecks = await Promise.all([
+      q('SELECT COUNT(*)::int AS count FROM clienti WHERE giro=$1', [giro]),
+      q(`SELECT COUNT(*)::int AS count
+         FROM utenti
+         WHERE EXISTS (
+           SELECT 1
+           FROM jsonb_array_elements_text(COALESCE(giri_consegna, '[]'::jsonb)) AS g(val)
+           WHERE g.val = $1
+         )`, [giro]),
+      q('SELECT COUNT(*)::int AS count FROM listini WHERE giro=$1', [giro]),
+      q('SELECT COUNT(*)::int AS count FROM ordini WHERE COALESCE(giro_override, \'\')=$1', [giro]),
+    ]);
+
+    const usage = {
+      clienti: dependencyChecks[0].rows[0]?.count || 0,
+      utenti: dependencyChecks[1].rows[0]?.count || 0,
+      listini: dependencyChecks[2].rows[0]?.count || 0,
+      ordini_override: dependencyChecks[3].rows[0]?.count || 0,
+    };
+    const totalUsage = Object.values(usage).reduce((sum, value) => sum + Number(value || 0), 0);
+    if (totalUsage > 0) {
+      return res.status(409).json({
+        error: 'Impossibile eliminare il giro: risulta ancora assegnato o utilizzato',
+        usage,
+      });
+    }
+
+    await q('DELETE FROM giri_calendario WHERE id=$1', [giroId]);
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Calendario giri', `Elimina giro: ${giro}`);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

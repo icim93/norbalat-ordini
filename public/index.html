@@ -4701,7 +4701,7 @@ async function loadAllData() {
     state.ordini   = (ordini   ||[]).map(normalizeOrdine);
     state.camions  = (camions  ||[]).map(normalizeCamion);
     state.ferie    = Array.isArray(ferie) ? ferie : [];
-    state.giriCalendario = (giri||[]).map(g => ({...g, giorni: g.giorni||[]}));
+    state.giriCalendario = (giri || []).map(g => ({ ...g, giorni: Array.isArray(g.giorni) ? g.giorni : [] }));
     state.carichiTentataVendita = Array.isArray(tentataConfig?.carichi) ? tentataConfig.carichi.map(entry => ({
       userId: Number(entry.userId),
       templates: Array.isArray(entry.templates) && entry.templates.length ? entry.templates.map(template => ({
@@ -7027,20 +7027,37 @@ function renderImpostazioni() {
   // Calendario giri
   const el = document.getElementById('giri-calendar-list');
   if (!el) return;
-  el.innerHTML = state.giriCalendario.map((g, gi) => {
+  const isAdmin = state.currentUser?.ruolo === 'admin';
+  const createBox = isAdmin ? `
+    <div style="display:flex;gap:10px;align-items:flex-end;padding:4px 0 14px;border-bottom:1px solid var(--border);margin-bottom:6px;flex-wrap:wrap;">
+      <div class="field" style="margin:0;min-width:240px;flex:1;">
+        <label>Nuovo giro</label>
+        <input id="new-giro-name" type="text" maxlength="120" placeholder="Es. BAT o giro speciale" onkeydown="if(event.key==='Enter') createGiroCalendario();">
+      </div>
+      <button class="btn btn-green btn-sm" onclick="createGiroCalendario()">+ Crea giro</button>
+    </div>
+  ` : '';
+  el.innerHTML = createBox + state.giriCalendario.map((g, gi) => {
     const checkboxes = [1,2,3,4,5,6,0].map(d => `
       <label style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;">
         <input type="checkbox" ${g.giorni.includes(d)?'checked':''} 
           onchange="toggleGiroGiorno(${gi},${d},this.checked)"
+          ${isAdmin ? '' : 'disabled'}
           style="accent-color:var(--accent);">
         <span style="font-size:11px;font-weight:500;">${GIORNI_NOMI[d]}</span>
       </label>`).join('');
     const prossima = getNextGiroDate(g.giro);
     const prossimaLabel = prossima ? ` <span style="font-size:11px;color:var(--accent);">→ prossima: ${formatDate(prossima)}</span>` : '';
     return `
-      <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;">
         <div style="min-width:110px;font-weight:600;font-size:13px;text-transform:capitalize;">${g.giro} ${prossimaLabel}</div>
         <div style="display:flex;gap:12px;">${checkboxes}</div>
+        ${isAdmin ? `
+          <div style="margin-left:auto;display:flex;gap:8px;">
+            <button class="btn btn-outline btn-sm" onclick="saveGiroCalendario(${gi})">Salva</button>
+            <button class="btn btn-sm" style="background:var(--danger-light);color:var(--danger);" onclick="deleteGiroCalendario(${gi})">Elimina</button>
+          </div>
+        ` : ''}
       </div>`;
   }).join('');
   renderEmailNotificationSettings();
@@ -7631,11 +7648,71 @@ function renderTentataPage() {
   }
 }
 
+async function loadGiriCalendario() {
+  const giri = await api('GET', '/api/giri');
+  state.giriCalendario = (giri || []).map(g => ({ ...g, giorni: Array.isArray(g.giorni) ? g.giorni : [] }));
+}
+
 function toggleGiroGiorno(gi, d, checked) {
   const g = state.giriCalendario[gi];
+  if (!g) return;
   if (checked) { if (!g.giorni.includes(d)) g.giorni.push(d); }
   else { g.giorni = g.giorni.filter(x => x !== d); }
   renderImpostazioni();
+}
+
+async function saveGiroCalendario(gi) {
+  const g = state.giriCalendario[gi];
+  if (!g || state.currentUser?.ruolo !== 'admin') return;
+  try {
+    await api('PUT', `/api/giri/${g.id}`, { giorni: g.giorni || [] });
+    await loadGiriCalendario();
+    renderImpostazioni();
+    showToast('Giro aggiornato', 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore salvataggio giro', 'warning');
+  }
+}
+
+async function createGiroCalendario() {
+  if (state.currentUser?.ruolo !== 'admin') return;
+  const input = document.getElementById('new-giro-name');
+  const giro = (input?.value || '').trim();
+  if (!giro) return showToast('Inserisci il nome del giro', 'warning');
+  try {
+    await api('POST', '/api/giri', { giro, giorni: [] });
+    if (input) input.value = '';
+    await loadGiriCalendario();
+    renderImpostazioni();
+    showToast('Giro creato', 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore creazione giro', 'warning');
+  }
+}
+
+async function deleteGiroCalendario(gi) {
+  const g = state.giriCalendario[gi];
+  if (!g || state.currentUser?.ruolo !== 'admin') return;
+  if (!confirm(`Eliminare il giro "${g.giro}"?`)) return;
+  try {
+    await api('DELETE', `/api/giri/${g.id}`);
+    await loadGiriCalendario();
+    renderImpostazioni();
+    showToast('Giro eliminato', 'success');
+  } catch (e) {
+    if (e?.payload?.usage) {
+      const usage = e.payload.usage;
+      const detail = [
+        usage.clienti ? `${usage.clienti} clienti` : '',
+        usage.utenti ? `${usage.utenti} utenti` : '',
+        usage.listini ? `${usage.listini} listini` : '',
+        usage.ordini_override ? `${usage.ordini_override} ordini con override` : '',
+      ].filter(Boolean).join(', ');
+      showToast(detail ? `${e.message}: ${detail}` : e.message, 'warning');
+      return;
+    }
+    showToast(e.message || 'Errore eliminazione giro', 'warning');
+  }
 }
 
 function getNextBusinessDate(fromDate = today()) {
