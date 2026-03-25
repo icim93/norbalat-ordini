@@ -6257,8 +6257,9 @@ function renderMagazzino() {
     return 4;
   };
   const getMagazzinoBaseQtyValue = (line, prodotto) => {
-    const qtyBase = Number(line?.qtyBase);
-    if (Number.isFinite(qtyBase) && qtyBase > 0) return qtyBase;
+    const rawQtyBase = line?.qtyBase;
+    const qtyBase = Number(rawQtyBase);
+    if (rawQtyBase !== null && rawQtyBase !== undefined && Number.isFinite(qtyBase) && qtyBase >= 0) return qtyBase;
     const qty = Number(line?.qty);
     if (!Number.isFinite(qty) || qty <= 0) return null;
     const um = String(line?.unitaMisura || '').toLowerCase();
@@ -6280,6 +6281,10 @@ function renderMagazzino() {
       || (currentUm === 'pezzi' && baseUm === 'pz');
     if (sameBase) return '';
     return `${Number(val).toFixed(2).replace(/\.00$/, '')} ${prodotto?.um || ''}`;
+  };
+  const isTentataTecnicaOrdine = ordine => {
+    const cliente = getCliente(ordine?.clienteId);
+    return typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(cliente);
   };
   const getMagazzinoMaxUnitsForStock = (line, prodotto, lottoValue) => {
     if (!line?.prodId || !lottoValue) return null;
@@ -6318,12 +6323,15 @@ function renderMagazzino() {
       });
       checkLines = sortedLinee.map(({ l, li }) => {
         const p = l.prodId ? getProdotto(l.prodId) : { codice: 'LIB', nome: l.prodottoNomeLibero || 'Prodotto libero', pesoFisso: true };
+        const isTentataTecnica = isTentataTecnicaOrdine(o);
         const checked = l.preparato ? 'checked' : '';
         const barratoStyle = l.preparato ? 'text-decoration:line-through;color:var(--text3);' : '';
         const lottoMancante = !l.lotto || !String(l.lotto).trim();
         const lottoBorderStyle = lottoMancante ? 'border-color:#e74c3c;' : 'border-color:var(--border);';
         const umLabel = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty);
         const baseQtyInfo = getMagazzinoBaseQtyLabel(l, p);
+        const baseQtyValue = getMagazzinoBaseQtyValue(l, p);
+        const showTentataBaseInput = isTentataTecnica && Number.isFinite(baseQtyValue) && baseQtyValue >= 0 && (p.pesoFisso || !!baseQtyInfo);
         const maxUnitsForSelectedLotto = getMagazzinoMaxUnitsForStock(l, p, l.lotto);
         const hasPartialStock = Number.isFinite(maxUnitsForSelectedLotto) && maxUnitsForSelectedLotto > 0 && maxUnitsForSelectedLotto < Number(l.qty || 0);
         const partialHint = hasPartialStock
@@ -6334,10 +6342,20 @@ function renderMagazzino() {
 
         // Indici per navigazione Enter
         const navColli = trackColli ? _navIdx++ : -1;
-        const navPeso = !p.pesoFisso ? _navIdx++ : -1;
+        const navPeso = (!p.pesoFisso || showTentataBaseInput) ? _navIdx++ : -1;
         const navLotto = _navIdx++;
 
-        const pesoInput = !p.pesoFisso
+        const pesoInput = showTentataBaseInput
+          ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;min-width:96px;">
+               <input type="number" step="0.01" min="0" placeholder="${escapeHtml(p.um || 'UM base')}" value="${Number(baseQtyValue || 0).toFixed(2).replace(/\.00$/, '')}"
+                 data-mgnav="${navPeso}"
+                 style="width:92px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;text-align:right;"
+                 oninput="onLineQtyBaseInput(${o.id},${li},this)"
+                 onchange="setLineQtyBase(${o.id},${li},this.value)"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();magazzinoNavNext(${navPeso})}">
+               <span style="font-size:10px;color:var(--text2);">${escapeHtml(p.um || 'UM base')}</span>
+             </div>`
+          : !p.pesoFisso
           ? `<input type="number" step="0.1" min="0" placeholder="kg eff." value="${l.pesoEffettivo || ''}"
                data-mgnav="${navPeso}"
                style="width:80px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;"
@@ -6503,9 +6521,10 @@ function setLinePesoEffettivo(ordineId, lineIdx, val) {
   const n = parseFloat(String(val).replace(',', '.'));
   const next = Number.isFinite(n) ? n : null;
   if (prev === next) return;
-  pushMagazzinoUndo({ ordineId, lineIdx, field: 'pesoEffettivo', prev });
+  pushMagazzinoUndo({ ordineId, lineIdx, field: 'pesoEffettivo', prev, prevQtyBase: o.linee[lineIdx].qtyBase ?? null });
   o.linee[lineIdx].pesoEffettivo = next;
-  saveLineaPreparazione(ordineId, lineIdx, { peso_effettivo: next });
+  o.linee[lineIdx].qtyBase = next;
+  saveLineaPreparazione(ordineId, lineIdx, { peso_effettivo: next, qty_base: next });
 }
 
 async function markOrdinePreparato(id) {
@@ -6543,6 +6562,20 @@ function setLineLotto(ordineId, lineIdx, val) {
   pushMagazzinoUndo({ ordineId, lineIdx, field: 'lotto', prev });
   o.linee[lineIdx].lotto = next;
   saveLineaPreparazione(ordineId, lineIdx, { lotto: next });
+}
+
+function setLineQtyBase(ordineId, lineIdx, val) {
+  const o = state.ordini.find(x => x.id === ordineId);
+  if (!o) return;
+  const line = o.linee[lineIdx];
+  if (!line) return;
+  const prev = line.qtyBase ?? null;
+  const n = parseFloat(String(val).replace(',', '.'));
+  const next = Number.isFinite(n) ? n : null;
+  if (prev === next) return;
+  pushMagazzinoUndo({ ordineId, lineIdx, field: 'qtyBase', prev });
+  line.qtyBase = next;
+  saveLineaPreparazione(ordineId, lineIdx, { qty_base: next });
 }
 
 // Handler oninput per campo lotto: auto-tick + aggiorna stato Pronto
@@ -6884,13 +6917,18 @@ async function undoMagazzinoLastAction() {
     patch.preparato = !!action.prev;
   } else if (action.field === 'pesoEffettivo') {
     line.pesoEffettivo = action.prev ?? null;
+    line.qtyBase = action.prevQtyBase ?? null;
     patch.peso_effettivo = action.prev ?? null;
+    patch.qty_base = action.prevQtyBase ?? null;
   } else if (action.field === 'colliEffettivi') {
     line.colliEffettivi = action.prev ?? null;
     patch.colli_effettivi = action.prev ?? null;
   } else if (action.field === 'lotto') {
     line.lotto = String(action.prev || '');
     patch.lotto = line.lotto;
+  } else if (action.field === 'qtyBase') {
+    line.qtyBase = action.prev ?? null;
+    patch.qty_base = action.prev ?? null;
   } else {
     showToast('Undo non supportato per questa operazione', 'warning');
     return;
@@ -6943,6 +6981,21 @@ function renderDailyClosureSummaryBox(summary) {
     autistaSummary.textContent = chiuso
       ? `Giro già chiuso. Ordini del giorno: ${ordini.length}. Criticità: ${summary.orders?.counts?.sospeso || 0} sospesi, ${summary.orders?.counts?.annullato || 0} annullati.`
       : `Ordini assegnati: ${ordini.length}. Ancora senza esito finale: ${aperti}.`;
+  }
+}
+
+function onLineQtyBaseInput(ordineId, lineIdx, el) {
+  const o = state.ordini.find(x => x.id === ordineId);
+  if (!o) return;
+  const line = o.linee[lineIdx];
+  if (!line) return;
+  if (el.value.trim() && !line.preparato) {
+    line.preparato = true;
+    saveLineaPreparazione(ordineId, lineIdx, { preparato: true });
+    const cb = document.querySelector(`[data-line-cb="${ordineId}-${lineIdx}"]`);
+    if (cb) cb.checked = true;
+    const nm = document.querySelector(`[data-line-nome="${ordineId}-${lineIdx}"]`);
+    if (nm) { nm.style.textDecoration = 'line-through'; nm.style.color = 'var(--text3)'; }
   }
 }
 

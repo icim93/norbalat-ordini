@@ -279,6 +279,13 @@ function buildTentataVenditaClienteName(user = null) {
   return suffix ? `${TENTATA_VENDITA_CLIENT_NAME} ${suffix}` : TENTATA_VENDITA_CLIENT_NAME;
 }
 
+function isTentataVenditaClienteRecord(cliente = null) {
+  if (!cliente) return false;
+  const nome = String(cliente.nome || '').trim().toUpperCase();
+  const classificazione = String(cliente.classificazione || '').trim().toLowerCase();
+  return classificazione === TENTATA_VENDITA_CLIENT_CLASS || nome.startsWith(TENTATA_VENDITA_CLIENT_NAME);
+}
+
 async function ensureTentataVenditaCliente(client = null, userId = null) {
   const db = client || pool;
   let user = null;
@@ -2323,6 +2330,7 @@ const zConsegnaParzialePayload = z.object({
 const zPreparazioneLineaPayload = z.object({
   preparato: z.boolean().optional(),
   peso_effettivo: z.coerce.number().nullable().optional(),
+  qty_base: z.coerce.number().nonnegative().nullable().optional(),
   colli_effettivi: z.coerce.number().nullable().optional(),
   lotto: z.string().max(120).optional(),
 });
@@ -4514,8 +4522,16 @@ app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, r
     const parsed = zPreparazioneLineaPayload.safeParse(req.body || {});
     if (!parsed.success) { client.release(); return validationError(res, parsed); }
     const payload = parsed.data;
-    const { rows: lineRows } = await client.query('SELECT id, ordine_id FROM ordine_linee WHERE id=$1 AND ordine_id=$2 LIMIT 1', [lineaId, ordineId]);
+    const { rows: lineRows } = await client.query(
+      `SELECT ol.id, ol.ordine_id, p.um AS prodotto_um
+         FROM ordine_linee ol
+         LEFT JOIN prodotti p ON p.id = ol.prodotto_id
+        WHERE ol.id=$1 AND ol.ordine_id=$2
+        LIMIT 1`,
+      [lineaId, ordineId]
+    );
     if (!lineRows.length) { client.release(); return res.status(404).json({ error: 'Riga ordine non trovata' }); }
+    const lineMeta = lineRows[0];
 
     const sets = ['id=id'];
     const params = [];
@@ -4527,6 +4543,14 @@ app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, r
     if (payload.peso_effettivo !== undefined) {
       sets.push(`peso_effettivo=$${p++}`);
       params.push(payload.peso_effettivo === null ? null : Number(payload.peso_effettivo));
+    }
+    if (payload.qty_base !== undefined) {
+      sets.push(`qty_base=$${p++}`);
+      params.push(payload.qty_base === null ? null : Number(payload.qty_base));
+      if (payload.peso_effettivo === undefined && String(lineMeta.prodotto_um || '').trim().toLowerCase() === 'kg') {
+        sets.push(`peso_effettivo=$${p++}`);
+        params.push(payload.qty_base === null ? null : Number(payload.qty_base));
+      }
     }
     if (payload.colli_effettivi !== undefined) {
       sets.push(`colli_effettivi=$${p++}`);
@@ -4561,7 +4585,7 @@ app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, r
         [lineaId]
       );
       if (updLine.length && updLine[0].prodotto_id) {
-        const { prodotto_id, lotto, peso_effettivo } = updLine[0];
+        const { prodotto_id, lotto } = updLine[0];
         const lottoVal = String(lotto || '').trim();
         if (lottoVal) {
           const { rows: gRows } = await client.query(
@@ -4572,11 +4596,10 @@ app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, r
             warning = 'LOTTO_NON_IN_GIACENZA';
           } else {
             const giac = gRows[0];
-            const peso = Number(peso_effettivo);
             const qtyBase = updLine[0].qty_base !== null && updLine[0].qty_base !== undefined
               ? Number(updLine[0].qty_base)
               : calcolaQtyBaseRiga({ qty: updLine[0].qty, unitaMisura: updLine[0].unita_misura, prodotto: updLine[0] });
-            const scaricoQta = Number.isFinite(peso) && peso > 0 ? peso : qtyBase;
+            const scaricoQta = qtyBase;
             if (Number.isFinite(scaricoQta) && scaricoQta > 0) {
               await client.query('BEGIN');
               const nuovaQty = Number(giac.quantita) - scaricoQta;
@@ -5252,6 +5275,12 @@ app.post('/api/ordini/:id/esito-consegna', authMiddleware, requirePermission('or
       return res.status(404).json({ error: 'Ordine non trovato' });
     }
     const ordine = ordRows[0];
+    const { rows: clienteRows } = await client.query(
+      'SELECT id, nome, classificazione, giro FROM clienti WHERE id=$1 LIMIT 1',
+      [ordine.cliente_id]
+    );
+    const clienteOrdine = clienteRows[0] || null;
+    const isTentataTecnica = isTentataVenditaClienteRecord(clienteOrdine);
     if (String(ordine.stato || '') !== 'preparato') {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'L\'ordine deve essere in stato preparato per registrare l\'esito consegna' });
@@ -5333,10 +5362,25 @@ app.post('/api/ordini/:id/esito-consegna', authMiddleware, requirePermission('or
       resetPreparation: false,
     });
 
-    const { rows: cRows } = await client.query('SELECT giro FROM clienti WHERE id=$1', [ordine.cliente_id]);
-    const giro = cRows[0]?.giro || '';
+    const giro = clienteOrdine?.giro || '';
     const autoNextData = await getNextDeliveryDate(giro, ordine.data);
     const nextData = preferredDate && preferredDate >= autoNextData ? preferredDate : autoNextData;
+    if (isTentataTecnica) {
+      await client.query(
+        `UPDATE ordini
+            SET stato='consegnato',
+                note=TRIM(BOTH ' ' FROM COALESCE(note,'') || CASE
+                  WHEN $1 <> '' THEN ' [NOTE CONSEGNA: ' || $1 || ']'
+                  ELSE ''
+                END || ' [TENTATA VENDITA: nessun riporto automatico generato]'),
+                updated_at=NOW()
+          WHERE id=$2`,
+        [note, ordineId]
+      );
+      await client.query('COMMIT');
+      await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Esito consegna', `ordine #${ordineId} parziale tentata vendita senza riporto${note ? ` | ${note}` : ''}`);
+      return res.json({ ok: true, stato: 'consegnato', skipped_residual_order: true, next_date: nextData });
+    }
     const ins = await client.query(
       `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef,altro_vettore,giro_override,inserted_at,updated_at)
        VALUES ($1,$2,$3,$4,$5,'attesa',$6,$7,$8,$9,$10,NOW(),NOW()) RETURNING id`,
@@ -5396,6 +5440,12 @@ app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission(
       return res.status(404).json({ error: 'Ordine non trovato' });
     }
     const ordine = ordRows[0];
+    const { rows: clienteRows } = await client.query(
+      'SELECT id, nome, classificazione, giro FROM clienti WHERE id=$1 LIMIT 1',
+      [ordine.cliente_id]
+    );
+    const clienteOrdine = clienteRows[0] || null;
+    const isTentataTecnica = isTentataVenditaClienteRecord(clienteOrdine);
     const { rows: linee } = await client.query('SELECT * FROM ordine_linee WHERE ordine_id=$1 ORDER BY id', [ordineId]);
     if (!linee.length) {
       await client.query('ROLLBACK');
@@ -5425,10 +5475,23 @@ app.post('/api/ordini/:id/consegna-parziale', authMiddleware, requirePermission(
       return res.status(400).json({ error: 'Nessun residuo da riportare: usa consegna completa' });
     }
 
-    const { rows: cRows } = await client.query('SELECT giro FROM clienti WHERE id=$1', [ordine.cliente_id]);
-    const giro = cRows[0]?.giro || '';
+    const giro = clienteOrdine?.giro || '';
     const autoNextData = await getNextDeliveryDate(giro, ordine.data);
     const nextData = preferredDate && preferredDate >= autoNextData ? preferredDate : autoNextData;
+    if (isTentataTecnica) {
+      await client.query(
+        `UPDATE ordini
+            SET stato='consegnato',
+                note=TRIM(BOTH ' ' FROM COALESCE(note,'') || ' [TENTATA VENDITA: nessun riporto automatico generato]'),
+                updated_at=NOW()
+          WHERE id=$1`,
+        [ordineId]
+      );
+      await client.query('COMMIT');
+      const u = req.user;
+      await logDB(u.id, `${u.nome} ${u.cognome||''}`.trim(), 'Consegna parziale', `ordine #${ordineId} tentata vendita senza riporto`);
+      return res.json({ ok: true, skipped_residual_order: true, next_date: nextData });
+    }
 
     const ins = await client.query(
       `INSERT INTO ordini (cliente_id,agente_id,autista_di_giro,inserted_by,data,stato,note,data_non_certa,stef,altro_vettore,giro_override,inserted_at,updated_at)
@@ -7478,7 +7541,7 @@ app.get('/api/giacenze/rientro-tv', authMiddleware, requireRole('admin', 'magazz
     const { rows } = await q(
       `SELECT ol.prodotto_id, p.nome, p.codice, p.um, ol.lotto,
               o.cliente_id, c.nome AS cliente_nome,
-              ol.unita_misura, SUM(ol.qty) as qty_totale, SUM(ol.peso_effettivo) as peso_totale
+              p.um AS unita_misura, SUM(COALESCE(ol.qty_base, ol.qty)) as qty_totale, SUM(ol.peso_effettivo) as peso_totale
        FROM ordine_linee ol
        JOIN ordini o ON o.id = ol.ordine_id
        JOIN clienti c ON c.id = o.cliente_id
@@ -7491,8 +7554,8 @@ app.get('/api/giacenze/rientro-tv', authMiddleware, requireRole('admin', 'magazz
          )
          AND ($4::int IS NULL OR o.cliente_id = $4)
          AND ($5 = '' OR COALESCE(NULLIF(o.giro_override,''), NULLIF(c.giro,''), '') = $5)
-       GROUP BY ol.prodotto_id, p.nome, p.codice, p.um, ol.lotto, o.cliente_id, c.nome, ol.unita_misura
-       ORDER BY c.nome, p.nome, ol.lotto, ol.unita_misura`,
+       GROUP BY ol.prodotto_id, p.nome, p.codice, p.um, ol.lotto, o.cliente_id, c.nome
+       ORDER BY c.nome, p.nome, ol.lotto, p.um`,
       [
         data,
         TENTATA_VENDITA_CLIENT_CLASS,
