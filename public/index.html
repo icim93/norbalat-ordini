@@ -4617,6 +4617,9 @@ let state = {
   magazzinoResidualLog: [],
   carichiTentataVendita: [],
   tentataConfigSearch: {},
+  tentataConfigAutosaveTimer: null,
+  tentataConfigSaving: false,
+  tentataConfigSaveQueued: false,
   tentataModalSearch: '',
   devMetrics: null,
   devErrors: [],
@@ -8358,7 +8361,7 @@ function renderTentataConfigList() {
         return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:13px;">
           <span style="flex:1;">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</span>
           <input type="number" value="${l.qty}" min="0.01" step="0.01" style="width:70px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:12px;"
-            onchange="updateCaricoTentata(${a.id},'${tpl.id}',${li},'qty',parseFloat(this.value)||1)">
+            oninput="updateCaricoTentata(${a.id},'${tpl.id}',${li},'qty',parseFloat(this.value)||1)">
           <select style="width:110px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;font-size:12px;"
             onchange="updateCaricoTentata(${a.id},'${tpl.id}',${li},'unitaMisura',this.value)">
             ${umOpts.map(um => `<option value="${escapeHtml(um)}" ${um === currentUm ? 'selected' : ''}>${escapeHtml(um)}</option>`).join('')}
@@ -8683,22 +8686,28 @@ function addCaricoTentataLine(userId, templateId, prodId) {
     });
   }
   renderTentataConfigList();
+  queueTentataConfigAutosave();
 }
 
 function removeCaricoTentataLine(userId, templateId, li) {
   const template = getTentataTemplate(userId, templateId);
   template.linee.splice(li, 1);
   renderTentataConfigList();
+  queueTentataConfigAutosave();
 }
 
 function updateCaricoTentata(userId, templateId, li, field, val) {
   const template = getTentataTemplate(userId, templateId);
-  if (template?.linee?.[li]) template.linee[li][field] = val;
+  if (template?.linee?.[li]) {
+    template.linee[li][field] = val;
+    queueTentataConfigAutosave();
+  }
 }
 
 function updateTentataTemplateName(userId, templateId, value) {
   const template = getTentataTemplate(userId, templateId);
   template.nome = String(value || '').trim() || 'Profilo TV';
+  queueTentataConfigAutosave();
 }
 
 function toggleTentataTemplateDay(userId, templateId, day, checked) {
@@ -8710,12 +8719,14 @@ function toggleTentataTemplateDay(userId, templateId, day, checked) {
     template.giorni = template.giorni.filter(x => x !== day);
   }
   renderTentataConfigList();
+  queueTentataConfigAutosave();
 }
 
 function addTentataTemplate(userId) {
   const config = getTentataConfigForUser(userId);
   config.templates.push(makeTentataTemplate(`Profilo ${config.templates.length + 1}`));
   renderTentataConfigList();
+  queueTentataConfigAutosave();
 }
 
 function cloneTentataTemplate(userId, templateId) {
@@ -8728,6 +8739,7 @@ function cloneTentataTemplate(userId, templateId) {
     linee: (template.linee || []).map(line => ({ ...line })),
   });
   renderTentataConfigList();
+  queueTentataConfigAutosave();
 }
 
 function deleteTentataTemplate(userId, templateId) {
@@ -8741,6 +8753,7 @@ function deleteTentataTemplate(userId, templateId) {
     if (config.assegnazioni[dateKey] === templateId) delete config.assegnazioni[dateKey];
   });
   renderTentataConfigList();
+  queueTentataConfigAutosave();
 }
 
 function assignTentataTemplateToDate(userId, templateId) {
@@ -8749,34 +8762,64 @@ function assignTentataTemplateToDate(userId, templateId) {
   if (!templateId) delete config.assegnazioni[dateKey];
   else config.assegnazioni[dateKey] = templateId;
   renderTentataConfigList();
+  queueTentataConfigAutosave();
 }
 
-async function saveTentataConfig() {
-  try {
-    const payload = {
-      carichi: (state.carichiTentataVendita || []).map(entry => ({
-        userId: entry.userId,
-        templates: (entry.templates || []).map(template => ({
-          id: template.id,
-          nome: String(template.nome || '').trim() || 'Profilo TV',
-          giorni: Array.isArray(template.giorni) ? template.giorni : [],
-          linee: sortTentataLines(template.linee || [])
-            .map(line => ({
-              prodId: line.prodId,
-              qty: Number(line.qty || 0),
-              unitaMisura: String(line.unitaMisura || (typeof getDefaultUM === 'function' ? getDefaultUM(getProdotto(line.prodId)) : 'Pezzi')).trim() || 'Pezzi',
-            }))
-            .filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0),
-        })),
-        assegnazioni: entry.assegnazioni || {},
+function buildTentataConfigPayload() {
+  return {
+    carichi: (state.carichiTentataVendita || []).map(entry => ({
+      userId: entry.userId,
+      templates: (entry.templates || []).map(template => ({
+        id: template.id,
+        nome: String(template.nome || '').trim() || 'Profilo TV',
+        giorni: Array.isArray(template.giorni) ? template.giorni : [],
+        linee: sortTentataLines(template.linee || [])
+          .map(line => ({
+            prodId: line.prodId,
+            qty: Number(line.qty || 0),
+            unitaMisura: String(line.unitaMisura || (typeof getDefaultUM === 'function' ? getDefaultUM(getProdotto(line.prodId)) : 'Pezzi')).trim() || 'Pezzi',
+          }))
+          .filter(line => Number.isFinite(line.prodId) && Number.isFinite(line.qty) && line.qty > 0),
       })),
-    };
+      assegnazioni: entry.assegnazioni || {},
+    })),
+  };
+}
+
+function queueTentataConfigAutosave() {
+  if (state.currentUser?.ruolo !== 'admin' && state.currentUser?.ruolo !== 'magazzino') return;
+  if (state.tentataConfigAutosaveTimer) clearTimeout(state.tentataConfigAutosaveTimer);
+  state.tentataConfigAutosaveTimer = setTimeout(() => {
+    state.tentataConfigAutosaveTimer = null;
+    saveTentataConfig({ silent: true });
+  }, 700);
+}
+
+async function saveTentataConfig(options = {}) {
+  const { silent = false } = options;
+  if (state.tentataConfigSaving) {
+    state.tentataConfigSaveQueued = true;
+    return;
+  }
+  if (state.tentataConfigAutosaveTimer) {
+    clearTimeout(state.tentataConfigAutosaveTimer);
+    state.tentataConfigAutosaveTimer = null;
+  }
+  state.tentataConfigSaving = true;
+  try {
+    const payload = buildTentataConfigPayload();
     const saved = await api('PUT', '/api/impostazioni/tentata-vendita', payload);
     state.carichiTentataVendita = saved.carichi || [];
     renderTentataConfigList();
-    showToast('Carichi tentata vendita salvati', 'success');
+    if (!silent) showToast('Carichi tentata vendita salvati', 'success');
   } catch (e) {
     showToast(e.message || 'Errore salvataggio tentata vendita', 'warning');
+  } finally {
+    state.tentataConfigSaving = false;
+    if (state.tentataConfigSaveQueued) {
+      state.tentataConfigSaveQueued = false;
+      queueTentataConfigAutosave();
+    }
   }
 }
 
