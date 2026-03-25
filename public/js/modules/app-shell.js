@@ -98,6 +98,7 @@
       { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'clienti', icon: '🏢', label: 'Clienti' },
       { page: 'ferie', icon: '🗓️', label: 'Calendario' },
+      { page: 'giacenze', icon: '📦', label: 'Giacenze' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
       { page: 'rese', icon: '♻️', label: 'Gestione Rese' },

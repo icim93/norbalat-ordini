@@ -36,6 +36,13 @@
 }
 
 function renderDashboard() {
+  const calendarTypeLabel = tipo => {
+    const key = String(tipo || '').toLowerCase();
+    if (key === 'ferie') return 'Ferie';
+    if (key === 'attivita') return 'Attivita';
+    if (key === 'evento') return 'Evento';
+    return 'Evento';
+  };
   const ruolo = state.currentUser?.ruolo || 'admin';
   const t = today();
   const userId = state.currentUser?.id;
@@ -49,6 +56,14 @@ function renderDashboard() {
   const alertScadenze = state.giacenzeAlerts?.in_scadenza?.length || 0;
   const caricoTentata = state.carichiTentataVendita.find(c => c.userId === userId);
   const clienteFollowup = Object.values(state.crmSummary || {}).filter(c => c?.followup_date && String(c.followup_date).slice(0, 10) <= t).length;
+  const unreadConversations = (state.messagesRecent || []).filter(item => !!item.unread).slice(0, 4);
+  const todaysCalendarEvents = (state.ferie || [])
+    .filter(item => {
+      const start = String(item.data_inizio || '').slice(0, 10);
+      const end = String(item.data_fine || '').slice(0, 10);
+      return start && end && start <= t && end >= t;
+    })
+    .slice(0, 5);
 
   const statLabels = {
     admin: ['Ordini oggi', 'In attesa', 'Consegnati', 'Da preparare'],
@@ -84,6 +99,40 @@ function renderDashboard() {
   const focus = document.getElementById('dashboard-focus-panels');
   if (focus) {
     const panels = [];
+    panels.push(`
+      <div class="card" style="grid-column:1 / -1;">
+        <div class="card-header">
+          <div class="card-title">Promemoria di oggi</div>
+        </div>
+        <div style="padding:0 16px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
+          <div style="border:1px solid var(--border);border-radius:12px;padding:14px;background:linear-gradient(180deg,#f7fbff 0%,#eef7ff 100%);">
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px;">
+              <strong>Messaggi ricevuti</strong>
+              <span class="badge ${unreadConversations.length ? 'badge-orange' : 'badge-gray'}">${Number(state.messagesUnreadCount || 0)} non letti</span>
+            </div>
+            ${unreadConversations.length ? unreadConversations.map(item => `
+              <button class="btn btn-outline btn-sm" style="width:100%;justify-content:flex-start;text-align:left;margin-bottom:8px;" onclick="goTo('messaggi');setTimeout(() => openMessaggioDettaglio(${Number(item.id)}), 60)">
+                <span style="display:block;min-width:0;">
+                  <strong>${escapeHtml(item.created_by_name || item.destinatario_nome || 'Utente')}</strong><br>
+                  <span style="font-size:11px;color:var(--text3);">${escapeHtml(String(item.oggetto || '(senza oggetto)').slice(0, 48))}</span>
+                </span>
+              </button>`).join('') : `<div style="font-size:13px;color:var(--text2);">Nessun nuovo messaggio da gestire.</div>`}
+          </div>
+          <div style="border:1px solid var(--border);border-radius:12px;padding:14px;background:linear-gradient(180deg,#fffdf7 0%,#fff7e8 100%);">
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px;">
+              <strong>Eventi in programma</strong>
+              <span class="badge ${todaysCalendarEvents.length ? 'badge-blue' : 'badge-gray'}">${todaysCalendarEvents.length} oggi</span>
+            </div>
+            ${todaysCalendarEvents.length ? todaysCalendarEvents.map(item => `
+              <button class="btn btn-outline btn-sm" style="width:100%;justify-content:flex-start;text-align:left;margin-bottom:8px;" onclick="goTo('ferie')">
+                <span style="display:block;min-width:0;">
+                  <strong>${escapeHtml(item.titolo || calendarTypeLabel(item.tipo))}</strong><br>
+                  <span style="font-size:11px;color:var(--text3);">${escapeHtml(`${item.nome || ''} ${item.cognome || ''}`.trim() || 'Referente')} · ${escapeHtml(calendarTypeLabel(item.tipo))}</span>
+                </span>
+              </button>`).join('') : `<div style="font-size:13px;color:var(--text2);">Nessun evento previsto per oggi.</div>`}
+          </div>
+        </div>
+      </div>`);
     if (['admin', 'magazzino', 'direzione'].includes(ruolo)) {
       panels.push(`
         <div class="card">

@@ -67,6 +67,8 @@
       window.state.messagesFilters = { q: '', stato: '', priorita: '', onlyUnread: false, assignedToMe: false };
     }
     if (!window.state.messagesDetail) window.state.messagesDetail = null;
+    if (typeof window.state.messagesSummaryInitialized !== 'boolean') window.state.messagesSummaryInitialized = false;
+    if (!('messagesLastToastConversationId' in window.state)) window.state.messagesLastToastConversationId = 0;
   }
 
   function renderMessaggiTopbarBadge() {
@@ -85,10 +87,27 @@
 
   async function loadMessaggiSummary() {
     if (!window.state.token) return;
+    ensureMessaggiState();
+    const prevUnread = Number(window.state.messagesUnreadCount || 0);
     const data = await window.api('GET', '/api/messaggi/summary').catch(() => ({ unread_count: 0, recent: [] }));
     window.state.messagesUnreadCount = Number(data.unread_count || 0);
     window.state.messagesRecent = Array.isArray(data.recent) ? data.recent : [];
+    const newest = window.state.messagesRecent[0] || null;
+    const newestId = Number(newest?.id || 0);
+    if (
+      window.state.messagesSummaryInitialized
+      && window.state.currentPage !== 'messaggi'
+      && Number(window.state.messagesUnreadCount || 0) > prevUnread
+      && newestId
+      && newestId !== Number(window.state.messagesLastToastConversationId || 0)
+      && newest?.unread
+    ) {
+      window.state.messagesLastToastConversationId = newestId;
+      window.showToast(`Nuovo messaggio da ${getConversationCounterpart(newest, true)}`, 'info');
+    }
+    window.state.messagesSummaryInitialized = true;
     renderMessaggiTopbarBadge();
+    if (window.state.currentPage === 'dashboard' && typeof window.renderDashboard === 'function') window.renderDashboard();
   }
 
   function stopMessaggiPolling() {
@@ -235,29 +254,34 @@
       const unread = isInbox && !!conv.unread;
       const active = Number(conv.id) === selectedId;
       const counterpart = getConversationCounterpart(conv, isInbox);
+      const initials = String(counterpart || '?').trim().split(/\s+/).slice(0, 2).map(v => v.charAt(0)).join('').toUpperCase() || '?';
       const refs = [
         conv.ordine_id ? `<span class="badge badge-blue">Ordine #${conv.ordine_id}</span>` : '',
         conv.cliente_id ? `<span class="badge badge-soft">${window.escapeHtml(conv.cliente_nome || `Cliente #${conv.cliente_id}`)}</span>` : '',
         conv.assegnato_nome ? `<span class="badge badge-gray">Assegnata a ${window.escapeHtml(conv.assegnato_nome)}</span>` : '',
       ].filter(Boolean).join(' ');
       return `
-        <button class="card" onclick="openMessaggioDettaglio(${conv.id})" style="width:100%;text-align:left;margin-top:12px;border:${active ? '1.5px solid var(--accent)' : '1px solid var(--border)'};background:${unread ? '#f5fbff' : 'var(--surface)'};">
-          <div style="padding:12px 14px;">
-            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
-              <div style="min-width:0;">
-                <div style="font-size:13px;font-weight:700;color:var(--text1);">${window.escapeHtml(conv.oggetto || '(senza oggetto)')}</div>
-                <div style="font-size:11px;color:var(--text3);margin-top:4px;">${isInbox ? 'Da' : 'A'} ${window.escapeHtml(counterpart)} - ${window.escapeHtml(window.formatNotificationDateTime(conv.last_message_at) || '')}</div>
+        <button class="card" onclick="openMessaggioDettaglio(${conv.id})" style="width:100%;text-align:left;margin-top:10px;border:${active ? '1.5px solid var(--accent)' : '1px solid var(--border)'};background:${unread ? '#eef8ff' : 'var(--surface)'};box-shadow:${active ? '0 8px 24px rgba(18,80,120,0.10)' : 'none'};">
+          <div style="padding:12px 14px;display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;align-items:start;">
+            <div style="width:44px;height:44px;border-radius:50%;background:${unread ? 'var(--accent)' : 'var(--surface2)'};color:${unread ? '#fff' : 'var(--accent)'};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;">${window.escapeHtml(initials)}</div>
+            <div>
+              <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+                <div style="min-width:0;">
+                  <div style="font-size:13px;font-weight:700;color:var(--text1);">${window.escapeHtml(counterpart)}</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:2px;">${window.escapeHtml(conv.oggetto || '(senza oggetto)')}</div>
+                </div>
+                <div style="font-size:11px;color:${unread ? 'var(--accent)' : 'var(--text3)'};font-weight:${unread ? '700' : '500'};white-space:nowrap;">${window.escapeHtml(window.formatNotificationDateTime(conv.last_message_at) || '')}</div>
               </div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
-                ${unread ? '<span class="badge badge-orange">Nuova</span>' : ''}
-                <span class="badge ${priorityBadges[conv.priorita] || 'badge-gray'}">${window.escapeHtml(priorityLabels[conv.priorita] || conv.priorita || 'Media')}</span>
-                <span class="badge ${statusBadges[conv.stato] || 'badge-gray'}">${window.escapeHtml(statusLabels[conv.stato] || conv.stato || 'Nuovo')}</span>
+              <div style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.45;">${window.escapeHtml(String(conv.last_message_text || '').slice(0, 130))}${String(conv.last_message_text || '').length > 130 ? '...' : ''}</div>
+              <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                  ${unread ? '<span class="badge badge-orange">Nuova</span>' : ''}
+                  <span class="badge ${priorityBadges[conv.priorita] || 'badge-gray'}">${window.escapeHtml(priorityLabels[conv.priorita] || conv.priorita || 'Media')}</span>
+                  <span class="badge ${statusBadges[conv.stato] || 'badge-gray'}">${window.escapeHtml(statusLabels[conv.stato] || conv.stato || 'Nuovo')}</span>
+                  ${refs}
+                </div>
+                <div style="font-size:11px;color:var(--text3);">${Number(conv.message_count || 0)} msg</div>
               </div>
-            </div>
-            <div style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.45;">${window.escapeHtml(String(conv.last_message_text || '').slice(0, 170))}${String(conv.last_message_text || '').length > 170 ? '...' : ''}</div>
-            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">
-              <div style="display:flex;gap:6px;flex-wrap:wrap;">${refs}</div>
-              <div style="font-size:11px;color:var(--text3);">${Number(conv.message_count || 0)} msg</div>
             </div>
           </div>
         </button>
