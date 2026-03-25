@@ -35,6 +35,9 @@
     chiuso: 'badge-gray',
   };
 
+  const MESSAGE_POLL_INTERVAL_DEFAULT_MS = 15000;
+  const MESSAGE_POLL_INTERVAL_ACTIVE_MS = 3000;
+
   const presets = {
     problema_ordine: {
       subject: 'Problema ordine',
@@ -69,6 +72,8 @@
     if (!window.state.messagesDetail) window.state.messagesDetail = null;
     if (typeof window.state.messagesSummaryInitialized !== 'boolean') window.state.messagesSummaryInitialized = false;
     if (!('messagesLastToastConversationId' in window.state)) window.state.messagesLastToastConversationId = 0;
+    if (typeof window.state.messagesPollingBound !== 'boolean') window.state.messagesPollingBound = false;
+    if (typeof window.state.messagesPollInFlight !== 'boolean') window.state.messagesPollInFlight = false;
   }
 
   function renderMessaggiTopbarBadge() {
@@ -112,18 +117,53 @@
 
   function stopMessaggiPolling() {
     if (window.state.messagesPoller) {
-      clearInterval(window.state.messagesPoller);
+      clearTimeout(window.state.messagesPoller);
       window.state.messagesPoller = null;
     }
+  }
+
+  function getMessaggiPollInterval() {
+    const isVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+    return isVisible && window.state.currentPage === 'messaggi'
+      ? MESSAGE_POLL_INTERVAL_ACTIVE_MS
+      : MESSAGE_POLL_INTERVAL_DEFAULT_MS;
+  }
+
+  async function runMessaggiPollingCycle() {
+    if (!window.state.token) return;
+    ensureMessaggiState();
+    if (window.state.messagesPollInFlight) return;
+    window.state.messagesPollInFlight = true;
+    try {
+      await loadMessaggiSummary();
+      if (window.state.currentPage === 'messaggi') await loadMessaggiPageData(true);
+    } finally {
+      window.state.messagesPollInFlight = false;
+      if (window.state.token) {
+        window.state.messagesPoller = setTimeout(() => {
+          runMessaggiPollingCycle().catch(() => {});
+        }, getMessaggiPollInterval());
+      }
+    }
+  }
+
+  function bindMessaggiRealtimeRefresh() {
+    ensureMessaggiState();
+    if (window.state.messagesPollingBound || typeof document === 'undefined') return;
+    const refreshNow = () => {
+      if (!window.state.token || document.visibilityState !== 'visible') return;
+      runMessaggiPollingCycle().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', refreshNow);
+    window.addEventListener('focus', refreshNow);
+    window.state.messagesPollingBound = true;
   }
 
   function startMessaggiPolling() {
     stopMessaggiPolling();
     if (!window.state.token) return;
-    window.state.messagesPoller = setInterval(() => {
-      loadMessaggiSummary().catch(() => {});
-      if (window.state.currentPage === 'messaggi') loadMessaggiPageData(true).catch(() => {});
-    }, 15000);
+    bindMessaggiRealtimeRefresh();
+    runMessaggiPollingCycle().catch(() => {});
   }
 
   function getMessaggiListForCurrentBox() {
@@ -652,6 +692,25 @@
     }
   }
 
+  function markConversationReadLocal(id) {
+    const targetId = Number(id || 0);
+    if (!targetId) return false;
+    const list = Array.isArray(window.state.messagesInbox) ? window.state.messagesInbox : [];
+    const item = list.find(msg => Number(msg.id) === targetId);
+    let changed = false;
+    if (item?.unread) {
+      item.unread = false;
+      window.state.messagesUnreadCount = Math.max(0, Number(window.state.messagesUnreadCount || 0) - 1);
+      changed = true;
+    }
+    if (window.state.messagesDetail?.conversation && Number(window.state.messagesDetail.conversation.id) === targetId && window.state.messagesDetail.conversation.unread) {
+      window.state.messagesDetail.conversation.unread = false;
+      changed = true;
+    }
+    if (changed) renderMessaggiTopbarBadge();
+    return changed;
+  }
+
   async function loadMessaggioDetail(id, options = {}) {
     const markRead = options.markRead !== false;
     if (!id) return;
@@ -699,25 +758,18 @@
 
   async function markMessaggioRead(id, silent = false) {
     await window.api('POST', `/api/messaggi/${id}/read`, {});
-    const list = Array.isArray(window.state.messagesInbox) ? window.state.messagesInbox : [];
-    const item = list.find(msg => Number(msg.id) === Number(id));
-    if (item?.unread) {
-      item.unread = false;
-      window.state.messagesUnreadCount = Math.max(0, Number(window.state.messagesUnreadCount || 0) - 1);
-    }
-    if (window.state.messagesDetail?.conversation && Number(window.state.messagesDetail.conversation.id) === Number(id)) {
-      window.state.messagesDetail.conversation.unread = false;
-    }
-    renderMessaggiTopbarBadge();
+    markConversationReadLocal(id);
     if (!silent) renderMessaggiPage();
   }
 
   async function openMessaggioDettaglio(id) {
-    window.state.messagesSelectedId = Number(id) || null;
+    const targetId = Number(id) || null;
+    window.state.messagesSelectedId = targetId;
+    const changed = window.state.messagesCurrentBox !== 'sent' ? markConversationReadLocal(targetId) : false;
     window.state.messagesDetail = null;
     renderMessaggiPage();
     try {
-      await loadMessaggioDetail(id);
+      await loadMessaggioDetail(targetId, { markRead: !changed });
     } catch (e) {
       window.showToast(e.message, 'warning');
     }
