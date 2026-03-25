@@ -10442,7 +10442,7 @@ function renderGiacenze() {
           ${scad ? `<span style="font-size:11px;${isExpiring ? 'color:var(--danger);font-weight:700;' : 'color:var(--text3);'}">Sc: ${scad}</span>` : '<span style="font-size:11px;color:var(--text3);">Scadenza n.d.</span>'}
           ${l.note ? `<span style="font-size:11px;color:var(--text3);">${escapeHtml(l.note)}</span>` : ''}
           <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;">
-            ${isAdmin ? `
+            ${canManageStock ? `
               <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openScaricoManuale(${l.id})">⬇️ Scarico</button>
               <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openGiacenzaRettifica(${l.id})">📊 Rettifica</button>
               <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openGiacenzaModifica(${l.id})">✏️ Modifica</button>
