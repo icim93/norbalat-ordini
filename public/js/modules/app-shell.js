@@ -32,7 +32,7 @@
           { page: 'clienti', icon: '🏢', label: 'Clienti' },
           { page: 'prodotti', icon: '🧀', label: 'Prodotti' },
           { page: 'utenti', icon: '👥', label: 'Utenti' },
-          { page: 'ferie', icon: '🌴', label: 'Ferie' },
+          { page: 'ferie', icon: '🗓️', label: 'Calendario' },
           { page: 'messaggi', icon: '✉️', label: 'Messaggi' },
         ],
       },
@@ -62,7 +62,7 @@
     amministrazione: [
       { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'clienti', icon: '🏢', label: 'Clienti' },
-      { page: 'ferie', icon: '🌴', label: 'Ferie' },
+      { page: 'ferie', icon: '🗓️', label: 'Calendario' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
       { page: 'ordini', icon: '📋', label: 'Ordini' },
@@ -73,6 +73,7 @@
     autista: [
       { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'autista', icon: '🚚', label: 'Il mio giro' },
+      { page: 'ferie', icon: '🗓️', label: 'Calendario' },
       { page: 'tentata', icon: '🛒', label: 'Tentata Vendita' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'piano', icon: '🚛', label: 'Piano Carico' },
@@ -83,6 +84,7 @@
     magazzino: [
       { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'magazzino', icon: '📋', label: 'Da preparare' },
+      { page: 'ferie', icon: '🗓️', label: 'Calendario' },
       { page: 'giacenze', icon: '📦', label: 'Giacenze' },
       { page: 'tentata', icon: '🚚', label: 'Tentata Vendita' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
@@ -95,7 +97,7 @@
     direzione: [
       { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'clienti', icon: '🏢', label: 'Clienti' },
-      { page: 'ferie', icon: '🌴', label: 'Ferie' },
+      { page: 'ferie', icon: '🗓️', label: 'Calendario' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },
       { page: 'listini', icon: '💶', label: 'Listini' },
       { page: 'rese', icon: '♻️', label: 'Gestione Rese' },

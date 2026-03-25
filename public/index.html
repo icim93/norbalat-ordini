@@ -2564,8 +2564,8 @@
 
       <div class="page" id="page-ferie">
         <div class="page-header">
-          <div class="page-title">Ferie</div>
-          <div class="page-sub">Pianificazione assenze dipendenti</div>
+          <div class="page-title">Calendario Aziendale</div>
+          <div class="page-sub">Eventi interni, ferie e attivita con visibilita configurabile</div>
         </div>
         <div id="ferie-page-body"></div>
       </div>
@@ -4477,16 +4477,20 @@
 </div>
 
 <div class="modal-overlay" id="modal-ferie">
-  <div class="modal" style="max-width:620px;">
+  <div class="modal" style="max-width:760px;">
     <div class="modal-header">
-      <div class="modal-title" id="modal-ferie-title">Nuovo periodo ferie</div>
+      <div class="modal-title" id="modal-ferie-title">Nuovo evento calendario</div>
       <button class="modal-close" onclick="closeModal('modal-ferie')">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="ferie-id">
       <div class="form-row">
         <div class="field form-full">
-          <label>Dipendente *</label>
+          <label>Titolo evento *</label>
+          <input type="text" id="ferie-titolo" placeholder="Es. ferie estive, riunione clienti, fiera di settore">
+        </div>
+        <div class="field form-full">
+          <label>Referente *</label>
           <select id="ferie-utente"></select>
         </div>
         <div class="field">
@@ -4501,9 +4505,8 @@
           <label>Tipo</label>
           <select id="ferie-tipo">
             <option value="ferie">Ferie</option>
-            <option value="permesso">Permesso</option>
-            <option value="rol">ROL</option>
-            <option value="recupero">Recupero</option>
+            <option value="attivita">Attivita</option>
+            <option value="evento">Evento</option>
           </select>
         </div>
         <div class="field">
@@ -4517,6 +4520,26 @@
         <div class="field form-full">
           <label>Note</label>
           <textarea id="ferie-note" rows="3" placeholder="Note interne, sostituzioni, mezza giornata, ecc."></textarea>
+        </div>
+        <div class="field form-full" style="border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--surface2);">
+          <div style="font-size:13px;font-weight:800;margin-bottom:10px;">Visibilita evento</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px;">
+            <input type="checkbox" id="ferie-vis-solo-creator" onchange="toggleFerieVisibilityMode()">
+            Solo chi ha inserito questo evento
+          </label>
+          <div id="ferie-vis-shared-wrap">
+            <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Seleziona uno o piu reparti e/o utenti che possono vedere l'evento.</div>
+            <div class="form-row">
+              <div class="field form-full">
+                <label>Settori visibili</label>
+                <div id="ferie-vis-ruoli" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
+              </div>
+              <div class="field form-full">
+                <label>Utenti visibili</label>
+                <div id="ferie-vis-utenti" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;max-height:180px;overflow:auto;padding:4px 2px;"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -4878,7 +4901,7 @@ async function loadAllData() {
     if (!state.pianoData) state.pianoData = today();
     const canSeePiano = ['admin', 'autista', 'magazzino'].includes(state.currentUser?.ruolo);
     const canSeeRese = ['admin', 'direzione'].includes(state.currentUser?.ruolo);
-    const canSeeFerie = ['admin', 'amministrazione', 'direzione'].includes(state.currentUser?.ruolo);
+    const canSeeFerie = !!state.currentUser;
     const [utenti, clienti, prodotti, listini, rese, ordini, camions, giri, tentataConfig, ferie] = await Promise.all([
       api('GET', '/api/utenti'),
       api('GET', '/api/clienti'),
@@ -7628,6 +7651,481 @@ function renderFeriePage() {
                 <span style="font-weight:700;">${escapeHtml(formatFerieMonthLabel(month))}</span>
                 <span style="color:var(--accent);font-weight:800;">${days} giorni</span>
               </div>`).join('') : `<div style="color:var(--text3);padding:6px 0;">Nessun dato disponibile.</div>`}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function canManageFerie() {
+  return !!state.currentUser;
+}
+
+function getFerieRoleLabels() {
+  return {
+    admin: 'Admin',
+    amministrazione: 'Amministrazione',
+    direzione: 'Direzione',
+    autista: 'Autista',
+    magazzino: 'Magazzino',
+  };
+}
+
+function getFerieRoleOptions() {
+  return ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'];
+}
+
+function normalizeFerieType(tipo) {
+  const value = String(tipo || 'evento').toLowerCase();
+  if (['ferie', 'attivita', 'evento'].includes(value)) return value;
+  if (['permesso', 'rol', 'recupero'].includes(value)) return 'ferie';
+  return 'evento';
+}
+
+function getFerieTipoLabel(tipo) {
+  const labels = { ferie: 'Ferie', attivita: 'Attivita', evento: 'Evento', permesso: 'Ferie', rol: 'Ferie', recupero: 'Ferie' };
+  return labels[String(tipo || '').toLowerCase()] || 'Evento';
+}
+
+function getFerieTipoBadge(tipo) {
+  const key = normalizeFerieType(tipo);
+  const styles = { ferie: 'badge-blue', attivita: 'badge-orange', evento: 'badge-green' };
+  return `<span class="badge ${styles[key] || 'badge-gray'}">${escapeHtml(getFerieTipoLabel(key))}</span>`;
+}
+
+function getFerieTypeColor(tipo) {
+  const palette = { ferie: '#2563eb', attivita: '#ea580c', evento: '#059669' };
+  return palette[normalizeFerieType(tipo)] || '#64748b';
+}
+
+function getFerieVisibilitySummary(item = {}) {
+  if (item.visibilita_solo_creator) return 'Solo autore';
+  const roleLabels = getFerieRoleLabels();
+  const roles = Array.isArray(item.visibilita_ruoli) ? item.visibilita_ruoli.map(r => roleLabels[r] || r) : [];
+  const userIds = Array.isArray(item.visibilita_utenti) ? item.visibilita_utenti.map(Number) : [];
+  const userNames = state.utenti
+    .filter(u => userIds.includes(Number(u.id)))
+    .map(u => `${u.nome || ''} ${u.cognome || ''}`.trim())
+    .filter(Boolean);
+  const chunks = [];
+  if (roles.length) chunks.push(`Reparti: ${roles.join(', ')}`);
+  if (userNames.length) chunks.push(`Utenti: ${userNames.join(', ')}`);
+  return chunks.join(' | ') || 'Solo autore';
+}
+
+function canEditFerieItem(item = {}) {
+  const role = state.currentUser?.ruolo || '';
+  if (['admin', 'amministrazione', 'direzione'].includes(role)) return true;
+  return Number(item.created_by) === Number(state.currentUser?.id);
+}
+
+function buildFerieCalendarHtml(ferieRows) {
+  const anchor = state.ferieCalendarAnchor || today();
+  state.ferieCalendarAnchor = anchor;
+  const events = ferieRows.map(item => ({
+    ...item,
+    start: new Date(`${getFerieDateOnly(item.data_inizio)}T00:00:00`),
+    end: new Date(`${getFerieDateOnly(item.data_fine)}T00:00:00`),
+    color: getFerieTypeColor(item.tipo),
+    fullName: `${item.nome || ''} ${item.cognome || ''}`.trim(),
+  })).filter(item => !Number.isNaN(item.start.getTime()) && !Number.isNaN(item.end.getTime()));
+  const legend = ['ferie', 'attivita', 'evento'].map(type => ({ type, label: getFerieTipoLabel(type), color: getFerieTypeColor(type) }));
+
+  if (state.ferieCalendarMode === 'settimana') {
+    const base = new Date(`${anchor}T00:00:00`);
+    const day = base.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    base.setDate(base.getDate() + mondayOffset);
+    const weekDays = Array.from({ length: 7 }, (_, idx) => {
+      const d = new Date(base);
+      d.setDate(base.getDate() + idx);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dayEvents = events.filter(ev => key >= getFerieDateOnly(ev.data_inizio) && key <= getFerieDateOnly(ev.data_fine));
+      return { key, date: d, dayEvents };
+    });
+    return `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Vista settimanale</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-outline btn-sm" onclick="shiftFerieCalendar(-1)">←</button>
+            <div style="font-size:12px;color:var(--text2);min-width:200px;text-align:center;">${formatDate(weekDays[0].key)} - ${formatDate(weekDays[6].key)}</div>
+            <button class="btn btn-outline btn-sm" onclick="shiftFerieCalendar(1)">→</button>
+          </div>
+        </div>
+        <div style="padding:0 16px 16px;">
+          <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;">
+            ${weekDays.map(dayItem => `
+              <div style="border:1px solid var(--border);border-radius:12px;background:var(--surface1);min-height:190px;padding:10px;">
+                <div style="font-weight:800;font-size:12px;text-transform:uppercase;">${dayItem.date.toLocaleDateString('it-IT', { weekday: 'short' })}</div>
+                <div style="font-size:18px;font-weight:800;margin:6px 0 10px;">${String(dayItem.date.getDate()).padStart(2, '0')}</div>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  ${dayItem.dayEvents.length ? dayItem.dayEvents.map(ev => `
+                    <div style="padding:7px 8px;border-radius:10px;background:${ev.color};color:#fff;font-size:11px;font-weight:700;">
+                      ${escapeHtml(ev.titolo || getFerieTipoLabel(ev.tipo))}
+                      <div style="font-size:10px;font-weight:500;opacity:0.92;">${escapeHtml(ev.fullName || 'Referente')}</div>
+                    </div>`).join('') : `<div style="font-size:11px;color:var(--text3);">Nessun evento</div>`}
+                </div>
+              </div>`).join('')}
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+            ${legend.map(item => `<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:var(--surface2);font-size:12px;"><span style="width:10px;height:10px;border-radius:50%;background:${item.color};display:inline-block;"></span>${escapeHtml(item.label)}</span>`).join('')}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const ref = new Date(`${anchor}T00:00:00`);
+  const year = ref.getFullYear();
+  const month = ref.getMonth();
+  const first = new Date(year, month, 1);
+  const start = new Date(first);
+  const offset = first.getDay() === 0 ? -6 : 1 - first.getDay();
+  start.setDate(first.getDate() + offset);
+  const days = Array.from({ length: 42 }, (_, idx) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + idx);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const dayEvents = events.filter(ev => key >= getFerieDateOnly(ev.data_inizio) && key <= getFerieDateOnly(ev.data_fine));
+    return { key, date: d, inMonth: d.getMonth() === month, dayEvents };
+  });
+  return `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Vista mensile</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-outline btn-sm" onclick="shiftFerieCalendar(-1)">←</button>
+          <div style="font-size:12px;color:var(--text2);min-width:180px;text-align:center;">${escapeHtml(formatFerieMonthLabel(`${year}-${String(month + 1).padStart(2, '0')}`))}</div>
+          <button class="btn btn-outline btn-sm" onclick="shiftFerieCalendar(1)">→</button>
+        </div>
+      </div>
+      <div style="padding:0 16px 16px;">
+        <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-bottom:8px;">
+          ${['Lun','Mar','Mer','Gio','Ven','Sab','Dom'].map(label => `<div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;padding:4px 6px;">${label}</div>`).join('')}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;">
+          ${days.map(dayItem => `
+            <div style="min-height:138px;border:1px solid ${dayItem.inMonth ? 'var(--border)' : '#e7edf4'};border-radius:12px;padding:8px;background:${dayItem.inMonth ? 'var(--surface1)' : '#f7fafc'};opacity:${dayItem.inMonth ? '1' : '0.72'};">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <span style="font-size:12px;font-weight:800;">${String(dayItem.date.getDate()).padStart(2, '0')}</span>
+                ${dayItem.key === today() ? '<span class="badge badge-blue">Oggi</span>' : ''}
+              </div>
+              <div style="display:flex;flex-direction:column;gap:5px;">
+                ${dayItem.dayEvents.slice(0, 3).map(ev => `<div style="padding:5px 6px;border-radius:8px;background:${ev.color};color:#fff;font-size:10px;font-weight:700;line-height:1.2;" title="${escapeHtml(ev.titolo || '')}">${escapeHtml(ev.titolo || getFerieTipoLabel(ev.tipo))}</div>`).join('')}
+                ${dayItem.dayEvents.length > 3 ? `<div style="font-size:10px;color:var(--text3);">+${dayItem.dayEvents.length - 3} altri</div>` : ''}
+              </div>
+            </div>`).join('')}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+          ${legend.map(item => `<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:var(--surface2);font-size:12px;"><span style="width:10px;height:10px;border-radius:50%;background:${item.color};display:inline-block;"></span>${escapeHtml(item.label)}</span>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+function fillFerieRoleChecks(selectedRoles = []) {
+  const box = document.getElementById('ferie-vis-ruoli');
+  if (!box) return;
+  const labels = getFerieRoleLabels();
+  box.innerHTML = getFerieRoleOptions().map(role => `
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;">
+      <input type="checkbox" class="ferie-vis-role-check" value="${role}" ${selectedRoles.includes(role) ? 'checked' : ''}>
+      ${escapeHtml(labels[role] || role)}
+    </label>`).join('');
+}
+
+function fillFerieUserChecks(selectedIds = []) {
+  const box = document.getElementById('ferie-vis-utenti');
+  if (!box) return;
+  const selected = new Set((selectedIds || []).map(Number));
+  box.innerHTML = [...state.utenti]
+    .sort((a, b) => String((a.nome + ' ' + (a.cognome || '')).trim()).localeCompare(String((b.nome + ' ' + (b.cognome || '')).trim()), 'it', { sensitivity: 'base' }))
+    .map(u => `
+      <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface1);">
+        <input type="checkbox" class="ferie-vis-user-check" value="${u.id}" ${selected.has(Number(u.id)) ? 'checked' : ''}>
+        <span><strong>${escapeHtml((u.nome + ' ' + (u.cognome || '')).trim())}</strong><br><span style="color:var(--text3);">${escapeHtml(u.ruolo || '')}</span></span>
+      </label>`).join('');
+}
+
+function toggleFerieVisibilityMode() {
+  const creatorOnly = !!document.getElementById('ferie-vis-solo-creator')?.checked;
+  const wrap = document.getElementById('ferie-vis-shared-wrap');
+  if (wrap) wrap.style.opacity = creatorOnly ? '0.45' : '1';
+  document.querySelectorAll('.ferie-vis-role-check, .ferie-vis-user-check').forEach(el => { el.disabled = creatorOnly; });
+}
+
+function getFerieSelectedRoles() {
+  return [...document.querySelectorAll('.ferie-vis-role-check:checked')].map(el => el.value);
+}
+
+function getFerieSelectedUsers() {
+  return [...document.querySelectorAll('.ferie-vis-user-check:checked')].map(el => Number(el.value)).filter(Number.isFinite);
+}
+
+function fillFerieUsersSelect(selectedId) {
+  const select = document.getElementById('ferie-utente');
+  if (!select) return;
+  select.innerHTML = [...state.utenti]
+    .sort((a, b) => String((a.nome + ' ' + (a.cognome || '')).trim()).localeCompare(String((b.nome + ' ' + (b.cognome || '')).trim()), 'it', { sensitivity: 'base' }))
+    .map(u => `<option value="${u.id}" ${Number(selectedId) === Number(u.id) ? 'selected' : ''}>${escapeHtml((u.nome + ' ' + (u.cognome || '')).trim())} · ${escapeHtml(u.ruolo)}</option>`)
+    .join('');
+}
+
+function openNewFerie() {
+  if (!canManageFerie()) return;
+  document.getElementById('modal-ferie-title').textContent = 'Nuovo evento calendario';
+  document.getElementById('ferie-id').value = '';
+  document.getElementById('ferie-titolo').value = '';
+  fillFerieUsersSelect(state.currentUser?.id || '');
+  document.getElementById('ferie-data-inizio').value = today();
+  document.getElementById('ferie-data-fine').value = today();
+  document.getElementById('ferie-tipo').value = 'evento';
+  document.getElementById('ferie-stato').value = 'programmata';
+  document.getElementById('ferie-note').value = '';
+  document.getElementById('ferie-vis-solo-creator').checked = true;
+  fillFerieRoleChecks([]);
+  fillFerieUserChecks([]);
+  toggleFerieVisibilityMode();
+  openModal('modal-ferie');
+}
+
+function openEditFerie(id) {
+  const item = (state.ferie || []).find(f => Number(f.id) === Number(id));
+  if (!item || !canEditFerieItem(item)) return;
+  document.getElementById('modal-ferie-title').textContent = 'Modifica evento calendario';
+  document.getElementById('ferie-id').value = item.id;
+  document.getElementById('ferie-titolo').value = item.titolo || '';
+  fillFerieUsersSelect(item.utente_id);
+  document.getElementById('ferie-data-inizio').value = getFerieDateOnly(item.data_inizio);
+  document.getElementById('ferie-data-fine').value = getFerieDateOnly(item.data_fine);
+  document.getElementById('ferie-tipo').value = normalizeFerieType(item.tipo);
+  document.getElementById('ferie-stato').value = item.stato || 'programmata';
+  document.getElementById('ferie-note').value = item.note || '';
+  document.getElementById('ferie-vis-solo-creator').checked = !!item.visibilita_solo_creator;
+  fillFerieRoleChecks(Array.isArray(item.visibilita_ruoli) ? item.visibilita_ruoli : []);
+  fillFerieUserChecks(Array.isArray(item.visibilita_utenti) ? item.visibilita_utenti : []);
+  toggleFerieVisibilityMode();
+  openModal('modal-ferie');
+}
+
+async function saveFerie() {
+  const id = Number(document.getElementById('ferie-id').value);
+  const creatorOnly = !!document.getElementById('ferie-vis-solo-creator').checked;
+  const body = {
+    titolo: document.getElementById('ferie-titolo').value.trim(),
+    utente_id: Number(document.getElementById('ferie-utente').value),
+    data_inizio: document.getElementById('ferie-data-inizio').value,
+    data_fine: document.getElementById('ferie-data-fine').value,
+    tipo: document.getElementById('ferie-tipo').value,
+    stato: document.getElementById('ferie-stato').value,
+    note: document.getElementById('ferie-note').value.trim(),
+    visibilita_solo_creator: creatorOnly,
+    visibilita_ruoli: creatorOnly ? [] : getFerieSelectedRoles(),
+    visibilita_utenti: creatorOnly ? [] : getFerieSelectedUsers(),
+  };
+  if (!body.titolo || !body.utente_id || !body.data_inizio || !body.data_fine) {
+    showToast('Compila titolo, referente e periodo', 'warning');
+    return;
+  }
+  if (!creatorOnly && !body.visibilita_ruoli.length && !body.visibilita_utenti.length) {
+    showToast('Seleziona almeno un reparto, un utente o usa "solo chi ha inserito"', 'warning');
+    return;
+  }
+  try {
+    const saved = id ? await api('PUT', `/api/ferie/${id}`, body) : await api('POST', '/api/ferie', body);
+    const user = state.utenti.find(u => Number(u.id) === Number(saved.utente_id));
+    const creator = state.utenti.find(u => Number(u.id) === Number(saved.created_by));
+    const normalized = {
+      ...saved,
+      nome: saved.nome || user?.nome || '',
+      cognome: saved.cognome || user?.cognome || '',
+      ruolo: saved.ruolo || user?.ruolo || '',
+      created_by_nome: saved.created_by_nome || creator?.nome || '',
+      created_by_cognome: saved.created_by_cognome || creator?.cognome || '',
+      visibilita_ruoli: Array.isArray(saved.visibilita_ruoli) ? saved.visibilita_ruoli : [],
+      visibilita_utenti: Array.isArray(saved.visibilita_utenti) ? saved.visibilita_utenti : [],
+      visibilita_solo_creator: !!saved.visibilita_solo_creator,
+    };
+    const idx = state.ferie.findIndex(f => Number(f.id) === Number(saved.id));
+    if (idx >= 0) state.ferie[idx] = normalized;
+    else state.ferie.unshift(normalized);
+    closeModal('modal-ferie');
+    renderFeriePage();
+    showToast('Evento calendario salvato', 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore salvataggio evento', 'warning');
+  }
+}
+
+async function deleteFerie(id) {
+  const item = (state.ferie || []).find(f => Number(f.id) === Number(id));
+  if (!item || !canEditFerieItem(item)) return;
+  const ok = await customConfirm(`Eliminare l'evento "${item.titolo || 'senza titolo'}"?`, 'Elimina', 'Conferma eliminazione');
+  if (!ok) return;
+  try {
+    await api('DELETE', `/api/ferie/${id}`);
+    state.ferie = state.ferie.filter(f => Number(f.id) !== Number(id));
+    renderFeriePage();
+    showToast('Evento eliminato', 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore eliminazione evento', 'warning');
+  }
+}
+
+function renderFeriePage() {
+  const container = document.getElementById('ferie-page-body');
+  if (!container) return;
+  if (!canManageFerie()) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔒</div><p>Sezione non disponibile.</p></div>`;
+    return;
+  }
+  const search = (document.getElementById('search-ferie')?.value || '').trim().toLowerCase();
+  const monthFilter = document.getElementById('filter-ferie-mese')?.value || '';
+  const userFilter = document.getElementById('filter-ferie-utente')?.value || '';
+  const typeFilter = document.getElementById('filter-ferie-tipo')?.value || '';
+  const users = [...state.utenti].sort((a, b) => String((a.nome + ' ' + (a.cognome || '')).trim()).localeCompare(String((b.nome + ' ' + (b.cognome || '')).trim()), 'it', { sensitivity: 'base' }));
+  const ferieRows = (state.ferie || []).filter(f => {
+    const fullName = `${f.nome || ''} ${f.cognome || ''}`.trim().toLowerCase();
+    const text = `${f.titolo || ''} ${fullName} ${f.note || ''} ${f.tipo || ''} ${f.stato || ''}`.toLowerCase();
+    if (search && !text.includes(search)) return false;
+    if (monthFilter) {
+      const startMonth = getFerieDateOnly(f.data_inizio).slice(0, 7);
+      const endMonth = getFerieDateOnly(f.data_fine).slice(0, 7);
+      if (monthFilter < startMonth || monthFilter > endMonth) return false;
+    }
+    if (userFilter && Number(f.utente_id) !== Number(userFilter)) return false;
+    if (typeFilter && normalizeFerieType(f.tipo) !== typeFilter) return false;
+    return true;
+  }).sort((a, b) => getFerieDateOnly(a.data_inizio).localeCompare(getFerieDateOnly(b.data_inizio)) || String(a.titolo || '').localeCompare(String(b.titolo || ''), 'it', { sensitivity: 'base' }));
+  const upcoming = ferieRows.filter(f => getFerieDateOnly(f.data_inizio) >= today()).slice(0, 6);
+  const monthlySummary = ferieRows.reduce((acc, item) => {
+    const key = getFerieDateOnly(item.data_inizio).slice(0, 7) || 'n.d.';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const typeSummary = ferieRows.reduce((acc, item) => {
+    const key = normalizeFerieType(item.tipo);
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const calendarHtml = buildFerieCalendarHtml(ferieRows);
+
+  container.innerHTML = `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <div class="toolbar-shell">
+          <div class="toolbar-filters">
+            <div class="toolbar-field grow">
+              <label class="toolbar-label">Cerca</label>
+              <input type="text" class="search-input" id="search-ferie" value="${escapeHtml(search)}" placeholder="Titolo, referente, note..." oninput="renderFeriePage()">
+            </div>
+            <div class="toolbar-field">
+              <label class="toolbar-label">Mese</label>
+              <input type="month" id="filter-ferie-mese" value="${escapeHtml(monthFilter)}" onchange="renderFeriePage()">
+            </div>
+            <div class="toolbar-field">
+              <label class="toolbar-label">Referente</label>
+              <select class="toolbar-select" id="filter-ferie-utente" onchange="renderFeriePage()">
+                <option value="">Tutti</option>
+                ${users.map(u => `<option value="${u.id}" ${Number(userFilter) === Number(u.id) ? 'selected' : ''}>${escapeHtml((u.nome + ' ' + (u.cognome || '')).trim())}</option>`).join('')}
+              </select>
+            </div>
+            <div class="toolbar-field">
+              <label class="toolbar-label">Tipo</label>
+              <select class="toolbar-select" id="filter-ferie-tipo" onchange="renderFeriePage()">
+                <option value="">Tutti</option>
+                <option value="ferie" ${typeFilter === 'ferie' ? 'selected' : ''}>Ferie</option>
+                <option value="attivita" ${typeFilter === 'attivita' ? 'selected' : ''}>Attivita</option>
+                <option value="evento" ${typeFilter === 'evento' ? 'selected' : ''}>Evento</option>
+              </select>
+            </div>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('search-ferie').value='';document.getElementById('filter-ferie-mese').value='';document.getElementById('filter-ferie-utente').value='';document.getElementById('filter-ferie-tipo').value='';renderFeriePage()">Reset</button>
+            <button class="btn btn-green btn-sm" onclick="openNewFerie()">+ Nuovo evento</button>
+          </div>
+        </div>
+      </div>
+      <div style="padding:0 16px 16px;">
+        <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));">
+          <div class="stat-card blue"><div class="stat-label">Eventi visibili</div><div class="stat-value" style="font-size:28px;">${ferieRows.length}</div></div>
+          <div class="stat-card green"><div class="stat-label">Giorni coperti</div><div class="stat-value" style="font-size:28px;">${ferieRows.reduce((sum, item) => sum + getFerieDays(item), 0)}</div></div>
+          <div class="stat-card orange"><div class="stat-label">Referenti coinvolti</div><div class="stat-value" style="font-size:28px;">${new Set(ferieRows.map(f => f.utente_id)).size}</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-header">
+        <div class="card-title">Calendario aziendale</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-outline btn-sm ${state.ferieCalendarMode === 'settimana' ? 'active' : ''}" onclick="setFerieCalendarMode('settimana')">Settimana</button>
+          <button class="btn btn-outline btn-sm ${state.ferieCalendarMode === 'mese' ? 'active' : ''}" onclick="setFerieCalendarMode('mese')">Mese</button>
+        </div>
+      </div>
+      <div>${calendarHtml}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,0.9fr);gap:16px;align-items:start;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Eventi visibili</div>
+          <div style="font-size:12px;color:var(--text2);">Elenco calendario con regole di visibilita</div>
+        </div>
+        <div class="table-scroll-wrap"><table>
+          <thead>
+            <tr>
+              <th>Titolo</th>
+              <th>Referente</th>
+              <th>Periodo</th>
+              <th>Tipo</th>
+              <th>Visibilita</th>
+              <th>Stato</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${ferieRows.length ? ferieRows.map(item => `
+              <tr>
+                <td><strong>${escapeHtml(item.titolo || 'Evento')}</strong><div style="font-size:11px;color:var(--text3);">${item.note ? escapeHtml(item.note) : '—'}</div></td>
+                <td><strong>${escapeHtml(`${item.nome || ''} ${item.cognome || ''}`.trim())}</strong><div style="font-size:11px;color:var(--text3);">${escapeHtml(item.ruolo || '')}</div></td>
+                <td>${formatDate(getFerieDateOnly(item.data_inizio))}<br><span style="font-size:11px;color:var(--text3);">al ${formatDate(getFerieDateOnly(item.data_fine))}</span></td>
+                <td>${getFerieTipoBadge(item.tipo)}</td>
+                <td style="max-width:240px;font-size:12px;">${escapeHtml(getFerieVisibilitySummary(item))}</td>
+                <td>${getFerieStatoBadge(item.stato)}</td>
+                <td>${canEditFerieItem(item) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="openEditFerie(${item.id})">✏️ Modifica</button><button class="btn btn-outline btn-sm" style="border-color:var(--danger);color:var(--danger);" onclick="deleteFerie(${item.id})">🗑 Elimina</button></div>` : '<span style="color:var(--text3);font-size:12px;">Solo lettura</span>'}</td>
+              </tr>`).join('') : `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px;">Nessun evento trovato.</td></tr>`}
+          </tbody>
+        </table></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Prossimi eventi</div></div>
+          <div style="padding:0 16px 14px;display:flex;flex-direction:column;gap:10px;">
+            ${upcoming.length ? upcoming.map(item => `
+              <div style="padding:12px;border:1px solid var(--border);border-radius:10px;background:linear-gradient(180deg,#fbfdff 0%,#f4f8fc 100%);">
+                <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;"><strong>${escapeHtml(item.titolo || 'Evento')}</strong>${getFerieTipoBadge(item.tipo)}</div>
+                <div style="font-size:12px;color:var(--text2);margin-top:4px;">${formatDate(getFerieDateOnly(item.data_inizio))} - ${formatDate(getFerieDateOnly(item.data_fine))} · ${escapeHtml(`${item.nome || ''} ${item.cognome || ''}`.trim())}</div>
+                <div style="font-size:12px;color:var(--text3);margin-top:4px;">${escapeHtml(getFerieVisibilitySummary(item))}</div>
+              </div>`).join('') : `<div style="color:var(--text3);padding:6px 0;">Nessun evento imminente.</div>`}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Carico per mese</div></div>
+          <div style="padding:0 16px 16px;display:flex;flex-direction:column;gap:8px;">
+            ${Object.keys(monthlySummary).length ? Object.entries(monthlySummary).sort((a, b) => a[0].localeCompare(b[0])).map(([month, count]) => `
+              <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+                <span style="font-weight:700;">${escapeHtml(formatFerieMonthLabel(month))}</span>
+                <span style="color:var(--accent);font-weight:800;">${count} eventi</span>
+              </div>`).join('') : `<div style="color:var(--text3);padding:6px 0;">Nessun dato disponibile.</div>`}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Ripartizione tipi</div></div>
+          <div style="padding:0 16px 16px;display:flex;flex-direction:column;gap:8px;">
+            ${['ferie', 'attivita', 'evento'].map(type => `
+              <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+                <span>${escapeHtml(getFerieTipoLabel(type))}</span>
+                <span style="color:${getFerieTypeColor(type)};font-weight:800;">${typeSummary[type] || 0}</span>
+              </div>`).join('')}
           </div>
         </div>
       </div>

@@ -1240,6 +1240,10 @@ async function createSchema() {
     ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE doc_folders ADD COLUMN IF NOT EXISTS allowed_roles JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE doc_folders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS titolo TEXT DEFAULT '';
+    ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS visibilita_ruoli JSONB NOT NULL DEFAULT '["admin","amministrazione","direzione"]'::jsonb;
+    ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS visibilita_utenti JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS visibilita_solo_creator BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE doc_files   ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT 'application/octet-stream';
     ALTER TABLE doc_files   ADD COLUMN IF NOT EXISTS size_bytes INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS stato_cliente TEXT DEFAULT '';
@@ -1436,9 +1440,13 @@ async function createSchema() {
       utente_id       INTEGER NOT NULL REFERENCES utenti(id) ON DELETE CASCADE,
       data_inizio     DATE NOT NULL,
       data_fine       DATE NOT NULL,
+      titolo          TEXT DEFAULT '',
       tipo            TEXT NOT NULL DEFAULT 'ferie',
       stato           TEXT NOT NULL DEFAULT 'programmata',
       note            TEXT DEFAULT '',
+      visibilita_ruoli JSONB NOT NULL DEFAULT '["admin","amministrazione","direzione"]'::jsonb,
+      visibilita_utenti JSONB NOT NULL DEFAULT '[]'::jsonb,
+      visibilita_solo_creator BOOLEAN NOT NULL DEFAULT FALSE,
       created_by      INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
       created_at      TIMESTAMPTZ DEFAULT NOW(),
       updated_at      TIMESTAMPTZ DEFAULT NOW()
@@ -1871,6 +1879,54 @@ function hasFullDocumentAccess(role) {
 function normalizeAllowedRoles(raw) {
   const arr = Array.isArray(raw) ? raw : [];
   return [...new Set(arr.map(r => String(r || '').trim()).filter(r => APP_ROLES.includes(r)))];
+}
+
+function normalizeAllowedUserIds(raw) {
+  const arr = Array.isArray(raw) ? raw : [];
+  return [...new Set(arr.map(v => Number.parseInt(v, 10)).filter(v => Number.isInteger(v) && v > 0))];
+}
+
+function normalizeCalendarEventType(raw) {
+  const value = String(raw || 'evento').trim().toLowerCase();
+  if (['ferie', 'attivita', 'evento'].includes(value)) return value;
+  if (['permesso', 'rol', 'recupero'].includes(value)) return 'ferie';
+  return 'evento';
+}
+
+function normalizeCalendarEventStatus(raw) {
+  const value = String(raw || 'programmata').trim().toLowerCase();
+  return ['programmata', 'confermata', 'da_approvare'].includes(value) ? value : 'programmata';
+}
+
+function normalizeCalendarVisibility(raw = {}) {
+  const creatorOnly = !!raw.visibilita_solo_creator;
+  const allowedRoles = creatorOnly ? [] : normalizeAllowedRoles(raw.visibilita_ruoli);
+  const allowedUsers = creatorOnly ? [] : normalizeAllowedUserIds(raw.visibilita_utenti);
+  if (creatorOnly || (!allowedRoles.length && !allowedUsers.length)) {
+    return { visibilita_solo_creator: true, visibilita_ruoli: [], visibilita_utenti: [] };
+  }
+  return {
+    visibilita_solo_creator: false,
+    visibilita_ruoli: allowedRoles,
+    visibilita_utenti: allowedUsers,
+  };
+}
+
+function userCanViewCalendarEvent(reqUser, row = {}) {
+  const currentUserId = Number.parseInt(reqUser?.id, 10);
+  if (Number.isInteger(currentUserId) && currentUserId > 0 && currentUserId === Number.parseInt(row.created_by, 10)) return true;
+  if (!!row.visibilita_solo_creator) return false;
+  const allowedRoles = normalizeAllowedRoles(row.visibilita_ruoli);
+  if (allowedRoles.includes(String(reqUser?.ruolo || '').trim())) return true;
+  const allowedUsers = normalizeAllowedUserIds(row.visibilita_utenti);
+  return Number.isInteger(currentUserId) && allowedUsers.includes(currentUserId);
+}
+
+function userCanManageCalendarEvent(reqUser, row = {}) {
+  const role = String(reqUser?.ruolo || '').trim();
+  if (['admin', 'amministrazione', 'direzione'].includes(role)) return true;
+  const currentUserId = Number.parseInt(reqUser?.id, 10);
+  return Number.isInteger(currentUserId) && currentUserId > 0 && currentUserId === Number.parseInt(row.created_by, 10);
 }
 
 function buildMessaggiConversationListSql(whereClause, userIdPlaceholder, limitPlaceholder) {
@@ -2653,74 +2709,124 @@ app.delete('/api/utenti/:id', authMiddleware, requireRole('admin'), async (req, 
 });
 
 // ─── CLIENTI ────────────────────────────────────────────────────
-app.get('/api/ferie', authMiddleware, requireRole('admin', 'amministrazione', 'direzione'), async (req, res) => {
+app.get('/api/ferie', authMiddleware, async (req, res) => {
   try {
     const { rows } = await q(
       `SELECT f.*, u.nome, u.cognome, u.ruolo,
-              c.nome AS created_by_nome, c.cognome AS created_by_cognome
+              c.nome AS created_by_nome, c.cognome AS created_by_cognome, c.ruolo AS created_by_ruolo
        FROM ferie_dipendenti f
        JOIN utenti u ON u.id = f.utente_id
        LEFT JOIN utenti c ON c.id = f.created_by
        ORDER BY f.data_inizio DESC, f.id DESC`
     );
-    res.json(rows);
+    res.json(rows.filter(row => userCanViewCalendarEvent(req.user, row)));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/ferie', authMiddleware, requireRole('admin', 'amministrazione', 'direzione'), async (req, res) => {
+app.post('/api/ferie', authMiddleware, async (req, res) => {
   try {
     const utenteId = Number(req.body?.utente_id);
     const dataInizio = String(req.body?.data_inizio || '').trim();
     const dataFine = String(req.body?.data_fine || '').trim();
-    const tipo = String(req.body?.tipo || 'ferie').trim() || 'ferie';
-    const stato = String(req.body?.stato || 'programmata').trim() || 'programmata';
+    const titolo = String(req.body?.titolo || '').trim();
+    const tipo = normalizeCalendarEventType(req.body?.tipo);
+    const stato = normalizeCalendarEventStatus(req.body?.stato);
     const note = String(req.body?.note || '').trim();
-    if (!Number.isFinite(utenteId) || utenteId <= 0) return res.status(400).json({ error: 'Dipendente non valido' });
+    const visibility = normalizeCalendarVisibility(req.body || {});
+    if (!Number.isFinite(utenteId) || utenteId <= 0) return res.status(400).json({ error: 'Referente non valido' });
+    if (!titolo) return res.status(400).json({ error: 'Titolo obbligatorio' });
     if (!dataInizio || !dataFine) return res.status(400).json({ error: 'Periodo obbligatorio' });
     if (dataFine < dataInizio) return res.status(400).json({ error: 'La data fine non puo essere precedente alla data inizio' });
     const { rows: userRows } = await q('SELECT id FROM utenti WHERE id=$1 LIMIT 1', [utenteId]);
-    if (!userRows.length) return res.status(404).json({ error: 'Dipendente non trovato' });
+    if (!userRows.length) return res.status(404).json({ error: 'Referente non trovato' });
+    const allowedUsers = visibility.visibilita_utenti;
+    if (allowedUsers.length) {
+      const existingUsers = await q('SELECT id FROM utenti WHERE id = ANY($1::int[])', [allowedUsers]);
+      if (existingUsers.rows.length !== allowedUsers.length) return res.status(400).json({ error: 'Uno o piu utenti visibili non sono validi' });
+    }
     const { rows } = await q(
-      `INSERT INTO ferie_dipendenti (utente_id, data_inizio, data_fine, tipo, stato, note, created_by, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+      `INSERT INTO ferie_dipendenti (
+         utente_id, data_inizio, data_fine, titolo, tipo, stato, note,
+         visibilita_ruoli, visibilita_utenti, visibilita_solo_creator, created_by, updated_at
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,NOW())
        RETURNING *`,
-      [utenteId, dataInizio, dataFine, tipo, stato, note, req.user.id || null]
+      [
+        utenteId,
+        dataInizio,
+        dataFine,
+        titolo,
+        tipo,
+        stato,
+        note,
+        JSON.stringify(visibility.visibilita_ruoli),
+        JSON.stringify(visibility.visibilita_utenti),
+        visibility.visibilita_solo_creator,
+        req.user.id || null,
+      ]
     );
     res.json(rows[0]);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/ferie/:id', authMiddleware, requireRole('admin', 'amministrazione', 'direzione'), async (req, res) => {
+app.put('/api/ferie/:id', authMiddleware, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const utenteId = Number(req.body?.utente_id);
     const dataInizio = String(req.body?.data_inizio || '').trim();
     const dataFine = String(req.body?.data_fine || '').trim();
-    const tipo = String(req.body?.tipo || 'ferie').trim() || 'ferie';
-    const stato = String(req.body?.stato || 'programmata').trim() || 'programmata';
+    const titolo = String(req.body?.titolo || '').trim();
+    const tipo = normalizeCalendarEventType(req.body?.tipo);
+    const stato = normalizeCalendarEventStatus(req.body?.stato);
     const note = String(req.body?.note || '').trim();
+    const visibility = normalizeCalendarVisibility(req.body || {});
     if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'ID non valido' });
-    if (!Number.isFinite(utenteId) || utenteId <= 0) return res.status(400).json({ error: 'Dipendente non valido' });
+    if (!Number.isFinite(utenteId) || utenteId <= 0) return res.status(400).json({ error: 'Referente non valido' });
+    if (!titolo) return res.status(400).json({ error: 'Titolo obbligatorio' });
     if (!dataInizio || !dataFine) return res.status(400).json({ error: 'Periodo obbligatorio' });
     if (dataFine < dataInizio) return res.status(400).json({ error: 'La data fine non puo essere precedente alla data inizio' });
+    const current = await q('SELECT * FROM ferie_dipendenti WHERE id=$1 LIMIT 1', [id]);
+    if (!current.rows.length) return res.status(404).json({ error: 'Evento non trovato' });
+    if (!userCanManageCalendarEvent(req.user, current.rows[0])) return res.status(403).json({ error: 'Permesso negato' });
+    const { rows: userRows } = await q('SELECT id FROM utenti WHERE id=$1 LIMIT 1', [utenteId]);
+    if (!userRows.length) return res.status(404).json({ error: 'Referente non trovato' });
+    const allowedUsers = visibility.visibilita_utenti;
+    if (allowedUsers.length) {
+      const existingUsers = await q('SELECT id FROM utenti WHERE id = ANY($1::int[])', [allowedUsers]);
+      if (existingUsers.rows.length !== allowedUsers.length) return res.status(400).json({ error: 'Uno o piu utenti visibili non sono validi' });
+    }
     const { rows } = await q(
       `UPDATE ferie_dipendenti
-       SET utente_id=$1, data_inizio=$2, data_fine=$3, tipo=$4, stato=$5, note=$6, updated_at=NOW()
-       WHERE id=$7
+       SET utente_id=$1, data_inizio=$2, data_fine=$3, titolo=$4, tipo=$5, stato=$6, note=$7,
+           visibilita_ruoli=$8::jsonb, visibilita_utenti=$9::jsonb, visibilita_solo_creator=$10, updated_at=NOW()
+       WHERE id=$11
        RETURNING *`,
-      [utenteId, dataInizio, dataFine, tipo, stato, note, id]
+      [
+        utenteId,
+        dataInizio,
+        dataFine,
+        titolo,
+        tipo,
+        stato,
+        note,
+        JSON.stringify(visibility.visibilita_ruoli),
+        JSON.stringify(visibility.visibilita_utenti),
+        visibility.visibilita_solo_creator,
+        id,
+      ]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Voce ferie non trovata' });
     res.json(rows[0]);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/ferie/:id', authMiddleware, requireRole('admin', 'amministrazione', 'direzione'), async (req, res) => {
+app.delete('/api/ferie/:id', authMiddleware, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'ID non valido' });
-    const result = await q('DELETE FROM ferie_dipendenti WHERE id=$1', [id]);
-    if (!result.rowCount) return res.status(404).json({ error: 'Voce ferie non trovata' });
+    const current = await q('SELECT * FROM ferie_dipendenti WHERE id=$1 LIMIT 1', [id]);
+    if (!current.rows.length) return res.status(404).json({ error: 'Evento non trovato' });
+    if (!userCanManageCalendarEvent(req.user, current.rows[0])) return res.status(403).json({ error: 'Permesso negato' });
+    await q('DELETE FROM ferie_dipendenti WHERE id=$1', [id]);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
