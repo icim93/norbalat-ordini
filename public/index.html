@@ -9743,14 +9743,15 @@ function updatePDFPreview() {
 
   const MAX_COLUMNS = 3;
   const FIXED_COLUMN_COUNT = Math.min(MAX_COLUMNS, Math.max(1, giri.length));
-  const PAGE_HEIGHT = 980;
-  const PAGE_HEADER_HEIGHT = 58;
-  const COLUMN_HEADER_HEIGHT = 64;
-  const ORDER_HEADER_HEIGHT = 42;
-  const ORDER_NOTE_HEIGHT = 18;
-  const ORDER_TABLE_HEADER_HEIGHT = 18;
-  const ORDER_LINE_HEIGHT = 22;
-  const PAGE_FOOTER_HEIGHT = 26;
+  const mmToPx = mm => (mm * 96) / 25.4;
+  const PAGE_HEIGHT = Math.floor(mmToPx(297 - 16)); // A4 portrait al netto dei margini @page di 8mm sopra/sotto
+  const PAGE_HEADER_HEIGHT = 46;
+  const COLUMN_HEADER_HEIGHT = 52;
+  const ORDER_HEADER_HEIGHT = 22;
+  const ORDER_NOTE_HEIGHT = 14;
+  const ORDER_TABLE_HEADER_HEIGHT = 16;
+  const ORDER_LINE_HEIGHT = 18;
+  const PAGE_FOOTER_HEIGHT = 18;
   const COLUMN_TOLERANCE = 4;
   const AVAILABLE_COLUMN_HEIGHT = PAGE_HEIGHT - PAGE_HEADER_HEIGHT - PAGE_FOOTER_HEIGHT;
   const SUMMARY_GAP_HEIGHT = 12;
@@ -9830,7 +9831,7 @@ function updatePDFPreview() {
       const lineSlice = segment.lines.slice(stateItem.lineIndex, stateItem.lineIndex + linesPerChunk);
       if (!lineSlice.length) break;
       html += buildOrderChunkHtml(segment, lineSlice, stateItem.lineIndex > 0);
-      remaining -= fixedHeight + (lineSlice.length * ORDER_LINE_HEIGHT) + 8;
+      remaining -= fixedHeight + (lineSlice.length * ORDER_LINE_HEIGHT) + 4;
       stateItem.lineIndex += lineSlice.length;
       if (stateItem.lineIndex >= segment.lines.length) {
         stateItem.segmentIndex += 1;
@@ -9854,17 +9855,13 @@ function updatePDFPreview() {
       while (batchStates.some(isGiroStateActive)) {
         const columnAvailableHeight = AVAILABLE_COLUMN_HEIGHT - (pages.length === 0 ? introHeight : 0);
         const columns = [];
-        for (let idx = 0; idx < FIXED_COLUMN_COUNT; idx += 1) {
-          const stateItem = batchStates[idx] || null;
-          if (!stateItem || !isGiroStateActive(stateItem)) {
-            columns.push({ giro: stateItem?.giro || '', html: '', usedHeight: 0 });
-            continue;
-          }
+        const activeBatchStates = batchStates.filter(isGiroStateActive);
+        for (const stateItem of activeBatchStates) {
           const chunk = renderGiroPageChunk(stateItem, columnAvailableHeight);
           columns.push({ giro: stateItem.giro, html: chunk.html, usedHeight: chunk.usedHeight });
         }
         pages.push({
-          columnCount: FIXED_COLUMN_COUNT,
+          columnCount: Math.max(1, columns.length),
           columns,
           maxUsedHeight: Math.max(...columns.map(col => Number(col.usedHeight || 0)), 0),
           batchIndex: Math.floor(batchStart / FIXED_COLUMN_COUNT),
