@@ -1833,6 +1833,7 @@ const PERMISSIONS = {
   'clienti:delete': ['admin'],
   'documenti:view': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'documenti:manage': ['admin', 'amministrazione', 'direzione'],
+  'prodotti:manage': ['admin', 'direzione'],
   'listini:view': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'listini:manage': ['admin', 'direzione'],
   'rese:view': ['admin', 'direzione'],
@@ -3105,7 +3106,7 @@ app.get('/api/prodotti', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/prodotti', authMiddleware, requireRole('admin'), async (req, res) => {
+app.post('/api/prodotti', authMiddleware, requirePermission('prodotti:manage'), async (req, res) => {
   try {
     const {
       codice, nome, categoria, um, packaging = '', peso_fisso = false,
@@ -3139,7 +3140,7 @@ app.post('/api/prodotti', authMiddleware, requireRole('admin'), async (req, res)
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.put('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req, res) => {
+app.put('/api/prodotti/:id', authMiddleware, requirePermission('prodotti:manage'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const {
@@ -3175,14 +3176,14 @@ app.put('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req, r
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/prodotti/:id', authMiddleware, requireRole('admin'), async (req, res) => {
+app.delete('/api/prodotti/:id', authMiddleware, requirePermission('prodotti:manage'), async (req, res) => {
   try {
     await q('DELETE FROM prodotti WHERE id=$1', [parseInt(req.params.id)]);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/prodotti/:id/scheda', authMiddleware, requireRole('admin'), async (req, res) => {
+app.post('/api/prodotti/:id/scheda', authMiddleware, requirePermission('prodotti:manage'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { file_name='', mime_type='application/octet-stream', content_base64='' } = req.body || {};
@@ -3232,7 +3233,7 @@ app.get('/api/prodotti/:id/scheda', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/prodotti/:id/scheda', authMiddleware, requireRole('admin'), async (req, res) => {
+app.delete('/api/prodotti/:id/scheda', authMiddleware, requirePermission('prodotti:manage'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     await q(
@@ -7223,7 +7224,7 @@ app.get('/api/giacenze/movimenti', authMiddleware, requireRole('admin', 'magazzi
 });
 
 // PATCH /api/prodotti/:id/punto-riordino
-app.patch('/api/prodotti/:id/punto-riordino', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+app.patch('/api/prodotti/:id/punto-riordino', authMiddleware, requireRole('admin', 'magazzino', 'direzione'), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const puntoRiordino = req.body?.punto_riordino !== undefined
@@ -7239,7 +7240,7 @@ app.patch('/api/prodotti/:id/punto-riordino', authMiddleware, requireRole('admin
   }
 });
 
-app.post('/api/prodotti/:id/riordino', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+app.post('/api/prodotti/:id/riordino', authMiddleware, requireRole('admin', 'magazzino', 'direzione'), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     const quantita = Number(req.body?.quantita);

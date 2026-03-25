@@ -2512,7 +2512,7 @@
                 <option value="">Tutti i prodotti</option>
                 <option value="da_verificare">Solo da verificare</option>
               </select>
-              <button class="btn btn-green" onclick="openNewProdotto()">+ Nuovo Prodotto</button>
+              <button class="btn btn-green" id="btn-new-prodotto" onclick="openNewProdotto()">+ Nuovo Prodotto</button>
             </div>
           </div>
           <div class="table-scroll-wrap"><table>
@@ -9750,7 +9750,8 @@ function renderGiacenze() {
   const searchWasFocused = activeId === 'giacenze-search-input';
   const searchSelectionStart = searchWasFocused && typeof activeEl.selectionStart === 'number' ? activeEl.selectionStart : null;
   const searchSelectionEnd = searchWasFocused && typeof activeEl.selectionEnd === 'number' ? activeEl.selectionEnd : null;
-  const isAdmin = ['admin', 'magazzino'].includes(state.currentUser?.ruolo);
+  const canManageStock = ['admin', 'magazzino'].includes(state.currentUser?.ruolo);
+  const canManageRiordino = ['admin', 'magazzino', 'direzione'].includes(state.currentUser?.ruolo);
   const today30 = new Date();
   today30.setDate(today30.getDate() + 30);
   const query = (document.getElementById('giacenze-search-input')?.value || '').trim().toLowerCase();
@@ -9931,9 +9932,9 @@ function renderGiacenze() {
             ${riordinoInfo}
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;">
-            ${isAdmin ? `<button class="btn btn-sm" style="font-size:11px;background:var(--success-light);color:var(--success);" onclick="openGiacenzaCarico(${g.prodotto_id})">+ Carico</button>` : ''}
-            ${isAdmin ? `<button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="markProdottoRiordinato(${g.prodotto_id})">🛒 Ordinato</button>` : ''}
-            ${isAdmin ? `<button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openPuntoRiordinoModal(${g.prodotto_id}, ${card.puntoRiordino !== null ? card.puntoRiordino : 'null'})">⚙️ Riordino</button>` : ''}
+            ${canManageStock ? `<button class="btn btn-sm" style="font-size:11px;background:var(--success-light);color:var(--success);" onclick="openGiacenzaCarico(${g.prodotto_id})">+ Carico</button>` : ''}
+            ${canManageRiordino ? `<button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="markProdottoRiordinato(${g.prodotto_id})">🛒 Ordinato</button>` : ''}
+            ${canManageRiordino ? `<button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openPuntoRiordinoModal(${g.prodotto_id}, ${card.puntoRiordino !== null ? card.puntoRiordino : 'null'})">⚙️ Riordino</button>` : ''}
             <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="openMovimentiModal(${g.prodotto_id})">📋 Movimenti</button>
           </div>
         </div>
@@ -10478,7 +10479,7 @@ function renderGiacenzeAlerts() {
           <span style="color:var(--danger);font-weight:700;">${Number(p.totale_quantita).toFixed(2)} ${p.um}</span>
           <span style="color:var(--text3);font-size:11px;">Riordino: ${p.punto_riordino} ${p.um}</span>
           ${p.ultimo_riordino_at ? `<span style="font-size:11px;color:var(--accent);">Riord. ${formatDate(p.ultimo_riordino_at)} · ${escapeHtml(p.ultimo_riordino_utente_nome || '')} · ${Number(p.ultimo_riordino_qta || 0).toFixed(2)} ${p.um}</span>` : ''}
-          ${['admin', 'magazzino'].includes(state.currentUser?.ruolo) ? `<button class="btn btn-outline btn-sm" onclick="markProdottoRiordinato(${p.id})">Ordinato</button>` : ''}
+          ${['admin', 'magazzino', 'direzione'].includes(state.currentUser?.ruolo) ? `<button class="btn btn-outline btn-sm" onclick="markProdottoRiordinato(${p.id})">Ordinato</button>` : ''}
         </div>`).join('')}
     </div>`;
   }
@@ -10492,7 +10493,7 @@ function renderGiacenzeAlerts() {
           <span style="color:var(--orange);font-weight:700;">${Number(g.quantita).toFixed(2)} ${g.um}</span>
           <span style="color:var(--danger);font-size:11px;">Sc: ${g.scadenza?.substring(0,10)}</span>
           ${g.ultimo_riordino_at ? `<span style="font-size:11px;color:var(--accent);">Riord. ${formatDate(g.ultimo_riordino_at)} · ${escapeHtml(g.ultimo_riordino_utente_nome || '')} · ${Number(g.ultimo_riordino_qta || 0).toFixed(2)} ${g.um}</span>` : ''}
-          ${['admin', 'magazzino'].includes(state.currentUser?.ruolo) ? `<button class="btn btn-outline btn-sm" onclick="markProdottoRiordinato(${g.prodotto_id})">Ordinato</button>` : ''}
+          ${['admin', 'magazzino', 'direzione'].includes(state.currentUser?.ruolo) ? `<button class="btn btn-outline btn-sm" onclick="markProdottoRiordinato(${g.prodotto_id})">Ordinato</button>` : ''}
         </div>`).join('')}
     </div>`;
   }

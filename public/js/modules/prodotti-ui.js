@@ -73,7 +73,13 @@ function applyProdottoCategoriaDefaults(force = false) {
   if (riordinoEl && (force || !riordinoEl.dataset.touched)) riordinoEl.value = defaults.puntoRiordino ?? '';
 }
 
+function canManageProdotti() {
+  return ['admin', 'direzione'].includes(state.currentUser?.ruolo);
+}
+
 function renderProdottiTable() {
+  const newButton = document.getElementById('btn-new-prodotto');
+  if (newButton) newButton.style.display = canManageProdotti() ? '' : 'none';
   const q = (document.getElementById('search-prodotti')?.value || '').toLowerCase();
   const filterCat = document.getElementById('filter-cat-prodotti')?.value || '';
   const filterVerifica = document.getElementById('filter-verifica-prodotti')?.value || '';
@@ -120,11 +126,13 @@ function renderProdottiTable() {
       <td>${p.hasSchedaTecnica ? `<button class="btn btn-outline btn-sm" onclick="downloadProdottoScheda(${p.id})">Apri</button>` : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
       <td style="font-family:'DM Mono',monospace;">${eur(getListinoBaseProdotto(p.id))}</td>
       <td>
-        <div class="table-actions">
-          <button class="btn btn-outline btn-sm" title="Modifica prodotto" aria-label="Modifica prodotto" onclick="openEditProdotto(${p.id})">Mod</button>
-          <button class="btn btn-outline btn-sm" title="Carica scheda tecnica" aria-label="Carica scheda tecnica" onclick="promptProdottoSchedaUpload(${p.id})">Scheda</button>
-          <button class="btn btn-danger btn-sm" title="Elimina prodotto" aria-label="Elimina prodotto" onclick="deleteProdotto(${p.id})">Del</button>
-        </div>
+        ${canManageProdotti() ? `
+          <div class="table-actions">
+            <button class="btn btn-outline btn-sm" title="Modifica prodotto" aria-label="Modifica prodotto" onclick="openEditProdotto(${p.id})">Mod</button>
+            <button class="btn btn-outline btn-sm" title="Carica scheda tecnica" aria-label="Carica scheda tecnica" onclick="promptProdottoSchedaUpload(${p.id})">Scheda</button>
+            <button class="btn btn-danger btn-sm" title="Elimina prodotto" aria-label="Elimina prodotto" onclick="deleteProdotto(${p.id})">Del</button>
+          </div>
+        ` : '<span style="color:var(--text3);font-size:12px;">-</span>'}
       </td>
     </tr>
   `).join('');
