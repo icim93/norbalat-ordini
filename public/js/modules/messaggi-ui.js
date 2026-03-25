@@ -198,15 +198,11 @@
     const userSel = document.getElementById('msg-dest-user');
     const groupSel = document.getElementById('msg-dest-group');
     const roleSel = document.getElementById('msg-dest-role');
-    const clientSel = document.getElementById('msg-client-id');
-    const orderSel = document.getElementById('msg-order-id');
-    if (!typeEl || !userWrap || !groupWrap || !roleWrap || !groupNameWrap || !userSel || !groupSel || !roleSel || !clientSel || !orderSel) return;
+    if (!typeEl || !userWrap || !groupWrap || !roleWrap || !groupNameWrap || !userSel || !groupSel || !roleSel) return;
 
     const keepUser = userSel.value;
     const keepGroup = new Set([...(groupSel.selectedOptions || [])].map(opt => opt.value));
     const keepRole = roleSel.value;
-    const keepClient = clientSel.value;
-    const keepOrder = orderSel.value;
 
     const users = [...(window.state.utenti || [])]
       .filter(u => Number(u.id) !== Number(window.state.currentUser?.id))
@@ -223,22 +219,6 @@
 
     roleSel.innerHTML = Object.entries(roleLabels).map(([key, label]) => `<option value="${key}">${window.escapeHtml(label)}</option>`).join('');
     if (keepRole) roleSel.value = keepRole;
-
-    clientSel.innerHTML = `<option value="">Nessun cliente</option>` + [...(window.state.clienti || [])]
-      .filter(c => !(typeof window.isTentataVenditaCliente === 'function' && window.isTentataVenditaCliente(c)))
-      .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' }))
-      .map(c => `<option value="${c.id}">${window.escapeHtml(c.nome)}</option>`).join('');
-    if (keepClient) clientSel.value = keepClient;
-
-    const orders = [...(window.state.ordini || [])]
-      .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))
-      .slice(0, 200);
-    orderSel.innerHTML = `<option value="">Nessun ordine</option>` + orders.map(o => {
-      const cliente = typeof window.getCliente === 'function' ? window.getCliente(o.clienteId) : null;
-      const label = `#${o.id} - ${(cliente?.nome || '?')} - ${o.data || ''}`;
-      return `<option value="${o.id}">${window.escapeHtml(label)}</option>`;
-    }).join('');
-    if (keepOrder) orderSel.value = keepOrder;
 
     const mode = typeEl.value;
     const isRole = mode === 'role';
@@ -267,6 +247,212 @@
       destRole.value = preset.role;
     }
     if (body && !body.value.trim()) body.value = preset.body;
+  }
+
+  function normalizeMessageToken(value) {
+    return String(value || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
+  function getUserMentionToken(user) {
+    return `@${normalizeMessageToken(user?.username || `${user?.nome || ''} ${user?.cognome || ''}`)}`;
+  }
+
+  function getClientReferenceToken(cliente) {
+    return `*${normalizeMessageToken(cliente?.nome || '')}`;
+  }
+
+  function getComposerTriggerMatch(text, caretPos) {
+    const uptoCaret = String(text || '').slice(0, Math.max(0, Number(caretPos || 0)));
+    const match = uptoCaret.match(/(^|\s)([@*])([^\s@*#]*)$/);
+    if (!match) return null;
+    return {
+      trigger: match[2],
+      query: match[3] || '',
+      start: uptoCaret.length - (match[2].length + (match[3] || '').length),
+      end: uptoCaret.length,
+    };
+  }
+
+  function buildComposerSuggestions(trigger, query) {
+    const q = normalizeMessageToken(query);
+    if (trigger === '@') {
+      return [...(window.state.utenti || [])]
+        .filter(u => Number(u.id) !== Number(window.state.currentUser?.id || 0))
+        .map(u => ({
+          kind: 'user',
+          id: Number(u.id),
+          label: `${u.nome} ${u.cognome || ''}`.trim(),
+          meta: roleLabels[u.ruolo] || u.ruolo,
+          token: `${getUserMentionToken(u)} `,
+          search: `${u.username || ''} ${u.nome || ''} ${u.cognome || ''} ${u.ruolo || ''}`,
+        }))
+        .filter(item => !q || normalizeMessageToken(item.search).includes(q))
+        .slice(0, 8);
+    }
+    if (trigger === '*') {
+      return [...(window.state.clienti || [])]
+        .map(c => ({
+          kind: 'client',
+          id: Number(c.id),
+          label: String(c.nome || '').trim() || `Cliente #${c.id}`,
+          meta: c.localita || c.citta || '',
+          token: `${getClientReferenceToken(c)} `,
+          search: `${c.nome || ''} ${c.localita || ''} ${c.citta || ''}`,
+        }))
+        .filter(item => !q || normalizeMessageToken(item.search).includes(q))
+        .slice(0, 8);
+    }
+    return [];
+  }
+
+  function hideComposerPicker(pickerId) {
+    const picker = document.getElementById(pickerId);
+    if (!picker) return;
+    picker.style.display = 'none';
+    picker.innerHTML = '';
+    picker.dataset.activeIndex = '0';
+    picker.dataset.trigger = '';
+    picker.dataset.start = '';
+    picker.dataset.end = '';
+  }
+
+  function applyComposerSuggestion(textarea, pickerId, index) {
+    const picker = document.getElementById(pickerId);
+    if (!textarea || !picker) return false;
+    const suggestions = Array.isArray(window.state.messageComposerSuggestions?.[pickerId]) ? window.state.messageComposerSuggestions[pickerId] : [];
+    const item = suggestions[index];
+    if (!item) return false;
+    const start = Number(picker.dataset.start || 0);
+    const end = Number(picker.dataset.end || 0);
+    const value = textarea.value || '';
+    textarea.value = `${value.slice(0, start)}${item.token}${value.slice(end)}`;
+    const nextPos = start + item.token.length;
+    textarea.focus();
+    textarea.setSelectionRange(nextPos, nextPos);
+    hideComposerPicker(pickerId);
+    return true;
+  }
+
+  function renderComposerPicker(textarea, pickerId, suggestions, match) {
+    const picker = document.getElementById(pickerId);
+    if (!picker) return;
+    window.state.messageComposerSuggestions = window.state.messageComposerSuggestions || {};
+    window.state.messageComposerSuggestions[pickerId] = suggestions;
+    if (!suggestions.length || !match) {
+      hideComposerPicker(pickerId);
+      return;
+    }
+    picker.dataset.activeIndex = '0';
+    picker.dataset.trigger = match.trigger;
+    picker.dataset.start = String(match.start);
+    picker.dataset.end = String(match.end);
+    picker.innerHTML = suggestions.map((item, index) => `
+      <button type="button" class="btn btn-outline btn-sm" style="width:100%;justify-content:flex-start;border:none;border-radius:0;padding:10px 12px;background:${index === 0 ? 'var(--surface2)' : 'transparent'};" onmousedown="event.preventDefault()" onclick="applyMessageComposerSuggestion('${pickerId}', ${index})">
+        <span style="display:block;text-align:left;">
+          <strong>${window.escapeHtml(item.label)}</strong><br>
+          <span style="font-size:11px;color:var(--text3);">${window.escapeHtml(item.meta || item.token.trim())}</span>
+        </span>
+      </button>
+    `).join('');
+    picker.style.display = 'block';
+  }
+
+  function handleMessageComposerInput(textarea, pickerId) {
+    if (!textarea) return;
+    const match = getComposerTriggerMatch(textarea.value, textarea.selectionStart);
+    const suggestions = match ? buildComposerSuggestions(match.trigger, match.query) : [];
+    renderComposerPicker(textarea, pickerId, suggestions, match);
+  }
+
+  function handleMessageComposerKeydown(event, textarea, pickerId, mode = 'reply') {
+    const picker = document.getElementById(pickerId);
+    const hasPicker = !!picker && picker.style.display !== 'none' && picker.children.length > 0;
+    const maxIndex = hasPicker ? picker.children.length - 1 : -1;
+    let activeIndex = Number(picker?.dataset.activeIndex || 0);
+    if (hasPicker && event.key === 'ArrowDown') {
+      event.preventDefault();
+      activeIndex = Math.min(maxIndex, activeIndex + 1);
+      picker.dataset.activeIndex = String(activeIndex);
+      [...picker.children].forEach((child, idx) => { child.style.background = idx === activeIndex ? 'var(--surface2)' : 'transparent'; });
+      return;
+    }
+    if (hasPicker && event.key === 'ArrowUp') {
+      event.preventDefault();
+      activeIndex = Math.max(0, activeIndex - 1);
+      picker.dataset.activeIndex = String(activeIndex);
+      [...picker.children].forEach((child, idx) => { child.style.background = idx === activeIndex ? 'var(--surface2)' : 'transparent'; });
+      return;
+    }
+    if (hasPicker && (event.key === 'Tab' || event.key === 'Enter')) {
+      event.preventDefault();
+      applyComposerSuggestion(textarea, pickerId, activeIndex);
+      return;
+    }
+    if (event.key === 'Escape') {
+      hideComposerPicker(pickerId);
+      return;
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      if (mode === 'new') sendInternalMessage().catch(e => window.showToast(e.message || 'Errore invio chat', 'warning'));
+      else replyToConversation().catch(e => window.showToast(e.message || 'Errore invio messaggio', 'warning'));
+    }
+  }
+
+  function openMessaggiComposeModal() {
+    const body = document.getElementById('msg-body');
+    const destType = document.getElementById('msg-dest-type');
+    if (destType) destType.value = 'user';
+    renderMessaggiComposeDestinations();
+    if (body) body.value = '';
+    const groupName = document.getElementById('msg-group-name');
+    if (groupName) groupName.value = '';
+    hideComposerPicker('msg-body-picker');
+    if (typeof window.openModal === 'function') window.openModal('modal-messaggi-compose');
+    window.setTimeout(() => body?.focus(), 30);
+  }
+
+  function applyMessageComposerSuggestion(pickerId, index) {
+    const textarea = pickerId === 'msg-body-picker'
+      ? document.getElementById('msg-body')
+      : document.getElementById('msg-reply-body');
+    return applyComposerSuggestion(textarea, pickerId, index);
+  }
+
+  function renderMessageRichText(rawText) {
+    const text = String(rawText || '');
+    const regex = /(#ordine\d+|@[a-z0-9._-]+|\*[a-z0-9._-]+)/gi;
+    let lastIndex = 0;
+    const parts = [];
+    for (const match of text.matchAll(regex)) {
+      const token = match[0];
+      const index = match.index || 0;
+      if (index > lastIndex) parts.push(window.escapeHtml(text.slice(lastIndex, index)));
+      if (/^#ordine\d+$/i.test(token)) {
+        const orderId = Number(token.replace(/[^0-9]/g, ''));
+        parts.push(`<button class="btn btn-outline btn-sm" style="margin:0 2px;vertical-align:middle;" onclick="openMessaggioOrdine(${orderId})">${window.escapeHtml(token)}</button>`);
+      } else if (token.startsWith('@')) {
+        const slug = normalizeMessageToken(token.slice(1));
+        const user = (window.state.utenti || []).find(u => normalizeMessageToken(u.username || `${u.nome || ''} ${u.cognome || ''}`) === slug);
+        parts.push(`<span class="badge badge-blue" title="${window.escapeHtml(user ? `${user.nome} ${user.cognome || ''}`.trim() : token)}">${window.escapeHtml(`@${user ? `${user.nome} ${user.cognome || ''}`.trim() : token.slice(1)}`)}</span>`);
+      } else if (token.startsWith('*')) {
+        const slug = normalizeMessageToken(token.slice(1));
+        const cliente = (window.state.clienti || []).find(c => normalizeMessageToken(c.nome || '') === slug);
+        if (cliente) {
+          parts.push(`<button class="btn btn-outline btn-sm" style="margin:0 2px;vertical-align:middle;" onclick="openMessaggioCliente(${Number(cliente.id)})">${window.escapeHtml(`*${cliente.nome}`)}</button>`);
+        } else {
+          parts.push(`<span class="badge badge-soft">${window.escapeHtml(token)}</span>`);
+        }
+      }
+      lastIndex = index + token.length;
+    }
+    if (lastIndex < text.length) parts.push(window.escapeHtml(text.slice(lastIndex)));
+    return parts.join('').replace(/\n/g, '<br>');
   }
 
   function renderMessaggiList() {
@@ -404,7 +590,7 @@
                   <div style="font-size:12px;font-weight:700;color:var(--text1);">${window.escapeHtml(msg.mittente_nome || 'Utente')}</div>
                   <div style="font-size:11px;color:var(--text3);">${window.escapeHtml(window.formatNotificationDateTime(msg.created_at) || '')}</div>
                 </div>
-                <div style="white-space:pre-wrap;line-height:1.55;color:var(--text1);">${window.escapeHtml(msg.testo || '')}</div>
+                <div style="line-height:1.6;color:var(--text1);">${renderMessageRichText(msg.testo || '')}</div>
               </div>
             </div>
           `;
@@ -414,7 +600,8 @@
       <div style="padding:14px;border:1px solid var(--border);border-radius:16px;background:#fff;">
         <div class="field" style="margin:0;">
           <label>Risposta</label>
-          <textarea id="msg-reply-body" rows="4" placeholder="Scrivi una risposta operativa"></textarea>
+          <textarea id="msg-reply-body" rows="4" placeholder="Scrivi una risposta operativa. Usa #ordine123, @utente o *cliente" oninput="handleMessageComposerInput(this,'msg-reply-picker')" onkeydown="handleMessageComposerKeydown(event,this,'msg-reply-picker','reply')"></textarea>
+          <div id="msg-reply-picker" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:12px;background:var(--surface);max-height:220px;overflow:auto;"></div>
         </div>
         <div style="display:flex;justify-content:flex-end;margin-top:10px;">
           <button class="btn btn-green" onclick="replyToConversation()">Invia risposta</button>
@@ -559,18 +746,25 @@
       return;
     }
     const saved = await window.api('POST', '/api/messaggi', body);
-    document.getElementById('msg-preset').value = '';
-    document.getElementById('msg-dest-type').value = 'user';
-    document.getElementById('msg-subject').value = '';
-    document.getElementById('msg-body').value = '';
-    document.getElementById('msg-order-id').value = '';
-    document.getElementById('msg-client-id').value = '';
+    const destTypeEl = document.getElementById('msg-dest-type');
+    if (destTypeEl) destTypeEl.value = 'user';
+    const subjectEl = document.getElementById('msg-subject');
+    if (subjectEl) subjectEl.value = '';
+    const bodyEl = document.getElementById('msg-body');
+    if (bodyEl) bodyEl.value = '';
+    const orderEl = document.getElementById('msg-order-id');
+    if (orderEl) orderEl.value = '';
+    const clientEl = document.getElementById('msg-client-id');
+    if (clientEl) clientEl.value = '';
     const groupName = document.getElementById('msg-group-name');
     if (groupName) groupName.value = '';
     const groupSel = document.getElementById('msg-dest-group');
     if (groupSel) [...groupSel.options].forEach(opt => { opt.selected = false; });
-    document.getElementById('msg-priority').value = 'media';
+    const priorityEl = document.getElementById('msg-priority');
+    if (priorityEl) priorityEl.value = 'media';
     renderMessaggiComposeDestinations();
+    hideComposerPicker('msg-body-picker');
+    if (typeof window.closeModal === 'function') window.closeModal('modal-messaggi-compose');
     window.showToast('Conversazione aperta', 'success');
     await loadMessaggiSummary();
     window.state.messagesCurrentBox = 'sent';
@@ -648,6 +842,10 @@
   window.renderMessaggiPage = renderMessaggiPage;
   window.loadMessaggiPageData = loadMessaggiPageData;
   window.renderMessaggiComposeDestinations = renderMessaggiComposeDestinations;
+  window.openMessaggiComposeModal = openMessaggiComposeModal;
+  window.handleMessageComposerInput = handleMessageComposerInput;
+  window.handleMessageComposerKeydown = handleMessageComposerKeydown;
+  window.applyMessageComposerSuggestion = applyMessageComposerSuggestion;
   window.setMessaggiBox = setMessaggiBox;
   window.openMessaggioDettaglio = openMessaggioDettaglio;
   window.sendInternalMessage = sendInternalMessage;

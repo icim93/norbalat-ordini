@@ -2851,11 +2851,16 @@
               </div>
             </div>
             <div style="padding:0 16px 14px;border-bottom:1px solid var(--border);">
-              <div class="messaggi-filter-grid" style="display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:10px;">
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:end;">
                 <div class="field" style="margin:0;">
-                  <label>Cerca</label>
-                  <input type="text" id="msg-search" placeholder="Oggetto, testo, cliente, ordine..." oninput="renderMessaggiPage()">
+                  <label>Cerca o avvia nuova chat</label>
+                  <input type="text" id="msg-search" placeholder="Nome, testo, cliente, ordine..." oninput="renderMessaggiPage()">
                 </div>
+                <div style="display:flex;align-items:flex-end;">
+                  <button class="btn btn-green" onclick="openMessaggiComposeModal()">+ Nuova chat</button>
+                </div>
+              </div>
+              <div class="messaggi-filter-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:10px;">
                 <div class="field" style="margin:0;">
                   <label>Stato</label>
                   <select id="msg-filter-status" onchange="renderMessaggiPage()">
@@ -2893,76 +2898,6 @@
             </div>
           </div>
           <div class="messaggi-thread-shell">
-            <div class="card">
-              <div class="card-header"><div class="card-title">Nuova chat</div></div>
-              <div style="padding:0 16px 16px;">
-                <div class="messaggi-form-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-                  <div class="field" style="margin:0;">
-                    <label>Preset</label>
-                    <select id="msg-preset" onchange="applyMessaggioPreset()">
-                      <option value="">Nessun preset</option>
-                      <option value="problema_ordine">Problema ordine</option>
-                      <option value="followup_cliente">Follow-up cliente</option>
-                      <option value="richiesta_magazzino">Richiesta magazzino</option>
-                      <option value="avviso_direzione">Avviso direzione</option>
-                    </select>
-                  </div>
-                  <div class="field" style="margin:0;">
-                    <label>Destinazione</label>
-                    <select id="msg-dest-type" onchange="renderMessaggiComposeDestinations()">
-                      <option value="user">Utente singolo</option>
-                      <option value="self">Me stesso</option>
-                      <option value="group">Gruppo dipendenti</option>
-                      <option value="role">Ruolo / reparto</option>
-                    </select>
-                  </div>
-                  <div class="field" id="msg-dest-user-wrap" style="margin:0;">
-                    <label>Utente</label>
-                    <select id="msg-dest-user"></select>
-                  </div>
-                  <div class="field" id="msg-dest-group-wrap" style="display:none;margin:0;">
-                    <label>Partecipanti gruppo</label>
-                    <select id="msg-dest-group" multiple size="5"></select>
-                  </div>
-                  <div class="field" id="msg-dest-role-wrap" style="display:none;margin:0;">
-                    <label>Ruolo</label>
-                    <select id="msg-dest-role"></select>
-                  </div>
-                  <div class="field" id="msg-group-name-wrap" style="display:none;margin:0;">
-                    <label>Nome gruppo</label>
-                    <input type="text" id="msg-group-name" maxlength="120" placeholder="Es. Team logistica">
-                  </div>
-                  <div class="field" style="margin:0;">
-                    <label>Oggetto</label>
-                    <input type="text" id="msg-subject" maxlength="120" placeholder="Oggetto breve">
-                  </div>
-                  <div class="field" style="margin:0;">
-                    <label>Priorita</label>
-                    <select id="msg-priority">
-                      <option value="media">Media</option>
-                      <option value="bassa">Bassa</option>
-                      <option value="alta">Alta</option>
-                      <option value="urgente">Urgente</option>
-                    </select>
-                  </div>
-                  <div class="field" style="margin:0;">
-                    <label>Ordine collegato</label>
-                    <select id="msg-order-id"></select>
-                  </div>
-                  <div class="field" style="margin:0;">
-                    <label>Cliente collegato</label>
-                    <select id="msg-client-id"></select>
-                  </div>
-                  <div class="field" style="grid-column:1 / -1;margin:0;">
-                    <label>Messaggio</label>
-                    <textarea id="msg-body" rows="4" placeholder="Scrivi qui il messaggio"></textarea>
-                  </div>
-                </div>
-                <div style="display:flex;justify-content:flex-end;margin-top:10px;">
-                  <button class="btn btn-green" onclick="sendInternalMessage()">Apri conversazione</button>
-                </div>
-              </div>
-            </div>
             <div class="card messaggi-thread-card">
               <div id="messaggi-detail" style="padding:0 16px 16px;font-size:13px;color:var(--text2);height:100%;display:flex;align-items:center;justify-content:center;">Seleziona una conversazione per leggere il thread e rispondere.</div>
             </div>
@@ -4579,6 +4514,54 @@
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-ferie')">Annulla</button>
       <button class="btn btn-green" onclick="saveFerie()">💾 Salva</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-messaggi-compose">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <div class="modal-title">Nuova chat</div>
+      <button class="modal-close" onclick="closeModal('modal-messaggi-compose')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="messaggi-form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="field" style="margin:0;">
+          <label>Destinazione</label>
+          <select id="msg-dest-type" onchange="renderMessaggiComposeDestinations()">
+            <option value="user">Utente singolo</option>
+            <option value="self">Me stesso</option>
+            <option value="group">Gruppo dipendenti</option>
+            <option value="role">Ruolo / reparto</option>
+          </select>
+        </div>
+        <div class="field" id="msg-dest-user-wrap" style="margin:0;">
+          <label>Utente</label>
+          <select id="msg-dest-user"></select>
+        </div>
+        <div class="field" id="msg-dest-group-wrap" style="display:none;margin:0;">
+          <label>Partecipanti gruppo</label>
+          <select id="msg-dest-group" multiple size="6"></select>
+        </div>
+        <div class="field" id="msg-dest-role-wrap" style="display:none;margin:0;">
+          <label>Ruolo</label>
+          <select id="msg-dest-role"></select>
+        </div>
+        <div class="field" id="msg-group-name-wrap" style="display:none;margin:0;">
+          <label>Nome gruppo</label>
+          <input type="text" id="msg-group-name" maxlength="120" placeholder="Es. Team logistica">
+        </div>
+        <div class="field" style="grid-column:1 / -1;margin:0;">
+          <label>Messaggio</label>
+          <textarea id="msg-body" rows="5" placeholder="Scrivi il primo messaggio. Usa #ordine123, @utente o *cliente" oninput="handleMessageComposerInput(this,'msg-body-picker')" onkeydown="handleMessageComposerKeydown(event,this,'msg-body-picker','new')"></textarea>
+          <div id="msg-body-picker" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:12px;background:var(--surface);max-height:220px;overflow:auto;"></div>
+          <div style="font-size:12px;color:var(--text3);margin-top:8px;">`Enter` invia, `Shift+Enter` va a capo. `#ordine123` apre l'ordine, `@utente` tagga un collega, `*cliente` rimanda al cliente.</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-messaggi-compose')">Annulla</button>
+      <button class="btn btn-green" onclick="sendInternalMessage()">Avvia chat</button>
     </div>
   </div>
 </div>
