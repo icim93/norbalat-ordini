@@ -10885,6 +10885,37 @@ async function saveScaricoRapido() {
 // TENTATA VENDITA — RIENTRO MERCE
 // ═══════════════════════════════════════════════
 
+function getRientroTVClienti(giro = '') {
+  const giroNorm = String(giro || '').trim().toLowerCase();
+  const clientiTentata = (state.clienti || [])
+    .filter(c => typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c))
+    .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' }));
+  if (!giroNorm) return clientiTentata;
+  const matches = clientiTentata.filter(c => String(c.giro || '').trim().toLowerCase() === giroNorm);
+  return matches.length ? matches : clientiTentata;
+}
+
+function syncRientroTVClienteOptions(preferredId = null) {
+  const select = document.getElementById('rientro-tv-cliente');
+  const giro = document.getElementById('rientro-tv-giro')?.value || '';
+  if (!select) return [];
+  const clienti = getRientroTVClienti(giro);
+  const currentValue = Number.parseInt(select.value, 10);
+  const targetId = Number.parseInt(preferredId ?? currentValue, 10);
+  select.innerHTML = [
+    '<option value="">Seleziona cliente tentata</option>',
+    ...clienti.map(c => `<option value="${c.id}">${escapeHtml(c.nome || '')}</option>`),
+  ].join('');
+  if (Number.isFinite(targetId) && clienti.some(c => Number(c.id) === targetId)) {
+    select.value = String(targetId);
+  } else if (clienti.length === 1) {
+    select.value = String(clienti[0].id);
+  } else {
+    select.value = '';
+  }
+  return clienti;
+}
+
 function renderRientroTV() {
   const container = document.getElementById('tentata-rientro-container');
   if (!container) return;
@@ -10905,7 +10936,7 @@ function renderRientroTV() {
           </div>
           <div class="field" style="margin:0;">
             <label class="toolbar-label">Giro</label>
-            <select id="rientro-tv-giro" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;">
+            <select id="rientro-tv-giro" onchange="syncRientroTVClienteOptions()" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;">
               <option value="">Tutti i giri</option>
               <option value="bari nord">Bari Nord</option>
               <option value="murgia">Murgia</option>
@@ -10917,6 +10948,12 @@ function renderRientroTV() {
               <option value="diretto">Diretto</option>
             </select>
           </div>
+          <div class="field" style="margin:0;min-width:260px;">
+            <label class="toolbar-label">Cliente tentata</label>
+            <select id="rientro-tv-cliente" style="padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:14px;">
+              <option value="">Seleziona cliente tentata</option>
+            </select>
+          </div>
           <button class="btn btn-sm" style="background:var(--blue-light);color:var(--blue);border:1px solid #b3d4f0;" onclick="caricaRientroTV()">📥 Carica lista</button>
         </div>
         <div id="rientro-tv-lista"></div>
@@ -10925,6 +10962,7 @@ function renderRientroTV() {
         </div>
       </div>
     </div>`;
+  syncRientroTVClienteOptions();
 }
 
 window._rientroTVRighe = Array.isArray(window._rientroTVRighe) ? window._rientroTVRighe : [];
@@ -10932,13 +10970,22 @@ window._rientroTVRighe = Array.isArray(window._rientroTVRighe) ? window._rientro
 async function caricaRientroTV() {
   const data = document.getElementById('rientro-tv-data')?.value;
   const giro = document.getElementById('rientro-tv-giro')?.value || '';
+  const clienteId = Number.parseInt(document.getElementById('rientro-tv-cliente')?.value || '', 10);
   if (!data) { showToast('Seleziona una data', 'warning'); return; }
+  const clientiDisponibili = syncRientroTVClienteOptions(clienteId);
+  if ((!Number.isFinite(clienteId) || clienteId <= 0) && clientiDisponibili.length > 1) {
+    showToast('Seleziona il cliente tentata vendita corretto prima di caricare il rientro', 'warning');
+    return;
+  }
   const lista = document.getElementById('rientro-tv-lista');
   const footer = document.getElementById('rientro-tv-footer');
   if (!lista) return;
   lista.innerHTML = '<div style="color:var(--text3);padding:16px;">Caricamento...</div>';
   try {
-    const rows = await api('GET', `/api/giacenze/rientro-tv?data=${data}&giro=${encodeURIComponent(giro)}`);
+    const selectedClienteId = Number.parseInt(document.getElementById('rientro-tv-cliente')?.value || '', 10);
+    const params = new URLSearchParams({ data, giro });
+    if (Number.isFinite(selectedClienteId) && selectedClienteId > 0) params.set('cliente_id', String(selectedClienteId));
+    const rows = await api('GET', `/api/giacenze/rientro-tv?${params.toString()}`);
     window._rientroTVRighe = rows;
     if (!rows.length) {
       lista.innerHTML = '<div class="empty-state"><div class="empty-icon">📦</div><p>Nessun prodotto preparato per questa data/giro</p></div>';
@@ -10961,7 +11008,7 @@ async function caricaRientroTV() {
           <tbody>
             ${rows.map((r, i) => `
               <tr>
-                <td>${escapeHtml(r.nome)}<br><span style="font-size:11px;color:var(--text3);">${escapeHtml(r.codice)}</span></td>
+                <td>${escapeHtml(r.nome)}<br><span style="font-size:11px;color:var(--text3);">${escapeHtml(r.codice)}</span>${r.cliente_nome ? `<br><span style="font-size:11px;color:var(--blue);font-weight:600;">${escapeHtml(r.cliente_nome)}</span>` : ''}</td>
                 <td style="font-family:'DM Mono',monospace;font-size:12px;">${escapeHtml(r.lotto)}</td>
                 <td style="text-align:right;">${Number(r.qty_totale)} ${escapeHtml(r.unita_misura || r.um || 'pezzi')}</td>
                 <td style="text-align:right;">${r.peso_totale !== null ? Number(r.peso_totale).toFixed(2) : '—'}</td>

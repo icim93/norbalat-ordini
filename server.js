@@ -7470,19 +7470,36 @@ app.get('/api/giacenze/rientro-tv', authMiddleware, requireRole('admin', 'magazz
   try {
     const data = req.query.data || '';
     const giro = String(req.query.giro || '').trim();
+    const clienteId = Number.parseInt(req.query.cliente_id, 10);
     if (!data) return res.status(400).json({ error: 'data obbligatoria' });
+    if (req.query.cliente_id !== undefined && (!Number.isFinite(clienteId) || clienteId <= 0)) {
+      return res.status(400).json({ error: 'cliente_id non valido' });
+    }
     const { rows } = await q(
       `SELECT ol.prodotto_id, p.nome, p.codice, p.um, ol.lotto,
+              o.cliente_id, c.nome AS cliente_nome,
               ol.unita_misura, SUM(ol.qty) as qty_totale, SUM(ol.peso_effettivo) as peso_totale
        FROM ordine_linee ol
        JOIN ordini o ON o.id = ol.ordine_id
+       JOIN clienti c ON c.id = o.cliente_id
        JOIN prodotti p ON p.id = ol.prodotto_id
        WHERE o.data = $1 AND ol.preparato = true AND ol.lotto != ''
          AND COALESCE(p.gestione_giacenza, TRUE) = TRUE
-         AND ($2 = '' OR COALESCE(NULLIF(o.giro_override,''), (SELECT giro FROM clienti WHERE id=o.cliente_id), '') = $2)
-       GROUP BY ol.prodotto_id, p.nome, p.codice, p.um, ol.lotto, ol.unita_misura
-       ORDER BY p.nome, ol.lotto, ol.unita_misura`,
-      [data, giro]
+         AND (
+           LOWER(COALESCE(c.classificazione, '')) = $2
+           OR UPPER(TRIM(COALESCE(c.nome, ''))) LIKE $3
+         )
+         AND ($4::int IS NULL OR o.cliente_id = $4)
+         AND ($5 = '' OR COALESCE(NULLIF(o.giro_override,''), NULLIF(c.giro,''), '') = $5)
+       GROUP BY ol.prodotto_id, p.nome, p.codice, p.um, ol.lotto, o.cliente_id, c.nome, ol.unita_misura
+       ORDER BY c.nome, p.nome, ol.lotto, ol.unita_misura`,
+      [
+        data,
+        TENTATA_VENDITA_CLIENT_CLASS,
+        `${TENTATA_VENDITA_CLIENT_NAME}%`,
+        Number.isFinite(clienteId) && clienteId > 0 ? clienteId : null,
+        giro,
+      ]
     );
     res.json(rows);
   } catch (e) {
