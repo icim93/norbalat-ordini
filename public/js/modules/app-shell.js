@@ -409,6 +409,9 @@
     const items = getFlatNavItems(config);
     navOpenSections.clear();
     ensurePageSectionOpen(config, window.state.currentPage || items[0]?.page);
+    if (role === 'admin') {
+      navOpenSections.add(getSectionKey('Magazzino'));
+    }
     const u = window.state.currentUser;
     const roleLabels = { admin: 'Admin / Ufficio', amministrazione: 'Amministrazione', autista: 'Autista / Agente', magazzino: 'Magazzino', direzione: 'Direzione' };
     const sidebar = document.getElementById('sidebar-nav');
