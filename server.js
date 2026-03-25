@@ -5796,7 +5796,7 @@ app.get('/api/notifiche/ordini', authMiddleware, async (req, res) => {
     const { rows } = await q(
       `SELECT id, user_id, user_name, action, detail, ts
          FROM activity_log
-        WHERE action = 'Nuovo ordine'
+        WHERE action IN ('Nuovo ordine', 'Modifica ordine')
         ORDER BY id DESC
         LIMIT $1`,
       [limit]

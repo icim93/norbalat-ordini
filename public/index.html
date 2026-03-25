@@ -4486,12 +4486,12 @@
       <input type="hidden" id="ferie-id">
       <div class="form-row">
         <div class="field form-full">
-          <label>Titolo evento *</label>
+          <label id="ferie-titolo-label">Titolo evento *</label>
           <input type="text" id="ferie-titolo" placeholder="Es. ferie estive, riunione clienti, fiera di settore">
         </div>
         <div class="field form-full">
-          <label>Referente *</label>
-          <select id="ferie-utente"></select>
+          <label id="ferie-utente-label">Referente *</label>
+          <select id="ferie-utente" onchange="onFerieUserChange()"></select>
         </div>
         <div class="field">
           <label>Dal *</label>
@@ -4503,7 +4503,7 @@
         </div>
         <div class="field">
           <label>Tipo</label>
-          <select id="ferie-tipo">
+          <select id="ferie-tipo" onchange="onFerieTypeChange()">
             <option value="ferie">Ferie</option>
             <option value="attivita">Attivita</option>
             <option value="evento">Evento</option>
@@ -5024,11 +5024,13 @@ function renderTopbarNotifications() {
   list.innerHTML = state.topbarNotifications.length
     ? state.topbarNotifications.map(item => {
         const orderMatch = String(item.detail || '').match(/#(\d+)/);
-        const orderLabel = orderMatch ? ` ordine #${orderMatch[1]}` : ' un nuovo ordine';
+        const isUpdate = String(item.action || '').toLowerCase() === 'modifica ordine';
+        const verb = isUpdate ? 'ha modificato' : 'ha aggiunto';
+        const orderLabel = orderMatch ? ` ordine #${orderMatch[1]}` : (isUpdate ? ' un ordine' : ' un nuovo ordine');
         const unseenClass = Number(item.id) > seenId ? ' unseen' : '';
         return `
           <button class="topbar-notify-item${unseenClass}" onclick="openOrderNotification(${item.id}, ${orderMatch ? Number(orderMatch[1]) : 0})">
-            <div class="topbar-notify-title"><b>${escapeHtml(item.userName || 'Utente')}</b> ha aggiunto${escapeHtml(orderLabel)}</div>
+            <div class="topbar-notify-title"><b>${escapeHtml(item.userName || 'Utente')}</b> ${escapeHtml(verb)}${escapeHtml(orderLabel)}</div>
             <div class="topbar-notify-meta">${escapeHtml(formatNotificationDateTime(item.ts))}${item.detail ? ` · ${escapeHtml(item.detail)}` : ''}</div>
           </button>
         `;
@@ -5043,6 +5045,7 @@ async function loadTopbarNotifications() {
     id: Number(row.id),
     userId: row.user_id || null,
     userName: row.user_name || '',
+    action: row.action || '',
     detail: row.detail || '',
     ts: row.ts,
   }));
@@ -7862,6 +7865,44 @@ function getFerieSelectedUsers() {
   return [...document.querySelectorAll('.ferie-vis-user-check:checked')].map(el => Number(el.value)).filter(Number.isFinite);
 }
 
+function getFerieSelectedUserName() {
+  const selectedId = Number(document.getElementById('ferie-utente')?.value);
+  const user = state.utenti.find(u => Number(u.id) === selectedId);
+  return user ? `${user.nome || ''} ${user.cognome || ''}`.trim() : '';
+}
+
+function syncFerieTypeUI(forceTitle = false) {
+  const type = document.getElementById('ferie-tipo')?.value || 'evento';
+  const titleLabel = document.getElementById('ferie-titolo-label');
+  const userLabel = document.getElementById('ferie-utente-label');
+  const titleInput = document.getElementById('ferie-titolo');
+  const isFerie = type === 'ferie';
+  if (titleLabel) titleLabel.textContent = isFerie ? 'Titolo ferie *' : 'Titolo evento *';
+  if (userLabel) userLabel.textContent = isFerie ? 'Ferie di *' : 'Referente *';
+  if (!titleInput) return;
+  const selectedName = getFerieSelectedUserName();
+  const suggested = isFerie
+    ? `Ferie di ${selectedName || 'utente'}`
+    : '';
+  const current = String(titleInput.value || '').trim();
+  const shouldReplace = forceTitle || !current || current.startsWith('Ferie di ');
+  if (isFerie) {
+    titleInput.placeholder = 'Es. Ferie di Mario Rossi';
+    if (shouldReplace) titleInput.value = suggested;
+  } else {
+    titleInput.placeholder = 'Es. ferie estive, riunione clienti, fiera di settore';
+    if (forceTitle && current.startsWith('Ferie di ')) titleInput.value = '';
+  }
+}
+
+function onFerieTypeChange() {
+  syncFerieTypeUI(false);
+}
+
+function onFerieUserChange() {
+  if ((document.getElementById('ferie-tipo')?.value || '') === 'ferie') syncFerieTypeUI(true);
+}
+
 function fillFerieUsersSelect(selectedId) {
   const select = document.getElementById('ferie-utente');
   if (!select) return;
@@ -7886,6 +7927,7 @@ function openNewFerie() {
   fillFerieRoleChecks([]);
   fillFerieUserChecks([]);
   toggleFerieVisibilityMode();
+  syncFerieTypeUI(true);
   openModal('modal-ferie');
 }
 
@@ -7905,6 +7947,7 @@ function openEditFerie(id) {
   fillFerieRoleChecks(Array.isArray(item.visibilita_ruoli) ? item.visibilita_ruoli : []);
   fillFerieUserChecks(Array.isArray(item.visibilita_utenti) ? item.visibilita_utenti : []);
   toggleFerieVisibilityMode();
+  syncFerieTypeUI(false);
   openModal('modal-ferie');
 }
 
