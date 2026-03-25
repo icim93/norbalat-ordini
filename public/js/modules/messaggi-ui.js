@@ -133,6 +133,19 @@
   }
 
   function getConversationCounterpart(conv, isInbox) {
+    const kind = String(conv.conversation_kind || '').toLowerCase();
+    const participantIds = Array.isArray(conv.partecipanti_user_ids) ? conv.partecipanti_user_ids.map(v => Number(v)) : [];
+    const participantNames = Array.isArray(conv.partecipanti_nomi) ? conv.partecipanti_nomi.filter(Boolean) : [];
+    const currentUserId = Number(window.state.currentUser?.id || 0);
+    if (kind === 'self') return 'Note personali';
+    if (kind === 'group') return conv.nome_chat || participantNames.join(', ') || 'Gruppo';
+    if (kind === 'direct') {
+      const otherId = participantIds.find(id => Number(id) !== currentUserId);
+      const otherUser = (window.state.utenti || []).find(u => Number(u.id) === Number(otherId));
+      if (otherUser) return `${otherUser.nome} ${otherUser.cognome || ''}`.trim();
+      const otherName = participantNames.find(name => name && name !== `${window.state.currentUser?.nome || ''} ${window.state.currentUser?.cognome || ''}`.trim());
+      if (otherName) return otherName;
+    }
     if (isInbox) return conv.created_by_name || 'Utente';
     if (conv.destinatario_tipo === 'role') return roleLabels[conv.destinatario_ruolo] || conv.destinatario_ruolo || 'Ruolo';
     return conv.destinatario_nome || 'Utente';
@@ -140,9 +153,11 @@
 
   function getConversationSearchText(conv) {
     return [
+      conv.nome_chat,
       conv.oggetto,
       conv.last_message_text,
       conv.cliente_nome,
+      ...(Array.isArray(conv.partecipanti_nomi) ? conv.partecipanti_nomi : []),
       conv.created_by_name,
       conv.destinatario_nome,
       conv.destinatario_ruolo,
@@ -177,14 +192,18 @@
   function renderMessaggiComposeDestinations() {
     const typeEl = document.getElementById('msg-dest-type');
     const userWrap = document.getElementById('msg-dest-user-wrap');
+    const groupWrap = document.getElementById('msg-dest-group-wrap');
     const roleWrap = document.getElementById('msg-dest-role-wrap');
+    const groupNameWrap = document.getElementById('msg-group-name-wrap');
     const userSel = document.getElementById('msg-dest-user');
+    const groupSel = document.getElementById('msg-dest-group');
     const roleSel = document.getElementById('msg-dest-role');
     const clientSel = document.getElementById('msg-client-id');
     const orderSel = document.getElementById('msg-order-id');
-    if (!typeEl || !userWrap || !roleWrap || !userSel || !roleSel || !clientSel || !orderSel) return;
+    if (!typeEl || !userWrap || !groupWrap || !roleWrap || !groupNameWrap || !userSel || !groupSel || !roleSel || !clientSel || !orderSel) return;
 
     const keepUser = userSel.value;
+    const keepGroup = new Set([...(groupSel.selectedOptions || [])].map(opt => opt.value));
     const keepRole = roleSel.value;
     const keepClient = clientSel.value;
     const keepOrder = orderSel.value;
@@ -196,6 +215,11 @@
       ? users.map(u => `<option value="${u.id}">${window.escapeHtml((u.nome + ' ' + (u.cognome || '')).trim())} - ${window.escapeHtml(roleLabels[u.ruolo] || u.ruolo)}</option>`).join('')
       : '<option value="">Nessun utente disponibile</option>';
     if (keepUser) userSel.value = keepUser;
+
+    groupSel.innerHTML = users.length
+      ? users.map(u => `<option value="${u.id}">${window.escapeHtml((u.nome + ' ' + (u.cognome || '')).trim())} - ${window.escapeHtml(roleLabels[u.ruolo] || u.ruolo)}</option>`).join('')
+      : '<option value="">Nessun utente disponibile</option>';
+    [...groupSel.options].forEach(opt => { if (keepGroup.has(opt.value)) opt.selected = true; });
 
     roleSel.innerHTML = Object.entries(roleLabels).map(([key, label]) => `<option value="${key}">${window.escapeHtml(label)}</option>`).join('');
     if (keepRole) roleSel.value = keepRole;
@@ -216,9 +240,14 @@
     }).join('');
     if (keepOrder) orderSel.value = keepOrder;
 
-    const isRole = typeEl.value === 'role';
-    userWrap.style.display = isRole ? 'none' : 'block';
+    const mode = typeEl.value;
+    const isRole = mode === 'role';
+    const isGroup = mode === 'group';
+    const isSelf = mode === 'self';
+    userWrap.style.display = (!isRole && !isGroup && !isSelf) ? 'block' : 'none';
+    groupWrap.style.display = isGroup ? 'block' : 'none';
     roleWrap.style.display = isRole ? 'block' : 'none';
+    groupNameWrap.style.display = isGroup ? 'block' : 'none';
   }
 
   function applyMessaggioPreset() {
@@ -301,22 +330,34 @@
     const detail = window.state.messagesDetail;
     const conv = detail?.conversation;
     if (!conv || Number(conv.id || 0) !== Number(window.state.messagesSelectedId || 0)) {
-      detailEl.textContent = 'Seleziona una conversazione per leggere il thread e rispondere.';
+      detailEl.innerHTML = `
+        <div style="width:100%;height:100%;min-height:520px;display:flex;align-items:center;justify-content:center;padding:24px;">
+          <div style="max-width:320px;text-align:center;color:var(--text3);">
+            <div style="font-size:42px;line-height:1;margin-bottom:12px;">💬</div>
+            <div style="font-size:16px;font-weight:800;color:var(--text1);margin-bottom:8px;">Apri una conversazione</div>
+            <div style="font-size:13px;line-height:1.6;">Seleziona una chat dalla colonna sinistra per leggere il thread e rispondere.</div>
+          </div>
+        </div>`;
       return;
     }
     const messages = Array.isArray(detail.messages) ? detail.messages : [];
     const isInbox = window.state.messagesCurrentBox !== 'sent';
     const counterpart = getConversationCounterpart(conv, isInbox);
+    const counterpartInitials = String(counterpart || '?').trim().split(/\s+/).slice(0, 2).map(v => v.charAt(0)).join('').toUpperCase() || '?';
     detailEl.innerHTML = `
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px;">
-        <div>
-          <div style="font-size:16px;font-weight:800;color:var(--text1);">${window.escapeHtml(conv.oggetto || '(senza oggetto)')}</div>
+      <div style="height:100%;min-height:520px;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;gap:14px;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;padding:16px 0 0;">
+          <div style="display:flex;gap:12px;align-items:flex-start;">
+            <div style="width:44px;height:44px;border-radius:50%;background:var(--surface2);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;">${window.escapeHtml(counterpartInitials)}</div>
+            <div style="min-width:0;">
+              <div style="font-size:16px;font-weight:800;color:var(--text1);">${window.escapeHtml(counterpart)}</div>
           <div style="font-size:12px;color:var(--text3);margin-top:4px;">${isInbox ? 'Da' : 'A'} ${window.escapeHtml(counterpart)} · Ultimo aggiornamento ${window.escapeHtml(window.formatNotificationDateTime(conv.last_message_at) || '')}</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
             <span class="badge ${priorityBadges[conv.priorita] || 'badge-gray'}">${window.escapeHtml(priorityLabels[conv.priorita] || conv.priorita || 'Media')}</span>
             <span class="badge ${statusBadges[conv.stato] || 'badge-gray'}">${window.escapeHtml(statusLabels[conv.stato] || conv.stato || 'Nuovo')}</span>
             ${conv.ordine_id ? `<button class="btn btn-outline btn-sm" onclick="openMessaggioOrdine(${conv.ordine_id})">Ordine #${conv.ordine_id}</button>` : ''}
             ${conv.cliente_id ? `<button class="btn btn-outline btn-sm" onclick="openMessaggioCliente(${conv.cliente_id})">${window.escapeHtml(conv.cliente_nome || 'Cliente')}</button>` : ''}
+          </div>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -325,7 +366,7 @@
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:end;margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:end;">
         <div class="field" style="margin:0;">
           <label>Stato</label>
           <select id="msg-detail-status">
@@ -353,12 +394,12 @@
         </div>
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;max-height:380px;overflow:auto;padding-right:4px;">
+      <div style="display:flex;flex-direction:column;gap:10px;min-height:0;overflow:auto;padding:18px 14px;border:1px solid var(--border);border-radius:16px;background:linear-gradient(180deg,#fcfdff 0%,#f5f8fb 100%);">
         ${messages.length ? messages.map(msg => {
           const mine = Number(msg.mittente_id || 0) === Number(window.state.currentUser?.id || 0);
           return `
             <div style="display:flex;justify-content:${mine ? 'flex-end' : 'flex-start'};">
-              <div style="max-width:min(720px,92%);padding:12px;border:1px solid ${mine ? 'var(--accent)' : 'var(--border)'};background:${mine ? 'var(--accent-light)' : 'var(--surface2)'};border-radius:12px;">
+              <div style="max-width:min(720px,88%);padding:12px 14px;border:1px solid ${mine ? 'rgba(18,80,120,0.18)' : 'var(--border)'};background:${mine ? 'linear-gradient(180deg,#dff1ff 0%,#d4ebff 100%)' : '#ffffff'};border-radius:${mine ? '16px 16px 6px 16px' : '16px 16px 16px 6px'};box-shadow:0 6px 18px rgba(10,30,50,0.05);">
                 <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:6px;">
                   <div style="font-size:12px;font-weight:700;color:var(--text1);">${window.escapeHtml(msg.mittente_nome || 'Utente')}</div>
                   <div style="font-size:11px;color:var(--text3);">${window.escapeHtml(window.formatNotificationDateTime(msg.created_at) || '')}</div>
@@ -367,17 +408,25 @@
               </div>
             </div>
           `;
-        }).join('') : '<div style="padding:18px;border:1px dashed var(--border);border-radius:10px;color:var(--text3);text-align:center;">Nessun messaggio nel thread.</div>'}
+        }).join('') : '<div style="padding:18px;border:1px dashed var(--border);border-radius:12px;color:var(--text3);text-align:center;background:#fff;">Nessun messaggio nel thread.</div>'}
       </div>
 
-      <div class="field" style="margin:0;">
-        <label>Risposta</label>
-        <textarea id="msg-reply-body" rows="4" placeholder="Scrivi una risposta operativa"></textarea>
-      </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:10px;">
-        <button class="btn btn-green" onclick="replyToConversation()">Invia risposta</button>
+      <div style="padding:14px;border:1px solid var(--border);border-radius:16px;background:#fff;">
+        <div class="field" style="margin:0;">
+          <label>Risposta</label>
+          <textarea id="msg-reply-body" rows="4" placeholder="Scrivi una risposta operativa"></textarea>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+          <button class="btn btn-green" onclick="replyToConversation()">Invia risposta</button>
+        </div>
       </div>
     `;
+    const threadScroller = detailEl.querySelector('div[style*="overflow:auto"]');
+    if (threadScroller) {
+      window.requestAnimationFrame(() => {
+        threadScroller.scrollTop = threadScroller.scrollHeight;
+      });
+    }
   }
 
   function renderMessaggiPage() {
@@ -488,10 +537,13 @@
   }
 
   async function sendInternalMessage() {
+    const destType = document.getElementById('msg-dest-type')?.value || 'user';
     const body = {
-      destinatario_tipo: document.getElementById('msg-dest-type')?.value || 'user',
+      destinatario_tipo: destType,
       destinatario_user_id: Number(document.getElementById('msg-dest-user')?.value || 0) || null,
+      destinatario_user_ids: [...(document.getElementById('msg-dest-group')?.selectedOptions || [])].map(opt => Number(opt.value)).filter(v => Number.isInteger(v) && v > 0),
       destinatario_ruolo: document.getElementById('msg-dest-role')?.value || '',
+      nome_chat: (document.getElementById('msg-group-name')?.value || '').trim(),
       oggetto: (document.getElementById('msg-subject')?.value || '').trim(),
       testo: (document.getElementById('msg-body')?.value || '').trim(),
       ordine_id: Number(document.getElementById('msg-order-id')?.value || 0) || null,
@@ -502,13 +554,23 @@
       window.showToast('Scrivi un messaggio', 'warning');
       return;
     }
+    if (destType === 'group' && !body.destinatario_user_ids.length) {
+      window.showToast('Seleziona almeno un altro partecipante', 'warning');
+      return;
+    }
     const saved = await window.api('POST', '/api/messaggi', body);
     document.getElementById('msg-preset').value = '';
+    document.getElementById('msg-dest-type').value = 'user';
     document.getElementById('msg-subject').value = '';
     document.getElementById('msg-body').value = '';
     document.getElementById('msg-order-id').value = '';
     document.getElementById('msg-client-id').value = '';
+    const groupName = document.getElementById('msg-group-name');
+    if (groupName) groupName.value = '';
+    const groupSel = document.getElementById('msg-dest-group');
+    if (groupSel) [...groupSel.options].forEach(opt => { opt.selected = false; });
     document.getElementById('msg-priority').value = 'media';
+    renderMessaggiComposeDestinations();
     window.showToast('Conversazione aperta', 'success');
     await loadMessaggiSummary();
     window.state.messagesCurrentBox = 'sent';

@@ -2089,7 +2089,30 @@
     display:grid;
     grid-template-columns:minmax(320px,380px) minmax(0,1fr);
     gap:16px;
-    align-items:start;
+    align-items:stretch;
+  }
+  .messaggi-sidebar-card,
+  .messaggi-thread-shell {
+    min-height:720px;
+  }
+  .messaggi-sidebar-card {
+    display:flex;
+    flex-direction:column;
+  }
+  .messaggi-list-scroll {
+    flex:1 1 auto;
+    overflow:auto;
+    min-height:0;
+  }
+  .messaggi-thread-shell {
+    display:grid;
+    grid-template-rows:auto minmax(0,1fr);
+    gap:16px;
+  }
+  .messaggi-thread-card {
+    display:grid;
+    grid-template-rows:minmax(0,1fr);
+    min-height:0;
   }
   .messaggi-form-grid,
   .messaggi-filter-grid {
@@ -2819,70 +2842,16 @@
           </div>
         </div>
         <div class="messaggi-layout">
-          <div class="card">
-            <div class="card-header"><div class="card-title">Nuova chat</div></div>
-            <div style="padding:0 16px 16px;">
-              <div class="field">
-                <label>Preset</label>
-                <select id="msg-preset" onchange="applyMessaggioPreset()">
-                  <option value="">Nessun preset</option>
-                  <option value="problema_ordine">Problema ordine</option>
-                  <option value="followup_cliente">Follow-up cliente</option>
-                  <option value="richiesta_magazzino">Richiesta magazzino</option>
-                  <option value="avviso_direzione">Avviso direzione</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Destinazione</label>
-                <select id="msg-dest-type" onchange="renderMessaggiComposeDestinations()">
-                  <option value="user">Utente singolo</option>
-                  <option value="role">Ruolo / reparto</option>
-                </select>
-              </div>
-              <div class="field" id="msg-dest-user-wrap">
-                <label>Utente</label>
-                <select id="msg-dest-user"></select>
-              </div>
-              <div class="field" id="msg-dest-role-wrap" style="display:none;">
-                <label>Ruolo</label>
-                <select id="msg-dest-role"></select>
-              </div>
-              <div class="field">
-                <label>Oggetto</label>
-                <input type="text" id="msg-subject" maxlength="120" placeholder="Oggetto breve">
-              </div>
-              <div class="field">
-                <label>Priorita</label>
-                <select id="msg-priority">
-                  <option value="media">Media</option>
-                  <option value="bassa">Bassa</option>
-                  <option value="alta">Alta</option>
-                  <option value="urgente">Urgente</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Messaggio</label>
-                <textarea id="msg-body" rows="6" placeholder="Scrivi qui il messaggio"></textarea>
-              </div>
-              <div class="messaggi-form-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                <div class="field">
-                  <label>Ordine collegato</label>
-                  <select id="msg-order-id"></select>
-                </div>
-                <div class="field">
-                  <label>Cliente collegato</label>
-                  <select id="msg-client-id"></select>
-                </div>
-              </div>
-              <div style="display:flex;justify-content:flex-end;">
-                <button class="btn btn-green" onclick="sendInternalMessage()">Apri conversazione</button>
+          <div class="card messaggi-sidebar-card">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+              <div class="card-title">Conversazioni</div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="tab-btn active" id="msg-tab-inbox" onclick="setMessaggiBox('inbox')">Ricevuti</button>
+                <button class="tab-btn" id="msg-tab-sent" onclick="setMessaggiBox('sent')">Inviati</button>
               </div>
             </div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:16px;">
-            <div class="card">
-              <div class="card-header"><div class="card-title">Filtri</div></div>
-              <div class="messaggi-filter-grid" style="padding:0 16px 16px;display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;">
+            <div style="padding:0 16px 14px;border-bottom:1px solid var(--border);">
+              <div class="messaggi-filter-grid" style="display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:10px;">
                 <div class="field" style="margin:0;">
                   <label>Cerca</label>
                   <input type="text" id="msg-search" placeholder="Oggetto, testo, cliente, ordine..." oninput="renderMessaggiPage()">
@@ -2908,7 +2877,7 @@
                   </select>
                 </div>
               </div>
-              <div style="padding:0 16px 16px;display:flex;gap:18px;flex-wrap:wrap;">
+              <div style="padding-top:10px;display:flex;gap:18px;flex-wrap:wrap;">
                 <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);cursor:pointer;">
                   <input type="checkbox" id="msg-filter-unread" onchange="renderMessaggiPage()">
                   Solo non lette
@@ -2919,19 +2888,83 @@
                 </label>
               </div>
             </div>
+            <div class="messaggi-list-scroll">
+              <div id="messaggi-list" style="padding:6px 16px 16px;"></div>
+            </div>
+          </div>
+          <div class="messaggi-thread-shell">
             <div class="card">
-              <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-                <div class="card-title">Chat</div>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                  <button class="tab-btn active" id="msg-tab-inbox" onclick="setMessaggiBox('inbox')">Ricevuti</button>
-                  <button class="tab-btn" id="msg-tab-sent" onclick="setMessaggiBox('sent')">Inviati</button>
+              <div class="card-header"><div class="card-title">Nuova chat</div></div>
+              <div style="padding:0 16px 16px;">
+                <div class="messaggi-form-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+                  <div class="field" style="margin:0;">
+                    <label>Preset</label>
+                    <select id="msg-preset" onchange="applyMessaggioPreset()">
+                      <option value="">Nessun preset</option>
+                      <option value="problema_ordine">Problema ordine</option>
+                      <option value="followup_cliente">Follow-up cliente</option>
+                      <option value="richiesta_magazzino">Richiesta magazzino</option>
+                      <option value="avviso_direzione">Avviso direzione</option>
+                    </select>
+                  </div>
+                  <div class="field" style="margin:0;">
+                    <label>Destinazione</label>
+                    <select id="msg-dest-type" onchange="renderMessaggiComposeDestinations()">
+                      <option value="user">Utente singolo</option>
+                      <option value="self">Me stesso</option>
+                      <option value="group">Gruppo dipendenti</option>
+                      <option value="role">Ruolo / reparto</option>
+                    </select>
+                  </div>
+                  <div class="field" id="msg-dest-user-wrap" style="margin:0;">
+                    <label>Utente</label>
+                    <select id="msg-dest-user"></select>
+                  </div>
+                  <div class="field" id="msg-dest-group-wrap" style="display:none;margin:0;">
+                    <label>Partecipanti gruppo</label>
+                    <select id="msg-dest-group" multiple size="5"></select>
+                  </div>
+                  <div class="field" id="msg-dest-role-wrap" style="display:none;margin:0;">
+                    <label>Ruolo</label>
+                    <select id="msg-dest-role"></select>
+                  </div>
+                  <div class="field" id="msg-group-name-wrap" style="display:none;margin:0;">
+                    <label>Nome gruppo</label>
+                    <input type="text" id="msg-group-name" maxlength="120" placeholder="Es. Team logistica">
+                  </div>
+                  <div class="field" style="margin:0;">
+                    <label>Oggetto</label>
+                    <input type="text" id="msg-subject" maxlength="120" placeholder="Oggetto breve">
+                  </div>
+                  <div class="field" style="margin:0;">
+                    <label>Priorita</label>
+                    <select id="msg-priority">
+                      <option value="media">Media</option>
+                      <option value="bassa">Bassa</option>
+                      <option value="alta">Alta</option>
+                      <option value="urgente">Urgente</option>
+                    </select>
+                  </div>
+                  <div class="field" style="margin:0;">
+                    <label>Ordine collegato</label>
+                    <select id="msg-order-id"></select>
+                  </div>
+                  <div class="field" style="margin:0;">
+                    <label>Cliente collegato</label>
+                    <select id="msg-client-id"></select>
+                  </div>
+                  <div class="field" style="grid-column:1 / -1;margin:0;">
+                    <label>Messaggio</label>
+                    <textarea id="msg-body" rows="4" placeholder="Scrivi qui il messaggio"></textarea>
+                  </div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+                  <button class="btn btn-green" onclick="sendInternalMessage()">Apri conversazione</button>
                 </div>
               </div>
-              <div id="messaggi-list" style="padding:0 16px 16px;"></div>
             </div>
-            <div class="card">
-              <div class="card-header"><div class="card-title">Chat attiva</div></div>
-              <div id="messaggi-detail" style="padding:0 16px 16px;font-size:13px;color:var(--text2);">Seleziona una conversazione per leggere il thread e rispondere.</div>
+            <div class="card messaggi-thread-card">
+              <div id="messaggi-detail" style="padding:0 16px 16px;font-size:13px;color:var(--text2);height:100%;display:flex;align-items:center;justify-content:center;">Seleziona una conversazione per leggere il thread e rispondere.</div>
             </div>
           </div>
         </div>
