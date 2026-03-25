@@ -56,12 +56,91 @@
   }
 
   function fillResaFornitoreSelect(selectedId = '') {
-    const sel = document.getElementById('resa-fornitore');
-    if (!sel) return;
-    const fornitori = getFornitoriRese();
-    sel.innerHTML = '<option value="">Seleziona fornitore</option>' +
-      fornitori.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
-    sel.value = selectedId ? String(selectedId) : '';
+    const hidden = document.getElementById('resa-fornitore');
+    const input = document.getElementById('resa-fornitore-search');
+    if (!hidden || !input) return;
+    const selected = getFornitoriRese().find(f => String(f.id) === String(selectedId));
+    hidden.value = selected ? String(selected.id) : '';
+    input.value = selected ? selected.nome : '';
+    input.classList.toggle('has-value', !!selected);
+    renderResaFornitoreAutocomplete(input.value);
+  }
+
+  function renderResaFornitoreAutocomplete(query = '') {
+    const listEl = document.getElementById('resa-fornitore-autocomplete');
+    if (!listEl) return;
+    const q = String(query || '').trim().toLowerCase();
+    const items = getFornitoriRese().filter(f => !q || String(f.nome || '').toLowerCase().includes(q)).slice(0, 12);
+    if (!items.length) {
+      listEl.innerHTML = '<div class="autocomplete-empty">Nessun fornitore trovato</div>';
+      return;
+    }
+    listEl.innerHTML = items.map((f, index) => `
+      <div class="autocomplete-item${index === 0 ? ' active' : ''}" data-resa-fornitore-id="${f.id}" onclick="selectResaFornitore(${f.id})">
+        <strong>${window.escapeHtml(f.nome || '')}</strong>
+      </div>
+    `).join('');
+  }
+
+  function openResaFornitoreAutocomplete() {
+    const listEl = document.getElementById('resa-fornitore-autocomplete');
+    const input = document.getElementById('resa-fornitore-search');
+    if (!listEl || !input) return;
+    renderResaFornitoreAutocomplete(input.value || '');
+    listEl.style.display = 'block';
+  }
+
+  function closeResaFornitoreAutocomplete() {
+    const listEl = document.getElementById('resa-fornitore-autocomplete');
+    if (listEl) listEl.style.display = 'none';
+  }
+
+  function filterResaFornitoreAutocomplete() {
+    const hidden = document.getElementById('resa-fornitore');
+    const input = document.getElementById('resa-fornitore-search');
+    if (!hidden || !input) return;
+    hidden.value = '';
+    input.classList.remove('has-value');
+    openResaFornitoreAutocomplete();
+  }
+
+  function selectResaFornitore(id) {
+    const fornitore = getFornitoriRese().find(f => Number(f.id) === Number(id));
+    const hidden = document.getElementById('resa-fornitore');
+    const input = document.getElementById('resa-fornitore-search');
+    if (!fornitore || !hidden || !input) return;
+    hidden.value = String(fornitore.id);
+    input.value = fornitore.nome || '';
+    input.classList.add('has-value');
+    closeResaFornitoreAutocomplete();
+  }
+
+  function handleResaFornitoreAutocompleteKey(event) {
+    const listEl = document.getElementById('resa-fornitore-autocomplete');
+    if (!listEl || listEl.style.display === 'none') return;
+    const items = [...listEl.querySelectorAll('.autocomplete-item')];
+    if (!items.length) return;
+    let activeIndex = items.findIndex(item => item.classList.contains('active'));
+    if (activeIndex < 0) activeIndex = 0;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      activeIndex = Math.min(items.length - 1, activeIndex + 1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      activeIndex = Math.max(0, activeIndex - 1);
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const id = items[activeIndex]?.getAttribute('data-resa-fornitore-id');
+      if (id) selectResaFornitore(Number(id));
+      return;
+    } else if (event.key === 'Escape') {
+      closeResaFornitoreAutocomplete();
+      return;
+    } else {
+      return;
+    }
+    items.forEach((item, idx) => item.classList.toggle('active', idx === activeIndex));
+    items[activeIndex]?.scrollIntoView({ block: 'nearest' });
   }
 
   function updateResaPrezzoVendutoPreview() {
@@ -211,6 +290,11 @@
 
   window.openNewResa = openNewResa;
   window.openEditResa = openEditResa;
+  window.openResaFornitoreAutocomplete = openResaFornitoreAutocomplete;
+  window.closeResaFornitoreAutocomplete = closeResaFornitoreAutocomplete;
+  window.filterResaFornitoreAutocomplete = filterResaFornitoreAutocomplete;
+  window.selectResaFornitore = selectResaFornitore;
+  window.handleResaFornitoreAutocompleteKey = handleResaFornitoreAutocompleteKey;
   window.updateResaPrezzoVendutoPreview = updateResaPrezzoVendutoPreview;
   window.saveResa = saveResa;
   window.deleteResa = deleteResa;

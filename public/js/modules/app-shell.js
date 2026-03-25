@@ -97,6 +97,7 @@
     direzione: [
       { page: 'dashboard', icon: '🏠', label: 'Dashboard' },
       { page: 'clienti', icon: '🏢', label: 'Clienti' },
+      { page: 'prodotti', icon: '🧀', label: 'Prodotti' },
       { page: 'ferie', icon: '🗓️', label: 'Calendario' },
       { page: 'giacenze', icon: '📦', label: 'Giacenze' },
       { page: 'documenti', icon: '🗂️', label: 'Documenti' },

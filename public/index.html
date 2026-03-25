@@ -3812,7 +3812,9 @@
       <div class="form-row">
         <div class="field form-full">
           <label>Fornitore *</label>
-          <select id="resa-fornitore"></select>
+          <input type="hidden" id="resa-fornitore">
+          <input type="text" class="ac-input" id="resa-fornitore-search" placeholder="Cerca fornitore..." autocomplete="off" oninput="filterResaFornitoreAutocomplete()" onfocus="openResaFornitoreAutocomplete()" onkeydown="handleResaFornitoreAutocompleteKey(event)">
+          <div id="resa-fornitore-autocomplete" class="autocomplete-list" style="display:none;"></div>
         </div>
         <div class="field">
           <label>Valore CLAL *</label>
