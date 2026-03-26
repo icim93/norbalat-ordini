@@ -722,6 +722,9 @@
   async function loadMessaggioDetail(id, options = {}) {
     const markRead = options.markRead !== false;
     if (!id) return;
+    // Save reply bar state before the API round-trip (polling can interrupt typing)
+    const replyFocused = document.activeElement?.id === 'msg-reply-body';
+    const replyValue = replyFocused ? (document.getElementById('msg-reply-body')?.value || '') : '';
     const data = await window.api('GET', `/api/messaggi/${id}`);
     window.state.messagesDetail = {
       conversation: data?.conversation || null,
@@ -732,6 +735,14 @@
       await markMessaggioRead(id, true);
     }
     renderMessaggiPage();
+    // Restore reply bar after re-render to avoid losing cursor/text during polling
+    if (replyFocused) {
+      const newReply = document.getElementById('msg-reply-body');
+      if (newReply) {
+        if (replyValue) newReply.value = replyValue;
+        newReply.focus();
+      }
+    }
   }
 
   async function loadMessaggiPageData(silent = false) {
