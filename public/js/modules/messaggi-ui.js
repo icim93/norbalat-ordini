@@ -501,7 +501,7 @@
     const rows = applyMessaggiFilters(getMessaggiListForCurrentBox());
     const selectedId = Number(window.state.messagesSelectedId || 0);
     if (!rows.length) {
-      listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">M</div><p>Nessuna conversazione per i filtri correnti.</p></div>';
+      listEl.innerHTML = '<div style="padding:32px 16px;text-align:center;color:var(--text3);font-size:13px;">Nessuna conversazione.</div>';
       return;
     }
     listEl.innerHTML = rows.map(conv => {
@@ -510,36 +510,32 @@
       const active = Number(conv.id) === selectedId;
       const counterpart = getConversationCounterpart(conv, isInbox);
       const initials = String(counterpart || '?').trim().split(/\s+/).slice(0, 2).map(v => v.charAt(0)).join('').toUpperCase() || '?';
-      const refs = [
-        conv.ordine_id ? `<span class="badge badge-blue">Ordine #${conv.ordine_id}</span>` : '',
-        conv.cliente_id ? `<span class="badge badge-soft">${window.escapeHtml(conv.cliente_nome || `Cliente #${conv.cliente_id}`)}</span>` : '',
-        conv.assegnato_nome ? `<span class="badge badge-gray">Assegnata a ${window.escapeHtml(conv.assegnato_nome)}</span>` : '',
-      ].filter(Boolean).join(' ');
+      const preview = String(conv.last_message_text || conv.oggetto || '').slice(0, 70);
+      const timeStr = window.escapeHtml(window.formatNotificationDateTime(conv.last_message_at) || '');
+      const unreadCount = unread ? (Number(conv.unread_count || 0) || 1) : 0;
+      const avatarBg = unread ? 'var(--accent)' : 'var(--surface2)';
+      const avatarColor = unread ? '#fff' : 'var(--accent)';
+      const priorityBadge = conv.priorita && conv.priorita !== 'media'
+        ? `<span class="badge ${priorityBadges[conv.priorita] || 'badge-gray'}" style="font-size:10px;">${window.escapeHtml(priorityLabels[conv.priorita] || conv.priorita)}</span>`
+        : '';
+      const statusBadge = conv.stato && conv.stato !== 'nuovo'
+        ? `<span class="badge ${statusBadges[conv.stato] || 'badge-gray'}" style="font-size:10px;">${window.escapeHtml(statusLabels[conv.stato] || conv.stato)}</span>`
+        : '';
       return `
-        <button class="card" onclick="openMessaggioDettaglio(${conv.id})" style="width:100%;text-align:left;margin-top:10px;border:${active ? '1.5px solid var(--accent)' : '1px solid var(--border)'};background:${unread ? '#eef8ff' : 'var(--surface)'};box-shadow:${active ? '0 8px 24px rgba(18,80,120,0.10)' : 'none'};">
-          <div style="padding:12px 14px;display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;align-items:start;">
-            <div style="width:44px;height:44px;border-radius:50%;background:${unread ? 'var(--accent)' : 'var(--surface2)'};color:${unread ? '#fff' : 'var(--accent)'};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;">${window.escapeHtml(initials)}</div>
-            <div>
-              <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
-                <div style="min-width:0;">
-                  <div style="font-size:13px;font-weight:700;color:var(--text1);">${window.escapeHtml(counterpart)}</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px;">${window.escapeHtml(conv.oggetto || '(senza oggetto)')}</div>
-                </div>
-                <div style="font-size:11px;color:${unread ? 'var(--accent)' : 'var(--text3)'};font-weight:${unread ? '700' : '500'};white-space:nowrap;">${window.escapeHtml(window.formatNotificationDateTime(conv.last_message_at) || '')}</div>
-              </div>
-              <div style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.45;">${window.escapeHtml(String(conv.last_message_text || '').slice(0, 130))}${String(conv.last_message_text || '').length > 130 ? '...' : ''}</div>
-              <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">
-                <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                  ${unread ? '<span class="badge badge-orange">Nuova</span>' : ''}
-                  <span class="badge ${priorityBadges[conv.priorita] || 'badge-gray'}">${window.escapeHtml(priorityLabels[conv.priorita] || conv.priorita || 'Media')}</span>
-                  <span class="badge ${statusBadges[conv.stato] || 'badge-gray'}">${window.escapeHtml(statusLabels[conv.stato] || conv.stato || 'Nuovo')}</span>
-                  ${refs}
-                </div>
-                <div style="font-size:11px;color:var(--text3);">${Number(conv.message_count || 0)} msg</div>
-              </div>
+        <div class="msg-conv-item${active ? ' active' : ''}${unread ? ' unread' : ''}" onclick="openMessaggioDettaglio(${conv.id})">
+          <div class="msg-conv-avatar" style="background:${avatarBg};color:${avatarColor};">${window.escapeHtml(initials)}</div>
+          <div class="msg-conv-body">
+            <div class="msg-conv-row1">
+              <div class="msg-conv-name">${window.escapeHtml(counterpart)}</div>
+              <div class="msg-conv-time${unread ? ' unread' : ''}">${timeStr}</div>
             </div>
+            <div class="msg-conv-row2">
+              <div class="msg-conv-preview">${window.escapeHtml(preview)}${preview.length >= 70 ? '…' : ''}</div>
+              ${unreadCount > 0 ? `<div class="msg-conv-unread-dot">${unreadCount > 9 ? '9+' : unreadCount}</div>` : ''}
+            </div>
+            ${priorityBadge || statusBadge ? `<div class="msg-conv-badges">${priorityBadge}${statusBadge}</div>` : ''}
           </div>
-        </button>
+        </div>
       `;
     }).join('');
   }
@@ -557,12 +553,10 @@
     const conv = detail?.conversation;
     if (!conv || Number(conv.id || 0) !== Number(window.state.messagesSelectedId || 0)) {
       detailEl.innerHTML = `
-        <div style="width:100%;height:100%;min-height:520px;display:flex;align-items:center;justify-content:center;padding:24px;">
-          <div style="max-width:320px;text-align:center;color:var(--text3);">
-            <div style="font-size:42px;line-height:1;margin-bottom:12px;">💬</div>
-            <div style="font-size:16px;font-weight:800;color:var(--text1);margin-bottom:8px;">Apri una conversazione</div>
-            <div style="font-size:13px;line-height:1.6;">Seleziona una chat dalla colonna sinistra per leggere il thread e rispondere.</div>
-          </div>
+        <div style="text-align:center;color:var(--text3);padding:40px 20px;">
+          <div style="font-size:48px;margin-bottom:12px;">💬</div>
+          <div style="font-size:15px;font-weight:700;color:var(--text2);margin-bottom:6px;">Apri una conversazione</div>
+          <div style="font-size:13px;">Seleziona una chat dalla colonna sinistra.</div>
         </div>`;
       return;
     }
@@ -570,90 +564,104 @@
     const isInbox = window.state.messagesCurrentBox !== 'sent';
     const counterpart = getConversationCounterpart(conv, isInbox);
     const counterpartInitials = String(counterpart || '?').trim().split(/\s+/).slice(0, 2).map(v => v.charAt(0)).join('').toUpperCase() || '?';
+    const metaOpen = !!window.state.messagesMetaOpen;
+
+    // Override placeholder styles so content fills the shell correctly
+    detailEl.style.display = 'flex';
+    detailEl.style.flexDirection = 'column';
+    detailEl.style.alignItems = 'stretch';
+    detailEl.style.justifyContent = 'flex-start';
+    detailEl.style.height = '100%';
+    detailEl.style.minHeight = '0';
+
     detailEl.innerHTML = `
-      <div style="height:100%;min-height:520px;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;gap:14px;">
-        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;padding:16px 0 0;">
-          <div style="display:flex;gap:12px;align-items:flex-start;">
-            <div style="width:44px;height:44px;border-radius:50%;background:var(--surface2);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;">${window.escapeHtml(counterpartInitials)}</div>
-            <div style="min-width:0;">
-              <div style="font-size:16px;font-weight:800;color:var(--text1);">${window.escapeHtml(counterpart)}</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px;">${isInbox ? 'Da' : 'A'} ${window.escapeHtml(counterpart)} · Ultimo aggiornamento ${window.escapeHtml(window.formatNotificationDateTime(conv.last_message_at) || '')}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-            <span class="badge ${priorityBadges[conv.priorita] || 'badge-gray'}">${window.escapeHtml(priorityLabels[conv.priorita] || conv.priorita || 'Media')}</span>
-            <span class="badge ${statusBadges[conv.stato] || 'badge-gray'}">${window.escapeHtml(statusLabels[conv.stato] || conv.stato || 'Nuovo')}</span>
-            ${conv.ordine_id ? `<button class="btn btn-outline btn-sm" onclick="openMessaggioOrdine(${conv.ordine_id})">Ordine #${conv.ordine_id}</button>` : ''}
-            ${conv.cliente_id ? `<button class="btn btn-outline btn-sm" onclick="openMessaggioCliente(${conv.cliente_id})">${window.escapeHtml(conv.cliente_nome || 'Cliente')}</button>` : ''}
-          </div>
+      <!-- Header -->
+      <div class="msg-thread-header">
+        <div style="width:40px;height:40px;border-radius:50%;background:var(--surface2);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;">${window.escapeHtml(counterpartInitials)}</div>
+        <div class="msg-thread-header-info">
+          <div class="msg-thread-header-name">${window.escapeHtml(counterpart)}</div>
+          <div class="msg-thread-header-meta">
+            ${window.escapeHtml(conv.oggetto || '')}
+            ${conv.ordine_id ? `· <button class="btn btn-outline btn-sm" style="padding:1px 7px;font-size:11px;" onclick="openMessaggioOrdine(${conv.ordine_id})">Ordine #${conv.ordine_id}</button>` : ''}
+            ${conv.cliente_id ? `· <button class="btn btn-outline btn-sm" style="padding:1px 7px;font-size:11px;" onclick="openMessaggioCliente(${conv.cliente_id})">${window.escapeHtml(conv.cliente_nome || 'Cliente')}</button>` : ''}
           </div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          ${isInbox ? '<button class="btn btn-outline btn-sm" onclick="takeConversationInCharge()">Prendi in carico</button>' : ''}
-          ${conv.unread ? '<button class="btn btn-outline btn-sm" onclick="markMessaggioRead(state.messagesSelectedId)">Segna letta</button>' : ''}
+        <div style="display:flex;gap:6px;flex-shrink:0;align-items:center;">
+          <span class="badge ${priorityBadges[conv.priorita] || 'badge-gray'}" style="font-size:11px;">${window.escapeHtml(priorityLabels[conv.priorita] || conv.priorita || 'Media')}</span>
+          <span class="badge ${statusBadges[conv.stato] || 'badge-gray'}" style="font-size:11px;">${window.escapeHtml(statusLabels[conv.stato] || conv.stato || 'Nuovo')}</span>
+          ${isInbox ? '<button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="takeConversationInCharge()">Prendi in carico</button>' : ''}
+          <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="toggleMessaggiMeta()">⚙</button>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;align-items:end;">
-        <div class="field" style="margin:0;">
-          <label>Stato</label>
-          <select id="msg-detail-status">
-            <option value="nuovo" ${conv.stato === 'nuovo' ? 'selected' : ''}>Nuovo</option>
-            <option value="preso_in_carico" ${conv.stato === 'preso_in_carico' ? 'selected' : ''}>Preso in carico</option>
-            <option value="in_attesa" ${conv.stato === 'in_attesa' ? 'selected' : ''}>In attesa</option>
-            <option value="chiuso" ${conv.stato === 'chiuso' ? 'selected' : ''}>Chiuso</option>
-          </select>
-        </div>
-        <div class="field" style="margin:0;">
-          <label>Priorita</label>
-          <select id="msg-detail-priority">
-            <option value="bassa" ${conv.priorita === 'bassa' ? 'selected' : ''}>Bassa</option>
-            <option value="media" ${conv.priorita === 'media' ? 'selected' : ''}>Media</option>
-            <option value="alta" ${conv.priorita === 'alta' ? 'selected' : ''}>Alta</option>
-            <option value="urgente" ${conv.priorita === 'urgente' ? 'selected' : ''}>Urgente</option>
-          </select>
-        </div>
-        <div class="field" style="margin:0;">
-          <label>Assegnazione</label>
-          <select id="msg-detail-assignee">${buildAssigneeOptions(conv.assegnato_user_id)}</select>
-        </div>
-        <div style="display:flex;justify-content:flex-end;">
-          <button class="btn btn-green btn-sm" onclick="saveConversationMeta()">Salva</button>
+      <!-- Meta panel (collapsible) -->
+      <div class="msg-meta-panel" id="msg-meta-panel" style="${metaOpen ? '' : 'display:none;'}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end;">
+          <div class="field" style="margin:0;">
+            <label>Stato</label>
+            <select id="msg-detail-status">
+              <option value="nuovo" ${conv.stato === 'nuovo' ? 'selected' : ''}>Nuovo</option>
+              <option value="preso_in_carico" ${conv.stato === 'preso_in_carico' ? 'selected' : ''}>Preso in carico</option>
+              <option value="in_attesa" ${conv.stato === 'in_attesa' ? 'selected' : ''}>In attesa</option>
+              <option value="chiuso" ${conv.stato === 'chiuso' ? 'selected' : ''}>Chiuso</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0;">
+            <label>Priorita</label>
+            <select id="msg-detail-priority">
+              <option value="bassa" ${conv.priorita === 'bassa' ? 'selected' : ''}>Bassa</option>
+              <option value="media" ${conv.priorita === 'media' ? 'selected' : ''}>Media</option>
+              <option value="alta" ${conv.priorita === 'alta' ? 'selected' : ''}>Alta</option>
+              <option value="urgente" ${conv.priorita === 'urgente' ? 'selected' : ''}>Urgente</option>
+            </select>
+          </div>
+          <div class="field" style="margin:0;">
+            <label>Assegnazione</label>
+            <select id="msg-detail-assignee">${buildAssigneeOptions(conv.assegnato_user_id)}</select>
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <button class="btn btn-green btn-sm" onclick="saveConversationMeta()">Salva</button>
+          </div>
         </div>
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:10px;min-height:0;overflow:auto;padding:18px 14px;border:1px solid var(--border);border-radius:16px;background:linear-gradient(180deg,#fcfdff 0%,#f5f8fb 100%);">
+      <!-- Messages -->
+      <div class="msg-thread-messages" id="msg-thread-scroll">
         ${messages.length ? messages.map(msg => {
           const mine = Number(msg.mittente_id || 0) === Number(window.state.currentUser?.id || 0);
+          const side = mine ? 'mine' : 'theirs';
           return `
-            <div style="display:flex;justify-content:${mine ? 'flex-end' : 'flex-start'};">
-              <div style="max-width:min(720px,88%);padding:12px 14px;border:1px solid ${mine ? 'rgba(18,80,120,0.18)' : 'var(--border)'};background:${mine ? 'linear-gradient(180deg,#dff1ff 0%,#d4ebff 100%)' : '#ffffff'};border-radius:${mine ? '16px 16px 6px 16px' : '16px 16px 16px 6px'};box-shadow:0 6px 18px rgba(10,30,50,0.05);">
-                <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:6px;">
-                  <div style="font-size:12px;font-weight:700;color:var(--text1);">${window.escapeHtml(msg.mittente_nome || 'Utente')}</div>
-                  <div style="font-size:11px;color:var(--text3);">${window.escapeHtml(window.formatNotificationDateTime(msg.created_at) || '')}</div>
+            <div class="msg-bubble-wrap ${side}">
+              <div class="msg-bubble ${side}">
+                ${!mine ? `<div class="msg-bubble-sender">${window.escapeHtml(msg.mittente_nome || 'Utente')}</div>` : ''}
+                <div>${renderMessageRichText(msg.testo || '')}</div>
+                <div class="msg-bubble-footer">
+                  <span class="msg-bubble-time">${window.escapeHtml(window.formatNotificationDateTime(msg.created_at) || '')}</span>
+                  ${mine ? '<span style="color:#53bdeb;font-size:13px;">✓✓</span>' : ''}
                 </div>
-                <div style="line-height:1.6;color:var(--text1);">${renderMessageRichText(msg.testo || '')}</div>
               </div>
             </div>
           `;
-        }).join('') : '<div style="padding:18px;border:1px dashed var(--border);border-radius:12px;color:var(--text3);text-align:center;background:#fff;">Nessun messaggio nel thread.</div>'}
+        }).join('') : '<div style="text-align:center;color:var(--text3);font-size:13px;padding:24px;">Nessun messaggio nel thread.</div>'}
       </div>
 
-      <div style="padding:14px;border:1px solid var(--border);border-radius:16px;background:#fff;">
-        <div class="field" style="margin:0;">
-          <label>Risposta</label>
-          <textarea id="msg-reply-body" rows="4" placeholder="Scrivi una risposta operativa. Usa #ordine123, @utente o *cliente" oninput="handleMessageComposerInput(this,'msg-reply-picker')" onkeydown="handleMessageComposerKeydown(event,this,'msg-reply-picker','reply')"></textarea>
-          <div id="msg-reply-picker" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:12px;background:var(--surface);max-height:220px;overflow:auto;"></div>
+      <!-- Reply bar -->
+      <div class="msg-reply-bar">
+        <div class="msg-reply-bar-wrap">
+          <textarea id="msg-reply-body" class="msg-reply-textarea" rows="1" placeholder="Scrivi un messaggio… (@utente, *cliente, #ordine123)" oninput="handleMessageComposerInput(this,'msg-reply-picker');autoResizeReplyBar(this)" onkeydown="handleMessageComposerKeydown(event,this,'msg-reply-picker','reply')"></textarea>
+          <div id="msg-reply-picker" style="display:none;position:absolute;bottom:100%;left:0;right:0;margin-bottom:4px;border:1px solid var(--border);border-radius:12px;background:var(--surface);max-height:220px;overflow:auto;box-shadow:0 4px 16px rgba(0,0,0,0.12);z-index:10;"></div>
         </div>
-        <div style="display:flex;justify-content:flex-end;margin-top:10px;">
-          <button class="btn btn-green" onclick="replyToConversation()">Invia risposta</button>
-        </div>
+        <button class="msg-reply-send" onclick="replyToConversation()" title="Invia (Enter)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
       </div>
     `;
-    const threadScroller = detailEl.querySelector('div[style*="overflow:auto"]');
-    if (threadScroller) {
-      window.requestAnimationFrame(() => {
-        threadScroller.scrollTop = threadScroller.scrollHeight;
-      });
-    }
+
+    // scroll to bottom
+    window.requestAnimationFrame(() => {
+      const scroller = document.getElementById('msg-thread-scroll');
+      if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    });
   }
 
   function renderMessaggiPage() {
@@ -859,7 +867,7 @@
       return;
     }
     const updated = await window.api('POST', `/api/messaggi/${id}/reply`, { testo });
-    if (textarea) textarea.value = '';
+    if (textarea) { textarea.value = ''; autoResizeReplyBar(textarea); }
     syncConversationInState(updated);
     await loadMessaggiSummary();
     await loadMessaggioDetail(id, { markRead: false });
@@ -888,6 +896,18 @@
     }
   }
 
+  function toggleMessaggiMeta() {
+    window.state.messagesMetaOpen = !window.state.messagesMetaOpen;
+    const panel = document.getElementById('msg-meta-panel');
+    if (panel) panel.style.display = window.state.messagesMetaOpen ? '' : 'none';
+  }
+
+  function autoResizeReplyBar(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+  }
+
   window.loadMessaggiSummary = loadMessaggiSummary;
   window.startMessaggiPolling = startMessaggiPolling;
   window.stopMessaggiPolling = stopMessaggiPolling;
@@ -908,4 +928,6 @@
   window.saveConversationMeta = saveConversationMeta;
   window.takeConversationInCharge = takeConversationInCharge;
   window.replyToConversation = replyToConversation;
+  window.toggleMessaggiMeta = toggleMessaggiMeta;
+  window.autoResizeReplyBar = autoResizeReplyBar;
 })();
