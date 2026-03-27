@@ -6997,6 +6997,102 @@ app.post('/api/giacenze/carico', authMiddleware, requireRole('admin', 'magazzino
 });
 
 // POST /api/giacenze/import — import iniziale da Excel
+app.post('/api/giacenze/carico-batch', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    const tipoVal = ['carico', 'reso', 'tentata_vendita'].includes(req.body?.tipo) ? req.body.tipo : 'carico';
+    const sharedNote = String(req.body?.note || '').trim();
+    if (!rows.length) return res.status(400).json({ error: 'Nessuna riga da caricare' });
+    const utenteName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
+
+    const normalizedRows = rows.map((row, index) => {
+      const prodottoId = Number(row?.prodotto_id);
+      const lottoVal = String(row?.lotto || '').trim();
+      const qty = Number(row?.quantita);
+      if (!prodottoId) {
+        const err = new Error(`prodotto_id obbligatorio alla riga ${index + 1}`);
+        err.status = 400;
+        throw err;
+      }
+      if (!lottoVal) {
+        const err = new Error(`lotto obbligatorio alla riga ${index + 1}`);
+        err.status = 400;
+        throw err;
+      }
+      if (!Number.isFinite(qty) || qty <= 0) {
+        const err = new Error(`quantita deve essere > 0 alla riga ${index + 1}`);
+        err.status = 400;
+        throw err;
+      }
+      return {
+        prodotto_id: prodottoId,
+        lotto: lottoVal,
+        quantita: qty,
+        scadenza: row?.scadenza || null,
+        note: String(row?.note || sharedNote || '').trim(),
+      };
+    });
+
+    await client.query('BEGIN');
+    const giacenzaIds = [];
+    for (const row of normalizedRows) {
+      const { rows: prodRows } = await client.query(
+        'SELECT gestione_giacenza FROM prodotti WHERE id=$1 LIMIT 1',
+        [row.prodotto_id]
+      );
+      if (!prodRows.length) {
+        const err = new Error('Prodotto non trovato');
+        err.status = 404;
+        throw err;
+      }
+      if (!prodRows[0].gestione_giacenza) {
+        const err = new Error('Il prodotto non è gestito a giacenza');
+        err.status = 400;
+        throw err;
+      }
+
+      const { rows: existing } = await client.query(
+        'SELECT id, quantita FROM giacenze WHERE prodotto_id=$1 AND lotto=$2 LIMIT 1',
+        [row.prodotto_id, row.lotto]
+      );
+      let giacenzaId, oldQty, newQty;
+      if (existing.length) {
+        giacenzaId = existing[0].id;
+        oldQty = Number(existing[0].quantita);
+        newQty = oldQty + row.quantita;
+        await client.query(
+          'UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2',
+          [newQty, giacenzaId]
+        );
+      } else {
+        oldQty = 0;
+        newQty = row.quantita;
+        const ins = await client.query(
+          `INSERT INTO giacenze (prodotto_id, lotto, scadenza, quantita, note)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+          [row.prodotto_id, row.lotto, row.scadenza, newQty, row.note || '']
+        );
+        giacenzaId = ins.rows[0].id;
+      }
+      await client.query(
+        `INSERT INTO movimenti_giacenza
+          (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [giacenzaId, row.prodotto_id, row.lotto, tipoVal, row.quantita, oldQty, newQty, req.user.id || null, utenteName, row.note || '']
+      );
+      giacenzaIds.push(giacenzaId);
+    }
+    await client.query('COMMIT');
+    client.release();
+    res.json({ ok: true, count: giacenzaIds.length, giacenza_ids: giacenzaIds });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    client.release();
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 app.post('/api/giacenze/import', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
   const client = await pool.connect();
   try {

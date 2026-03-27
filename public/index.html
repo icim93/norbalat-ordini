@@ -4738,29 +4738,13 @@
 
 <!-- Modal: Giacenza Carico -->
 <div class="modal-overlay" id="modal-giacenza-carico">
-  <div class="modal" style="max-width:520px;">
+  <div class="modal" style="max-width:760px;">
     <div class="modal-header">
       <div class="modal-title" id="modal-giacenza-carico-title">Carico Giacenza</div>
       <button class="modal-close" onclick="closeModal('modal-giacenza-carico')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-row">
-        <div class="field form-full">
-          <label>Prodotto *</label>
-          <select id="giacenza-carico-prodotto"></select>
-        </div>
-        <div class="field">
-          <label>Lotto *</label>
-          <input type="text" id="giacenza-carico-lotto" placeholder="Es. LOT240301">
-        </div>
-        <div class="field">
-          <label>Quantità *</label>
-          <input type="number" step="0.01" min="0.01" id="giacenza-carico-qty" placeholder="0.00">
-        </div>
-        <div class="field">
-          <label>Scadenza</label>
-          <input type="date" id="giacenza-carico-scadenza">
-        </div>
+      <div class="form-row" style="margin-bottom:12px;">
         <div class="field">
           <label>Tipo movimento</label>
           <select id="giacenza-carico-tipo">
@@ -4770,10 +4754,15 @@
           </select>
         </div>
         <div class="field form-full">
-          <label>Note</label>
-          <input type="text" id="giacenza-carico-note" placeholder="Opzionale">
+          <label>Note / riferimento carico</label>
+          <input type="text" id="giacenza-carico-note" placeholder="Es. fornitore, DDT o annotazioni comuni">
         </div>
       </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
+        <div style="font-size:12px;color:var(--text2);">Registra più prodotti nello stesso carico.</div>
+        <button type="button" class="btn btn-outline btn-sm" onclick="addGiacenzaCaricoRow()">+ Aggiungi riga</button>
+      </div>
+      <div id="giacenza-carico-rows" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-giacenza-carico')">Annulla</button>
@@ -11316,39 +11305,118 @@ function printGiacenzeInventario() {
 // GIACENZE — MODAL FUNCTIONS
 // ═══════════════════════════════════════════════
 
-function openGiacenzaCarico(prodottoId) {
-  const sel = document.getElementById('giacenza-carico-prodotto');
-  sel.innerHTML = state.prodotti
+let giacenzaCaricoRows = [];
+
+function createGiacenzaCaricoRow(prodottoId = null) {
+  return {
+    key: `gc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    prodottoId: prodottoId || null,
+    lotto: '',
+    quantita: '',
+    scadenza: '',
+  };
+}
+
+function renderGiacenzaCaricoRows() {
+  const container = document.getElementById('giacenza-carico-rows');
+  if (!container) return;
+  const productOptions = state.prodotti
     .filter(p => p.gestioneGiacenza)
-    .map(p => `<option value="${p.id}" ${p.id === prodottoId ? 'selected' : ''}>[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</option>`)
+    .map(p => `<option value="${p.id}">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</option>`)
     .join('');
-  document.getElementById('giacenza-carico-lotto').value = '';
-  document.getElementById('giacenza-carico-qty').value = '';
-  document.getElementById('giacenza-carico-scadenza').value = '';
+  container.innerHTML = giacenzaCaricoRows.map((row, index) => `
+    <div style="border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface2);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;">Riga ${index + 1}</div>
+        ${giacenzaCaricoRows.length > 1 ? `<button type="button" class="btn btn-outline btn-sm" onclick="removeGiacenzaCaricoRow('${row.key}')">Rimuovi</button>` : ''}
+      </div>
+      <div class="form-row">
+        <div class="field form-full">
+          <label>Prodotto *</label>
+          <select id="giacenza-carico-prodotto-${row.key}">
+            <option value="">Seleziona prodotto</option>
+            ${productOptions}
+          </select>
+        </div>
+        <div class="field">
+          <label>Lotto *</label>
+          <input type="text" id="giacenza-carico-lotto-${row.key}" value="${escapeHtml(row.lotto || '')}" placeholder="Es. LOT240301">
+        </div>
+        <div class="field">
+          <label>Quantità *</label>
+          <input type="number" step="0.01" min="0.01" id="giacenza-carico-qty-${row.key}" value="${escapeHtml(String(row.quantita || ''))}" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label>Scadenza</label>
+          <input type="date" id="giacenza-carico-scadenza-${row.key}" value="${escapeHtml(row.scadenza || '')}">
+        </div>
+      </div>
+    </div>
+  `).join('');
+  giacenzaCaricoRows.forEach(row => {
+    const select = document.getElementById(`giacenza-carico-prodotto-${row.key}`);
+    if (select) select.value = row.prodottoId ? String(row.prodottoId) : '';
+  });
+}
+
+function syncGiacenzaCaricoRowsFromDom() {
+  giacenzaCaricoRows = giacenzaCaricoRows.map(row => ({
+    ...row,
+    prodottoId: parseInt(document.getElementById(`giacenza-carico-prodotto-${row.key}`)?.value || '0', 10) || null,
+    lotto: document.getElementById(`giacenza-carico-lotto-${row.key}`)?.value || '',
+    quantita: document.getElementById(`giacenza-carico-qty-${row.key}`)?.value || '',
+    scadenza: document.getElementById(`giacenza-carico-scadenza-${row.key}`)?.value || '',
+  }));
+}
+
+function addGiacenzaCaricoRow(prodottoId = null) {
+  syncGiacenzaCaricoRowsFromDom();
+  giacenzaCaricoRows.push(createGiacenzaCaricoRow(prodottoId));
+  renderGiacenzaCaricoRows();
+}
+
+function removeGiacenzaCaricoRow(rowKey) {
+  syncGiacenzaCaricoRowsFromDom();
+  giacenzaCaricoRows = giacenzaCaricoRows.filter(row => row.key !== rowKey);
+  if (!giacenzaCaricoRows.length) giacenzaCaricoRows = [createGiacenzaCaricoRow()];
+  renderGiacenzaCaricoRows();
+}
+
+function openGiacenzaCarico(prodottoId) {
+  giacenzaCaricoRows = [createGiacenzaCaricoRow(prodottoId || null)];
   document.getElementById('giacenza-carico-tipo').value = 'carico';
   document.getElementById('giacenza-carico-note').value = '';
+  renderGiacenzaCaricoRows();
   document.getElementById('modal-giacenza-carico-title').textContent = prodottoId ? `Carico — ${getProdotto(prodottoId)?.nome || ''}` : 'Carico Giacenza';
   openModal('modal-giacenza-carico');
 }
 
 async function saveGiacenzaCarico() {
-  const prodotto_id = parseInt(document.getElementById('giacenza-carico-prodotto').value);
-  const lotto = document.getElementById('giacenza-carico-lotto').value.trim();
-  const quantita = parseFloat(document.getElementById('giacenza-carico-qty').value);
-  const scadenza = document.getElementById('giacenza-carico-scadenza').value || null;
   const tipo = document.getElementById('giacenza-carico-tipo').value;
   const note = document.getElementById('giacenza-carico-note').value.trim();
-
-  if (!prodotto_id) { showToast('Seleziona un prodotto', 'warning'); return; }
-  if (!lotto) { showToast('Lotto obbligatorio', 'warning'); return; }
-  if (!quantita || quantita <= 0) { showToast('Quantità deve essere > 0', 'warning'); return; }
+  const rows = giacenzaCaricoRows.map((row, index) => ({
+    prodotto_id: parseInt(document.getElementById(`giacenza-carico-prodotto-${row.key}`)?.value || '0', 10),
+    lotto: document.getElementById(`giacenza-carico-lotto-${row.key}`)?.value.trim() || '',
+    quantita: parseFloat(document.getElementById(`giacenza-carico-qty-${row.key}`)?.value || ''),
+    scadenza: document.getElementById(`giacenza-carico-scadenza-${row.key}`)?.value || null,
+    _index: index + 1,
+  }));
+  const invalid = rows.find(row => !row.prodotto_id || !row.lotto || !Number.isFinite(row.quantita) || row.quantita <= 0);
+  if (invalid) {
+    showToast(`Controlla la riga ${invalid._index}: prodotto, lotto e quantità sono obbligatori`, 'warning');
+    return;
+  }
 
   try {
-    await api('POST', '/api/giacenze/carico', { prodotto_id, lotto, quantita, scadenza, tipo, note });
+    const result = await api('POST', '/api/giacenze/carico-batch', {
+      tipo,
+      note,
+      rows: rows.map(({ _index, ...row }) => row),
+    });
     closeModal('modal-giacenza-carico');
     await reloadGiacenze();
     renderGiacenze();
-    showToast('Carico registrato ✅', 'success');
+    showToast(`${result?.count || rows.length} righe di carico registrate ✅`, 'success');
   } catch (e) {
     showToast(e.message, 'warning');
   }
