@@ -5075,6 +5075,7 @@ let state = {
   topbarNotifications: [],
   orderNotificationSeenId: 0,
   orderNotificationPoller: null,
+  ferieSyncPoller: null,
   ordersSyncPoller: null,
   ordersLastSyncAt: '',
   ordersSyncPendingRender: false,
@@ -5454,6 +5455,7 @@ async function loadAllData() {
     if (typeof startMessaggiPolling === 'function') startMessaggiPolling();
     if (typeof loadTopbarNotifications === 'function') await loadTopbarNotifications();
     if (typeof startTopbarNotificationPolling === 'function') startTopbarNotificationPolling();
+    if (typeof startFerieSyncPolling === 'function') startFerieSyncPolling();
     if (typeof startOrdersSyncPolling === 'function') startOrdersSyncPolling();
     if (typeof refreshNavBadges === 'function') refreshNavBadges();
   } catch(e) {
@@ -5543,6 +5545,55 @@ function stopOrdersSyncPolling() {
   }
 }
 
+function getFerieSyncSignature(rows = []) {
+  return (rows || [])
+    .map(item => `${Number(item.id) || 0}:${String(item.updated_at || item.updatedAt || item.data_fine || '')}`)
+    .sort()
+    .join('|');
+}
+
+function isFerieRefreshSafe() {
+  if (state.currentPage !== 'ferie' && state.currentPage !== 'dashboard') return true;
+  const active = document.activeElement;
+  if (!active) return true;
+  const tag = String(active.tagName || '').toUpperCase();
+  const isField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || active.isContentEditable;
+  if (!isField) return true;
+  return !active.closest('#modal-ferie, #page-ferie');
+}
+
+async function syncFerieIncrementally() {
+  if (!state.token || !state.currentUser?.id) return false;
+  const rows = await api('GET', '/api/ferie').catch(() => null);
+  if (!Array.isArray(rows)) return false;
+  const nextSignature = getFerieSyncSignature(rows);
+  const currentSignature = getFerieSyncSignature(state.ferie || []);
+  if (nextSignature === currentSignature) return false;
+  state.ferie = rows;
+  if (isFerieRefreshSafe()) {
+    if (state.currentPage === 'ferie') renderFeriePage();
+    if (state.currentPage === 'dashboard') renderDashboard();
+  }
+  return true;
+}
+
+function startFerieSyncPolling() {
+  stopFerieSyncPolling();
+  if (!state.token || !state.currentUser?.id) return;
+  state.ferieSyncPoller = setInterval(() => {
+    syncFerieIncrementally().catch(() => {});
+  }, 60000);
+}
+
+function stopFerieSyncPolling() {
+  if (state.ferieSyncPoller) {
+    clearInterval(state.ferieSyncPoller);
+    state.ferieSyncPoller = null;
+  }
+}
+
+window.startFerieSyncPolling = startFerieSyncPolling;
+window.stopFerieSyncPolling = stopFerieSyncPolling;
 window.startOrdersSyncPolling = startOrdersSyncPolling;
 window.stopOrdersSyncPolling = stopOrdersSyncPolling;
 
@@ -8573,8 +8624,8 @@ function openNewFerie() {
   document.getElementById('ferie-tipo').value = 'evento';
   document.getElementById('ferie-stato').value = 'programmata';
   document.getElementById('ferie-note').value = '';
-  document.getElementById('ferie-vis-solo-creator').checked = true;
-  fillFerieRoleChecks([]);
+  document.getElementById('ferie-vis-solo-creator').checked = false;
+  fillFerieRoleChecks(getFerieRoleOptions());
   fillFerieUserChecks([]);
   toggleFerieVisibilityMode();
   syncFerieTypeUI(true);

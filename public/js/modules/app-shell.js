@@ -46,7 +46,6 @@
           { page: 'giacenze', icon: NAV_ICONS.giacenze, label: 'Giacenze' },
           { page: 'tentata', icon: NAV_ICONS.tentata, label: 'Tentata Vendita' },
           { page: 'piano', icon: NAV_ICONS.piano, label: 'Piano Carico' },
-          { page: 'autista', icon: NAV_ICONS.autista, label: 'Vista Autista' },
         ],
       },
       {
@@ -371,6 +370,7 @@
   function doLogout() {
     window.stopDevMonitor();
     if (typeof window.stopTopbarNotificationPolling === 'function') window.stopTopbarNotificationPolling();
+    if (typeof window.stopFerieSyncPolling === 'function') window.stopFerieSyncPolling();
     if (typeof window.stopOrdersSyncPolling === 'function') window.stopOrdersSyncPolling();
     if (typeof window.stopMessaggiPolling === 'function') window.stopMessaggiPolling();
     clearStoredAuth();
@@ -413,6 +413,7 @@
     window.state.topbarNotifications = [];
     window.state.orderNotificationSeenId = 0;
     window.state.orderNotificationPoller = null;
+    window.state.ferieSyncPoller = null;
     window.state.ordersSyncPoller = null;
     window.state.ordersLastSyncAt = '';
     window.state.ordersSyncPendingRender = false;
@@ -544,5 +545,3 @@
     tryRestoreSession();
   });
 })();
-
-
