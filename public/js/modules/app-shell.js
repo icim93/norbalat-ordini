@@ -371,6 +371,7 @@
   function doLogout() {
     window.stopDevMonitor();
     if (typeof window.stopTopbarNotificationPolling === 'function') window.stopTopbarNotificationPolling();
+    if (typeof window.stopOrdersSyncPolling === 'function') window.stopOrdersSyncPolling();
     if (typeof window.stopMessaggiPolling === 'function') window.stopMessaggiPolling();
     clearStoredAuth();
     window.state.token = null;
@@ -412,6 +413,9 @@
     window.state.topbarNotifications = [];
     window.state.orderNotificationSeenId = 0;
     window.state.orderNotificationPoller = null;
+    window.state.ordersSyncPoller = null;
+    window.state.ordersLastSyncAt = '';
+    window.state.ordersSyncPendingRender = false;
     document.getElementById('screen-app').style.display = 'none';
     document.getElementById('screen-login').style.display = 'flex';
   }
@@ -540,6 +544,5 @@
     tryRestoreSession();
   });
 })();
-
 
 

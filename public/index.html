@@ -5075,6 +5075,9 @@ let state = {
   topbarNotifications: [],
   orderNotificationSeenId: 0,
   orderNotificationPoller: null,
+  ordersSyncPoller: null,
+  ordersLastSyncAt: '',
+  ordersSyncPendingRender: false,
   magazzinoResidualLog: [],
   carichiTentataVendita: [],
   tentataConfigSearch: {},
@@ -5403,6 +5406,7 @@ async function loadAllData() {
     state.listini  = (listini  ||[]).map(normalizeListino);
     state.rese     = (rese     ||[]).map(normalizeResa);
     state.ordini   = (ordini   ||[]).map(normalizeOrdine);
+    state.ordersLastSyncAt = getLatestOrderSyncTimestamp(state.ordini);
     state.camions  = (camions  ||[]).map(normalizeCamion);
     state.ferie    = Array.isArray(ferie) ? ferie : [];
     state.giriCalendario = (giri || []).map(g => ({ ...g, giorni: Array.isArray(g.giorni) ? g.giorni : [] }));
@@ -5450,12 +5454,97 @@ async function loadAllData() {
     if (typeof startMessaggiPolling === 'function') startMessaggiPolling();
     if (typeof loadTopbarNotifications === 'function') await loadTopbarNotifications();
     if (typeof startTopbarNotificationPolling === 'function') startTopbarNotificationPolling();
+    if (typeof startOrdersSyncPolling === 'function') startOrdersSyncPolling();
     if (typeof refreshNavBadges === 'function') refreshNavBadges();
   } catch(e) {
     console.error('loadAllData error:', e);
     showToast('Errore caricamento dati', 'warning');
   }
 }
+
+function getOrderSyncTimestampValue(order) {
+  return String(order?.updatedAt || order?.insertedAt || '').trim();
+}
+
+function getLatestOrderSyncTimestamp(orders = []) {
+  return (orders || []).reduce((latest, order) => {
+    const candidate = getOrderSyncTimestampValue(order);
+    return candidate && (!latest || candidate > latest) ? candidate : latest;
+  }, '');
+}
+
+function mergeOrdersIntoState(rows = []) {
+  let changed = false;
+  (rows || []).forEach(row => {
+    const normalized = normalizeOrdine(row);
+    const idx = state.ordini.findIndex(order => Number(order.id) === Number(normalized.id));
+    if (idx >= 0) state.ordini[idx] = normalized;
+    else state.ordini.unshift(normalized);
+    changed = true;
+  });
+  if (changed) {
+    state.ordersLastSyncAt = getLatestOrderSyncTimestamp(state.ordini);
+  }
+  return changed;
+}
+
+function isRemoteOrderRefreshSafe() {
+  if (!state.currentPage) return false;
+  const active = document.activeElement;
+  if (!active) return true;
+  const tag = String(active.tagName || '').toUpperCase();
+  const isField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || active.isContentEditable;
+  if (!isField) return true;
+  return !active.closest('#page-magazzino, #modal-ordine, #modal-catalogo, #modal-tentata');
+}
+
+function refreshCurrentOrderViewsAfterSync() {
+  state.ordersSyncPendingRender = false;
+  if (typeof refreshNavBadges === 'function') refreshNavBadges();
+  if (state.currentPage === 'dashboard' || state.currentPage === 'ordini' || state.currentPage === 'autista' || state.currentPage === 'magazzino') {
+    renderPage(state.currentPage);
+  }
+  if (state.currentPage === 'autista' || state.currentPage === 'magazzino') {
+    refreshDailyClosureSummary().catch(() => {});
+  }
+}
+
+async function syncOrdersIncrementally() {
+  if (!state.token || !state.currentUser?.id) return false;
+  const query = new URLSearchParams();
+  if (state.ordersLastSyncAt) query.set('since', state.ordersLastSyncAt);
+  const payload = await api('GET', `/api/ordini/sync${query.toString() ? `?${query.toString()}` : ''}`);
+  const changed = mergeOrdersIntoState(payload?.orders || []);
+  if (changed && isRemoteOrderRefreshSafe()) {
+    refreshCurrentOrderViewsAfterSync();
+  } else if (changed) {
+    state.ordersSyncPendingRender = true;
+    if (typeof refreshNavBadges === 'function') refreshNavBadges();
+  } else if (state.ordersSyncPendingRender && isRemoteOrderRefreshSafe()) {
+    refreshCurrentOrderViewsAfterSync();
+  } else if (typeof refreshNavBadges === 'function') {
+    refreshNavBadges();
+  }
+  return changed;
+}
+
+function startOrdersSyncPolling() {
+  stopOrdersSyncPolling();
+  if (!state.token || !state.currentUser?.id) return;
+  state.ordersSyncPoller = setInterval(() => {
+    syncOrdersIncrementally().catch(() => {});
+  }, 15000);
+}
+
+function stopOrdersSyncPolling() {
+  if (state.ordersSyncPoller) {
+    clearInterval(state.ordersSyncPoller);
+    state.ordersSyncPoller = null;
+  }
+}
+
+window.startOrdersSyncPolling = startOrdersSyncPolling;
+window.stopOrdersSyncPolling = stopOrdersSyncPolling;
 
 function getOrderNotificationSeenKey() {
   return state.currentUser?.id ? `norbalat_order_notification_seen_${state.currentUser.id}` : '';

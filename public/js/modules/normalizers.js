@@ -122,6 +122,7 @@
       autistaDiGiro: o.autista_di_giro || null,
       insertedBy: o.inserted_by || null,
       insertedAt: o.inserted_at || null,
+      updatedAt: o.updated_at || o.inserted_at || null,
       data: (o.data || '').substring(0, 10),
       stato: o.stato || 'attesa',
       note: o.note || '',

@@ -4213,6 +4213,65 @@ app.get('/api/ordini', authMiddleware, async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/ordini/sync', authMiddleware, async (req, res) => {
+  try {
+    const sinceRaw = String(req.query.since || '').trim();
+    const sinceDate = sinceRaw ? new Date(sinceRaw) : null;
+    if (sinceRaw && Number.isNaN(sinceDate?.getTime())) {
+      return res.status(400).json({ error: 'Parametro since non valido' });
+    }
+
+    const { rows } = await q(
+      `
+      SELECT o.id, o.data, o.stato, o.note, o.data_non_certa, o.stef, o.altro_vettore, o.giro_override,
+             o.inserted_at, o.updated_at,
+             o.cliente_id, c.nome as cliente_nome, c.giro as cliente_giro,
+             o.agente_id, u.nome as agente_nome,
+             o.autista_di_giro, a.nome as autista_nome,
+             o.inserted_by, ins.nome as inserted_by_nome, ins.cognome as inserted_by_cognome,
+             COUNT(ol.id) as n_linee
+        FROM ordini o
+        JOIN clienti c ON o.cliente_id = c.id
+        LEFT JOIN utenti u ON o.agente_id = u.id
+        LEFT JOIN utenti a ON o.autista_di_giro = a.id
+        LEFT JOIN utenti ins ON o.inserted_by = ins.id
+        LEFT JOIN ordine_linee ol ON ol.ordine_id = o.id
+       WHERE ($1::timestamptz IS NULL OR COALESCE(o.updated_at, o.inserted_at, NOW()) > $1::timestamptz)
+       GROUP BY o.id, c.nome, c.giro, u.nome, a.nome, ins.nome, ins.cognome
+       ORDER BY COALESCE(o.updated_at, o.inserted_at) ASC, o.id ASC
+      `,
+      [sinceDate ? sinceDate.toISOString() : null]
+    );
+
+    if (rows.length) {
+      const ids = rows.map(r => r.id);
+      const { rows: linee } = await q(
+        `SELECT ol.id, ol.ordine_id, ol.prodotto_id, ol.prodotto_nome_libero, ol.qty, ol.qty_base, ol.colli_effettivi, ol.peso_effettivo,
+                ol.prezzo_unitario, ol.is_pedana, ol.nota_riga, ol.unita_misura, ol.preparato, ol.lotto,
+                p.codice, p.nome as prodotto_nome, p.um, p.packaging, p.cartoni_attivi, p.peso_medio_pezzo_kg, p.pezzi_per_cartone, p.unita_per_cartone, p.pedane_attive, p.cartoni_per_pedana, p.peso_cartone_kg
+           FROM ordine_linee ol
+           LEFT JOIN prodotti p ON ol.prodotto_id = p.id
+          WHERE ol.ordine_id = ANY($1)
+          ORDER BY ol.ordine_id, ol.id`,
+        [ids]
+      );
+      const lineeMap = {};
+      linee.forEach(l => {
+        if (!lineeMap[l.ordine_id]) lineeMap[l.ordine_id] = [];
+        lineeMap[l.ordine_id].push(l);
+      });
+      rows.forEach(r => { r.linee = lineeMap[r.id] || []; });
+    }
+
+    res.json({
+      server_time: new Date().toISOString(),
+      orders: rows,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/ordini/:id', authMiddleware, async (req, res) => {
   try {
     const o = await getOrdineCompleto(parseInt(req.params.id));
