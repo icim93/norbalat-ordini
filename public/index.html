@@ -9702,7 +9702,8 @@ async function saveTentataVendita() {
 }
 
 // Aggiungo tentata all'acState e al sistema AC
-acState.tentata = { value: null, query: '', focusIdx: -1 };
+window.acState = window.acState || { cliente: { value: null, query: '', focusIdx: -1 } };
+window.acState.tentata = { value: null, query: '', focusIdx: -1 };
 
 if (!window._tentataProdDdListenerSet) {
   window._tentataProdDdListenerSet = true;
@@ -9955,7 +9956,8 @@ function openNewOrderCatalogo() {
   document.getElementById('cat-breadcrumb').style.display = 'none';
 
   // Autocomplete cliente
-  acState['cat-cliente'] = { value: null, query: '', focusIdx: -1 };
+  window.acState = window.acState || { cliente: { value: null, query: '', focusIdx: -1 } };
+  window.acState['cat-cliente'] = { value: null, query: '', focusIdx: -1 };
   const inp = document.getElementById('ac-cat-cliente-input');
   if (inp) { inp.value = ''; inp.classList.remove('has-value'); }
   document.getElementById('cat-cliente').value = '';
@@ -10006,7 +10008,7 @@ function catShowCarrello() {
 
 // ── Schermata 1: Categorie ──
 function catRenderCategorie() {
-  const clienteId = acState['cat-cliente']?.value || null;
+  const clienteId = window.acState?.['cat-cliente']?.value || null;
 
   // Bottoni categoria
   const btns = document.getElementById('cat-cat-buttons');
@@ -11304,7 +11306,7 @@ function printGiacenzeInventario() {
 // GIACENZE — MODAL FUNCTIONS
 // ═══════════════════════════════════════════════
 
-let giacenzaCaricoRows = [];
+var giacenzaCaricoRows = [];
 
 function createGiacenzaCaricoRow(prodottoId = null) {
   return {

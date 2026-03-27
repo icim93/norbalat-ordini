@@ -82,6 +82,7 @@ const acState = {
   cliente: { value: null, query: '', focusIdx: -1 },
   // per prodotti nelle righe ordine usiamo un sistema simile ma per riga
 };
+window.acState = acState;
 
 function acHighlight(text, query) {
   if (!query) return text;
