@@ -9951,7 +9951,7 @@ function openNewOrderCatalogo() {
   catCategoriaAttiva = null;
 
   document.getElementById('modal-catalogo-title').textContent = 'Nuovo Ordine';
-  document.getElementById('cat-data').value = today();
+  document.getElementById('cat-data').value = typeof getNextBusinessDate === 'function' ? getNextBusinessDate() : today();
   document.getElementById('cat-stef').checked = false;
   document.getElementById('cat-altro-vettore').checked = false;
   document.getElementById('cat-data-non-certa').checked = false;
