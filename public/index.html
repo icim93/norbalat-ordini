@@ -11312,10 +11312,26 @@ function createGiacenzaCaricoRow(prodottoId = null) {
   return {
     key: `gc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     prodottoId: prodottoId || null,
+    prodottoQuery: '',
     lotto: '',
     quantita: '',
     scadenza: '',
   };
+}
+
+function getGiacenzaCaricoProductLabel(prodottoId) {
+  const prodotto = state.prodotti.find(p => Number(p.id) === Number(prodottoId));
+  return prodotto ? `[${prodotto.codice}] ${prodotto.nome}` : '';
+}
+
+function resolveGiacenzaCaricoProductId(rawValue = '') {
+  const value = String(rawValue || '').trim().toLowerCase();
+  if (!value) return null;
+  const exact = state.prodotti.find(p => `[${p.codice}] ${p.nome}`.trim().toLowerCase() === value);
+  if (exact) return Number(exact.id);
+  const byCode = state.prodotti.find(p => String(p.codice || '').trim().toLowerCase() === value.replace(/^\[|\]$/g, ''));
+  if (byCode) return Number(byCode.id);
+  return null;
 }
 
 function renderGiacenzaCaricoRows() {
@@ -11323,7 +11339,7 @@ function renderGiacenzaCaricoRows() {
   if (!container) return;
   const productOptions = state.prodotti
     .filter(p => p.gestioneGiacenza)
-    .map(p => `<option value="${p.id}">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</option>`)
+    .map(p => `<option value="${escapeHtml(`[${p.codice}] ${p.nome}`)}"></option>`)
     .join('');
   container.innerHTML = giacenzaCaricoRows.map((row, index) => `
     <div style="border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface2);">
@@ -11334,10 +11350,9 @@ function renderGiacenzaCaricoRows() {
       <div class="form-row">
         <div class="field form-full">
           <label>Prodotto *</label>
-          <select id="${index === 0 ? 'giacenza-carico-prodotto' : `giacenza-carico-prodotto-${row.key}`}">
-            <option value="">Seleziona prodotto</option>
-            ${productOptions}
-          </select>
+          <input type="hidden" id="${index === 0 ? 'giacenza-carico-prodotto' : `giacenza-carico-prodotto-${row.key}`}" value="${escapeHtml(String(row.prodottoId || ''))}">
+          <input type="text" list="giacenza-carico-prodotti-list-${row.key}" id="${index === 0 ? 'giacenza-carico-prodotto-search' : `giacenza-carico-prodotto-search-${row.key}`}" value="${escapeHtml(row.prodottoQuery || getGiacenzaCaricoProductLabel(row.prodottoId))}" placeholder="Cerca prodotto per codice o nome">
+          <datalist id="giacenza-carico-prodotti-list-${row.key}">${productOptions}</datalist>
         </div>
         <div class="field">
           <label>Lotto *</label>
@@ -11355,8 +11370,19 @@ function renderGiacenzaCaricoRows() {
     </div>
   `).join('');
   giacenzaCaricoRows.forEach((row, index) => {
-    const select = document.getElementById(index === 0 ? 'giacenza-carico-prodotto' : `giacenza-carico-prodotto-${row.key}`);
-    if (select) select.value = row.prodottoId ? String(row.prodottoId) : '';
+    const hidden = document.getElementById(index === 0 ? 'giacenza-carico-prodotto' : `giacenza-carico-prodotto-${row.key}`);
+    const search = document.getElementById(index === 0 ? 'giacenza-carico-prodotto-search' : `giacenza-carico-prodotto-search-${row.key}`);
+    if (hidden) hidden.value = row.prodottoId ? String(row.prodottoId) : '';
+    if (search) {
+      search.oninput = () => {
+        const resolvedId = resolveGiacenzaCaricoProductId(search.value);
+        if (hidden) hidden.value = resolvedId ? String(resolvedId) : '';
+      };
+      search.onchange = () => {
+        const resolvedId = resolveGiacenzaCaricoProductId(search.value);
+        if (hidden) hidden.value = resolvedId ? String(resolvedId) : '';
+      };
+    }
   });
   const addBtn = document.getElementById('giacenza-carico-add-row-btn');
   if (addBtn) addBtn.onclick = () => addGiacenzaCaricoRow();
@@ -11369,6 +11395,7 @@ function syncGiacenzaCaricoRowsFromDom() {
   giacenzaCaricoRows = giacenzaCaricoRows.map((row, index) => ({
     ...row,
     prodottoId: parseInt(document.getElementById(index === 0 ? 'giacenza-carico-prodotto' : `giacenza-carico-prodotto-${row.key}`)?.value || '0', 10) || null,
+    prodottoQuery: document.getElementById(index === 0 ? 'giacenza-carico-prodotto-search' : `giacenza-carico-prodotto-search-${row.key}`)?.value || '',
     lotto: document.getElementById(index === 0 ? 'giacenza-carico-lotto' : `giacenza-carico-lotto-${row.key}`)?.value || '',
     quantita: document.getElementById(index === 0 ? 'giacenza-carico-qty' : `giacenza-carico-qty-${row.key}`)?.value || '',
     scadenza: document.getElementById(index === 0 ? 'giacenza-carico-scadenza' : `giacenza-carico-scadenza-${row.key}`)?.value || '',
