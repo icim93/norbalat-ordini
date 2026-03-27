@@ -1476,6 +1476,8 @@
     border-top: 1px solid var(--border);
     padding: 8px 0 env(safe-area-inset-bottom, 8px);
     z-index: 200;
+    box-shadow: 0 -10px 24px rgba(15,34,51,0.08);
+    backdrop-filter: blur(10px);
   }
 
   .mobile-nav-items { display: flex; }
@@ -1498,6 +1500,9 @@
 
   .mobile-nav-item .mn-icon { font-size: 20px; }
   .mobile-nav-item.active { color: var(--accent); }
+  .mobile-nav-item.active .mn-icon {
+    transform: translateY(-1px);
+  }
 
     /* ── HAMBURGER + DRAWER ── */
   .hamburger-btn {
@@ -1720,6 +1725,10 @@
       min-width: 0;
       flex: 1;
       width: 100%;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
     }
     .topbar-brand { font-size: 15px; }
     .topbar-user {
@@ -1727,11 +1736,28 @@
       flex-shrink: 1;
       min-width: 0;
       width: 100%;
-      justify-content: flex-end;
+      justify-content: stretch;
       flex-wrap: wrap;
     }
     #topbar-username { display: none; }
-    .topbar-logout { width: 34px; height: 34px; }
+    .topbar-logout,
+    .topbar-help,
+    .topbar-msg-btn,
+    .topbar-notify {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+    }
+    .topbar-notify-wrap {
+      min-width: 0;
+    }
+    .topbar-notify-panel {
+      top: calc(100% + 8px);
+      right: 0;
+      width: min(420px, calc(100vw - 24px));
+      max-height: min(60vh, 420px);
+      border-radius: 16px;
+    }
     .main { padding: 14px 12px calc(86px + env(safe-area-inset-bottom, 0px)); }
     .page-header { margin-bottom: 18px; }
     .page-header > div[style*="display:flex"],
@@ -1843,11 +1869,27 @@
     .modal {
       max-height: calc(100vh - 16px);
       border-radius: 18px 18px 0 0;
+      overscroll-behavior: contain;
     }
-    .modal-header { align-items: flex-start; gap: 12px; }
+    .modal-header {
+      align-items: flex-start;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--surface);
+    }
+    .modal-body {
+      padding-top: 16px;
+      padding-bottom: 16px;
+    }
     .modal-footer {
       flex-direction: column-reverse;
       gap: 8px;
+      position: sticky;
+      bottom: 0;
+      z-index: 2;
+      background: var(--surface);
     }
     .modal-footer .btn {
       width: 100%;
@@ -1940,6 +1982,83 @@
     .messaggi-sidebar-card {
       border-right:none;
       border-bottom:1px solid var(--border);
+      min-height:auto;
+    }
+    .messaggi-thread-shell {
+      min-height:calc(100dvh - 210px);
+    }
+    .messaggi-thread-card,
+    #messaggi-detail {
+      min-height:inherit;
+    }
+    .messaggi-layout:not(.mobile-thread-open) .messaggi-thread-shell {
+      display:none;
+    }
+    .messaggi-layout.mobile-thread-open .messaggi-sidebar-card {
+      display:none;
+    }
+    .messaggi-layout.mobile-thread-open .messaggi-thread-shell {
+      display:flex;
+    }
+    .msg-thread-back {
+      display:inline-flex;
+    }
+    .msg-thread-header {
+      padding:10px 12px;
+      gap:10px;
+      align-items:flex-start;
+      flex-wrap:wrap;
+      position:sticky;
+      top:0;
+      z-index:2;
+    }
+    .msg-thread-header-main {
+      width:100%;
+      align-items:flex-start;
+    }
+    .msg-thread-header-actions {
+      width:100%;
+      justify-content:flex-start;
+      padding-left:46px;
+    }
+    .msg-thread-header-meta {
+      line-height:1.45;
+    }
+    .msg-thread-messages {
+      padding:12px 10px;
+      gap:8px;
+    }
+    .msg-bubble {
+      max-width:88%;
+      font-size:13px;
+    }
+    .msg-meta-panel {
+      padding:10px 12px;
+    }
+    .msg-reply-bar {
+      padding:10px;
+      position:sticky;
+      bottom:0;
+      z-index:2;
+      box-shadow:0 -8px 20px rgba(15,34,51,0.06);
+    }
+    .messaggi-list-scroll {
+      max-height:none;
+    }
+    .msg-conv-item {
+      padding:14px 12px;
+      grid-template-columns:44px minmax(0,1fr);
+      gap:10px;
+    }
+    .msg-conv-time {
+      font-size:10px;
+    }
+    .msg-conv-preview {
+      font-size:12px;
+      white-space:normal;
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
     }
     .messaggi-form-grid,
     .messaggi-filter-grid {
@@ -1980,6 +2099,9 @@
       flex: 1 1 calc(50% - 6px);
       min-width: 0;
     }
+    .topbar-notify-wrap {
+      display:flex;
+    }
     .topbar-msg-btn,
     .topbar-help,
     .topbar-logout,
@@ -2001,6 +2123,25 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .topbar {
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+    .topbar > div:first-child {
+      gap: 8px;
+    }
+    .brand-logo {
+      width: 24px;
+      height: 24px;
+    }
+    .topbar-notify-panel {
+      position: fixed;
+      top: 72px;
+      right: 10px;
+      left: 10px;
+      width: auto;
+      max-height: min(58vh, 420px);
     }
     .stats-grid,
     #page-autista .stats-grid,
@@ -2039,6 +2180,51 @@
     }
     #page-autista > div[style*="margin-bottom:16px"] > div:last-child {
       grid-template-columns: 1fr;
+    }
+    .messaggi-layout {
+      border-radius:14px;
+    }
+    .messaggi-sidebar-card .card-header {
+      padding:10px !important;
+      flex-direction:column;
+      align-items:stretch !important;
+    }
+    .messaggi-sidebar-card .card-header > div:first-child,
+    .messaggi-sidebar-card .card-header > div:last-child {
+      width:100%;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+    .messaggi-layout.mobile-thread-open {
+      border:none;
+      border-radius:0;
+      margin-left:-10px;
+      margin-right:-10px;
+    }
+    .messaggi-layout.mobile-thread-open .messaggi-thread-shell {
+      min-height:calc(100dvh - 154px);
+    }
+    .msg-thread-header-name {
+      font-size:14px;
+    }
+    .msg-thread-header-actions {
+      padding-left:0;
+    }
+    .msg-thread-header-actions .btn,
+    .msg-thread-header-actions .badge {
+      font-size:10px !important;
+    }
+    .msg-reply-bar {
+      padding:8px;
+      gap:6px;
+    }
+    .msg-reply-textarea {
+      padding:8px 14px;
+      font-size:13px;
+    }
+    .msg-reply-send {
+      width:40px;
+      height:40px;
     }
   }
 
@@ -2265,8 +2451,38 @@
     flex-shrink:0;
   }
   .msg-thread-header-info { flex:1;min-width:0; }
+  .msg-thread-header-main {
+    display:flex;
+    align-items:center;
+    gap:12px;
+    min-width:0;
+    flex:1;
+  }
+  .msg-thread-header-actions {
+    display:flex;
+    gap:6px;
+    flex-shrink:0;
+    align-items:center;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
   .msg-thread-header-name { font-size:15px;font-weight:800;color:var(--text1); }
   .msg-thread-header-meta { font-size:11px;color:var(--text3);margin-top:2px; }
+  .msg-thread-back {
+    display:none;
+    width:36px;
+    height:36px;
+    border-radius:50%;
+    border:1px solid var(--border);
+    background:var(--surface2);
+    color:var(--text1);
+    cursor:pointer;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+    padding:0;
+  }
+  .msg-thread-back:hover { background:var(--accent-light); border-color:var(--accent); color:var(--accent); }
   /* Thread messages area */
   .msg-thread-messages {
     flex:1;overflow-y:auto;min-height:0;
@@ -3106,7 +3322,7 @@
             <button class="btn btn-outline btn-sm" onclick="loadMessaggiPageData()">Aggiorna</button>
           </div>
         </div>
-        <div class="messaggi-layout">
+        <div class="messaggi-layout" id="messaggi-layout">
           <!-- SIDEBAR -->
           <div class="card messaggi-sidebar-card">
             <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 14px;">

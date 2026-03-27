@@ -70,10 +70,44 @@
       window.state.messagesFilters = { q: '', stato: '', priorita: '', onlyUnread: false, assignedToMe: false };
     }
     if (!window.state.messagesDetail) window.state.messagesDetail = null;
+    if (typeof window.state.messagesMobileThreadOpen !== 'boolean') window.state.messagesMobileThreadOpen = false;
     if (typeof window.state.messagesSummaryInitialized !== 'boolean') window.state.messagesSummaryInitialized = false;
     if (!('messagesLastToastConversationId' in window.state)) window.state.messagesLastToastConversationId = 0;
     if (typeof window.state.messagesPollingBound !== 'boolean') window.state.messagesPollingBound = false;
     if (typeof window.state.messagesPollInFlight !== 'boolean') window.state.messagesPollInFlight = false;
+    if (typeof window.state.messagesResizeBound !== 'boolean') window.state.messagesResizeBound = false;
+  }
+
+  function isMessaggiMobileViewport() {
+    return typeof window !== 'undefined' && window.innerWidth <= 768;
+  }
+
+  function syncMessaggiLayoutMode() {
+    const layout = document.getElementById('messaggi-layout');
+    if (!layout) return;
+    const mobile = isMessaggiMobileViewport();
+    if (!mobile && window.state.messagesMobileThreadOpen) {
+      window.state.messagesMobileThreadOpen = false;
+    }
+    layout.classList.toggle('mobile-thread-open', mobile && !!window.state.messagesMobileThreadOpen);
+  }
+
+  function bindMessaggiResizeHandler() {
+    ensureMessaggiState();
+    if (window.state.messagesResizeBound || typeof window === 'undefined') return;
+    window.addEventListener('resize', () => {
+      if (!isMessaggiMobileViewport() && window.state.messagesMobileThreadOpen) {
+        window.state.messagesMobileThreadOpen = false;
+      }
+      syncMessaggiLayoutMode();
+    });
+    window.state.messagesResizeBound = true;
+  }
+
+  function closeMessaggioMobileThread() {
+    window.state.messagesMobileThreadOpen = false;
+    syncMessaggiLayoutMode();
+    renderMessaggiPage();
   }
 
   function renderMessaggiTopbarBadge() {
@@ -549,6 +583,7 @@
   function renderMessaggiDetail() {
     const detailEl = document.getElementById('messaggi-detail');
     if (!detailEl) return;
+    syncMessaggiLayoutMode();
     const detail = window.state.messagesDetail;
     const conv = detail?.conversation;
     if (!conv || Number(conv.id || 0) !== Number(window.state.messagesSelectedId || 0)) {
@@ -577,16 +612,21 @@
     detailEl.innerHTML = `
       <!-- Header -->
       <div class="msg-thread-header">
-        <div style="width:40px;height:40px;border-radius:50%;background:var(--surface2);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;">${window.escapeHtml(counterpartInitials)}</div>
-        <div class="msg-thread-header-info">
-          <div class="msg-thread-header-name">${window.escapeHtml(counterpart)}</div>
-          <div class="msg-thread-header-meta">
-            ${window.escapeHtml(conv.oggetto || '')}
-            ${conv.ordine_id ? `· <button class="btn btn-outline btn-sm" style="padding:1px 7px;font-size:11px;" onclick="openMessaggioOrdine(${conv.ordine_id})">Ordine #${conv.ordine_id}</button>` : ''}
-            ${conv.cliente_id ? `· <button class="btn btn-outline btn-sm" style="padding:1px 7px;font-size:11px;" onclick="openMessaggioCliente(${conv.cliente_id})">${window.escapeHtml(conv.cliente_nome || 'Cliente')}</button>` : ''}
+        <div class="msg-thread-header-main">
+          <button type="button" class="msg-thread-back" onclick="closeMessaggioMobileThread()" aria-label="Torna alla lista chat" title="Torna">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div style="width:40px;height:40px;border-radius:50%;background:var(--surface2);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex-shrink:0;">${window.escapeHtml(counterpartInitials)}</div>
+          <div class="msg-thread-header-info">
+            <div class="msg-thread-header-name">${window.escapeHtml(counterpart)}</div>
+            <div class="msg-thread-header-meta">
+              ${window.escapeHtml(conv.oggetto || '')}
+              ${conv.ordine_id ? `· <button class="btn btn-outline btn-sm" style="padding:1px 7px;font-size:11px;" onclick="openMessaggioOrdine(${conv.ordine_id})">Ordine #${conv.ordine_id}</button>` : ''}
+              ${conv.cliente_id ? `· <button class="btn btn-outline btn-sm" style="padding:1px 7px;font-size:11px;" onclick="openMessaggioCliente(${conv.cliente_id})">${window.escapeHtml(conv.cliente_nome || 'Cliente')}</button>` : ''}
+            </div>
           </div>
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0;align-items:center;">
+        <div class="msg-thread-header-actions">
           <span class="badge ${priorityBadges[conv.priorita] || 'badge-gray'}" style="font-size:11px;">${window.escapeHtml(priorityLabels[conv.priorita] || conv.priorita || 'Media')}</span>
           <span class="badge ${statusBadges[conv.stato] || 'badge-gray'}" style="font-size:11px;">${window.escapeHtml(statusLabels[conv.stato] || conv.stato || 'Nuovo')}</span>
           ${isInbox ? '<button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="takeConversationInCharge()">Prendi in carico</button>' : ''}
@@ -666,6 +706,8 @@
 
   function renderMessaggiPage() {
     ensureMessaggiState();
+    bindMessaggiResizeHandler();
+    syncMessaggiLayoutMode();
     renderMessaggiComposeDestinations();
     const sub = document.getElementById('messaggi-sub');
     const currentRows = getMessaggiListForCurrentBox();
@@ -766,6 +808,7 @@
 
   function setMessaggiBox(box) {
     window.state.messagesCurrentBox = box === 'sent' ? 'sent' : 'inbox';
+    window.state.messagesMobileThreadOpen = false;
     const rows = getMessaggiListForCurrentBox();
     window.state.messagesSelectedId = rows[0]?.id || null;
     window.state.messagesDetail = null;
@@ -784,6 +827,7 @@
   async function openMessaggioDettaglio(id) {
     const targetId = Number(id) || null;
     window.state.messagesSelectedId = targetId;
+    if (isMessaggiMobileViewport()) window.state.messagesMobileThreadOpen = true;
     const changed = window.state.messagesCurrentBox !== 'sent' ? markConversationReadLocal(targetId) : false;
     window.state.messagesDetail = null;
     renderMessaggiPage();
@@ -940,5 +984,6 @@
   window.takeConversationInCharge = takeConversationInCharge;
   window.replyToConversation = replyToConversation;
   window.toggleMessaggiMeta = toggleMessaggiMeta;
+  window.closeMessaggioMobileThread = closeMessaggioMobileThread;
   window.autoResizeReplyBar = autoResizeReplyBar;
 })();
