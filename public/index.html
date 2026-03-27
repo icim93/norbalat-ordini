@@ -5229,7 +5229,6 @@ const ENTITY_SELECT_AUTOCOMPLETE_CONFIG = {
   'ls-prodotto': { placeholder: 'Cerca prodotto...' },
   'ls-cliente': { placeholder: 'Cerca cliente...' },
   'prep-add-line-prod': { placeholder: 'Cerca prodotto...' },
-  'giacenza-carico-prodotto': { placeholder: 'Cerca prodotto...' },
   'ls-prodotti-multi': { placeholder: 'Filtra prodotti...', multiple: true },
   'ls-clienti-multi': { placeholder: 'Filtra clienti...', multiple: true },
   'ls-clienti-excluded': { placeholder: 'Filtra clienti...', multiple: true },
@@ -11357,7 +11356,6 @@ function renderGiacenzaCaricoRows() {
     const select = document.getElementById(index === 0 ? 'giacenza-carico-prodotto' : `giacenza-carico-prodotto-${row.key}`);
     if (select) select.value = row.prodottoId ? String(row.prodottoId) : '';
   });
-  if (typeof ensureEntitySelectAutocomplete === 'function') ensureEntitySelectAutocomplete();
 }
 
 function syncGiacenzaCaricoRowsFromDom() {
@@ -11384,12 +11382,12 @@ function removeGiacenzaCaricoRow(rowKey) {
 }
 
 function openGiacenzaCarico(prodottoId) {
+  openModal('modal-giacenza-carico');
   giacenzaCaricoRows = [createGiacenzaCaricoRow(prodottoId || null)];
   document.getElementById('giacenza-carico-tipo').value = 'carico';
   document.getElementById('giacenza-carico-note').value = '';
-  renderGiacenzaCaricoRows();
   document.getElementById('modal-giacenza-carico-title').textContent = prodottoId ? `Carico — ${getProdotto(prodottoId)?.nome || ''}` : 'Carico Giacenza';
-  openModal('modal-giacenza-carico');
+  renderGiacenzaCaricoRows();
 }
 
 async function saveGiacenzaCarico() {
