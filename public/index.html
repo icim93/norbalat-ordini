@@ -11333,39 +11333,40 @@ function renderGiacenzaCaricoRows() {
       <div class="form-row">
         <div class="field form-full">
           <label>Prodotto *</label>
-          <select id="giacenza-carico-prodotto-${row.key}">
+          <select id="${index === 0 ? 'giacenza-carico-prodotto' : `giacenza-carico-prodotto-${row.key}`}">
             <option value="">Seleziona prodotto</option>
             ${productOptions}
           </select>
         </div>
         <div class="field">
           <label>Lotto *</label>
-          <input type="text" id="giacenza-carico-lotto-${row.key}" value="${escapeHtml(row.lotto || '')}" placeholder="Es. LOT240301">
+          <input type="text" id="${index === 0 ? 'giacenza-carico-lotto' : `giacenza-carico-lotto-${row.key}`}" value="${escapeHtml(row.lotto || '')}" placeholder="Es. LOT240301">
         </div>
         <div class="field">
           <label>Quantità *</label>
-          <input type="number" step="0.01" min="0.01" id="giacenza-carico-qty-${row.key}" value="${escapeHtml(String(row.quantita || ''))}" placeholder="0.00">
+          <input type="number" step="0.01" min="0.01" id="${index === 0 ? 'giacenza-carico-qty' : `giacenza-carico-qty-${row.key}`}" value="${escapeHtml(String(row.quantita || ''))}" placeholder="0.00">
         </div>
         <div class="field">
           <label>Scadenza</label>
-          <input type="date" id="giacenza-carico-scadenza-${row.key}" value="${escapeHtml(row.scadenza || '')}">
+          <input type="date" id="${index === 0 ? 'giacenza-carico-scadenza' : `giacenza-carico-scadenza-${row.key}`}" value="${escapeHtml(row.scadenza || '')}">
         </div>
       </div>
     </div>
   `).join('');
-  giacenzaCaricoRows.forEach(row => {
-    const select = document.getElementById(`giacenza-carico-prodotto-${row.key}`);
+  giacenzaCaricoRows.forEach((row, index) => {
+    const select = document.getElementById(index === 0 ? 'giacenza-carico-prodotto' : `giacenza-carico-prodotto-${row.key}`);
     if (select) select.value = row.prodottoId ? String(row.prodottoId) : '';
   });
+  if (typeof ensureEntitySelectAutocomplete === 'function') ensureEntitySelectAutocomplete();
 }
 
 function syncGiacenzaCaricoRowsFromDom() {
-  giacenzaCaricoRows = giacenzaCaricoRows.map(row => ({
+  giacenzaCaricoRows = giacenzaCaricoRows.map((row, index) => ({
     ...row,
-    prodottoId: parseInt(document.getElementById(`giacenza-carico-prodotto-${row.key}`)?.value || '0', 10) || null,
-    lotto: document.getElementById(`giacenza-carico-lotto-${row.key}`)?.value || '',
-    quantita: document.getElementById(`giacenza-carico-qty-${row.key}`)?.value || '',
-    scadenza: document.getElementById(`giacenza-carico-scadenza-${row.key}`)?.value || '',
+    prodottoId: parseInt(document.getElementById(index === 0 ? 'giacenza-carico-prodotto' : `giacenza-carico-prodotto-${row.key}`)?.value || '0', 10) || null,
+    lotto: document.getElementById(index === 0 ? 'giacenza-carico-lotto' : `giacenza-carico-lotto-${row.key}`)?.value || '',
+    quantita: document.getElementById(index === 0 ? 'giacenza-carico-qty' : `giacenza-carico-qty-${row.key}`)?.value || '',
+    scadenza: document.getElementById(index === 0 ? 'giacenza-carico-scadenza' : `giacenza-carico-scadenza-${row.key}`)?.value || '',
   }));
 }
 
@@ -11395,10 +11396,10 @@ async function saveGiacenzaCarico() {
   const tipo = document.getElementById('giacenza-carico-tipo').value;
   const note = document.getElementById('giacenza-carico-note').value.trim();
   const rows = giacenzaCaricoRows.map((row, index) => ({
-    prodotto_id: parseInt(document.getElementById(`giacenza-carico-prodotto-${row.key}`)?.value || '0', 10),
-    lotto: document.getElementById(`giacenza-carico-lotto-${row.key}`)?.value.trim() || '',
-    quantita: parseFloat(document.getElementById(`giacenza-carico-qty-${row.key}`)?.value || ''),
-    scadenza: document.getElementById(`giacenza-carico-scadenza-${row.key}`)?.value || null,
+    prodotto_id: parseInt(document.getElementById(index === 0 ? 'giacenza-carico-prodotto' : `giacenza-carico-prodotto-${row.key}`)?.value || '0', 10),
+    lotto: document.getElementById(index === 0 ? 'giacenza-carico-lotto' : `giacenza-carico-lotto-${row.key}`)?.value.trim() || '',
+    quantita: parseFloat(document.getElementById(index === 0 ? 'giacenza-carico-qty' : `giacenza-carico-qty-${row.key}`)?.value || ''),
+    scadenza: document.getElementById(index === 0 ? 'giacenza-carico-scadenza' : `giacenza-carico-scadenza-${row.key}`)?.value || null,
     _index: index + 1,
   }));
   const invalid = rows.find(row => !row.prodotto_id || !row.lotto || !Number.isFinite(row.quantita) || row.quantita <= 0);
