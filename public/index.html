@@ -11421,6 +11421,11 @@ async function saveGiacenzaCarico() {
   }
 }
 
+window.addGiacenzaCaricoRow = addGiacenzaCaricoRow;
+window.removeGiacenzaCaricoRow = removeGiacenzaCaricoRow;
+window.openGiacenzaCarico = openGiacenzaCarico;
+window.saveGiacenzaCarico = saveGiacenzaCarico;
+
 function openGiacenzaRettifica(giacenzaId) {
   const g = state.giacenze.find(x => x.id === giacenzaId);
   if (!g) return;
@@ -11661,6 +11666,9 @@ async function saveScaricoRapido() {
     showToast(e.message || 'Errore scarico rapido', 'warning');
   }
 }
+
+window.openScaricoRapidoModal = openScaricoRapidoModal;
+window.saveScaricoRapido = saveScaricoRapido;
 
 // ═══════════════════════════════════════════════
 // TENTATA VENDITA — RIENTRO MERCE
