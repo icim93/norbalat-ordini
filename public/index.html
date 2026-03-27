@@ -4760,7 +4760,7 @@
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
         <div style="font-size:12px;color:var(--text2);">Registra più prodotti nello stesso carico.</div>
-        <button type="button" class="btn btn-outline btn-sm" onclick="addGiacenzaCaricoRow()">+ Aggiungi riga</button>
+        <button type="button" class="btn btn-outline btn-sm" data-giacenza-carico-add-row="1">+ Aggiungi riga</button>
       </div>
       <div id="giacenza-carico-rows" style="display:flex;flex-direction:column;gap:10px;"></div>
     </div>
@@ -11327,7 +11327,7 @@ function renderGiacenzaCaricoRows() {
     <div style="border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--surface2);">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
         <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;">Riga ${index + 1}</div>
-        ${giacenzaCaricoRows.length > 1 ? `<button type="button" class="btn btn-outline btn-sm" onclick="removeGiacenzaCaricoRow('${row.key}')">Rimuovi</button>` : ''}
+        ${giacenzaCaricoRows.length > 1 ? `<button type="button" class="btn btn-outline btn-sm" data-giacenza-carico-remove-row="${row.key}">Rimuovi</button>` : ''}
       </div>
       <div class="form-row">
         <div class="field form-full">
@@ -11425,6 +11425,23 @@ window.addGiacenzaCaricoRow = addGiacenzaCaricoRow;
 window.removeGiacenzaCaricoRow = removeGiacenzaCaricoRow;
 window.openGiacenzaCarico = openGiacenzaCarico;
 window.saveGiacenzaCarico = saveGiacenzaCarico;
+
+if (!window._giacenzaCaricoDelegatedActionsBound) {
+  window._giacenzaCaricoDelegatedActionsBound = true;
+  document.addEventListener('click', event => {
+    const addBtn = event.target.closest('[data-giacenza-carico-add-row]');
+    if (addBtn) {
+      event.preventDefault();
+      addGiacenzaCaricoRow();
+      return;
+    }
+    const removeBtn = event.target.closest('[data-giacenza-carico-remove-row]');
+    if (removeBtn) {
+      event.preventDefault();
+      removeGiacenzaCaricoRow(removeBtn.getAttribute('data-giacenza-carico-remove-row') || '');
+    }
+  });
+}
 
 function openGiacenzaRettifica(giacenzaId) {
   const g = state.giacenze.find(x => x.id === giacenzaId);
