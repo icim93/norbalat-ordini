@@ -29,6 +29,14 @@
     return classificazione === TENTATA_VENDITA_CLIENT_CLASS || nome.startsWith(TENTATA_VENDITA_CLIENT_NAME);
   }
 
+  function isCrmProspectCliente(cliente) {
+    return String(cliente?.crmTipo || cliente?.crm_tipo || 'cliente').toLowerCase() === 'prospect';
+  }
+
+  function isClienteAnagrafico(cliente) {
+    return !!cliente && !isTentataVenditaCliente(cliente) && !isCrmProspectCliente(cliente);
+  }
+
   function today() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -122,6 +130,8 @@
   window.getAgente = getAgente;
   window.getProdotto = getProdotto;
   window.isTentataVenditaCliente = isTentataVenditaCliente;
+  window.isCrmProspectCliente = isCrmProspectCliente;
+  window.isClienteAnagrafico = isClienteAnagrafico;
   window.TENTATA_VENDITA_CLIENT_NAME = TENTATA_VENDITA_CLIENT_NAME;
   window.TENTATA_VENDITA_CLIENT_CLASS = TENTATA_VENDITA_CLIENT_CLASS;
   window.today = today;

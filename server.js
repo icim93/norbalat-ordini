@@ -844,6 +844,7 @@ async function createSchema() {
     CREATE TABLE IF NOT EXISTS clienti (
       id               SERIAL PRIMARY KEY,
       nome             TEXT NOT NULL,
+      crm_tipo         TEXT NOT NULL DEFAULT 'cliente',
       alias            TEXT DEFAULT '',
       contatto_nome    TEXT DEFAULT '',
       telefono         TEXT DEFAULT '',
@@ -865,6 +866,7 @@ async function createSchema() {
       sbloccato        BOOLEAN DEFAULT FALSE,
       onboarding_approvato_da TEXT,
       onboarding_approvato_at TIMESTAMPTZ,
+      crm_convertito_at TIMESTAMPTZ,
       created_at       TIMESTAMPTZ DEFAULT NOW()
     );
 
@@ -1035,6 +1037,7 @@ async function createSchema() {
       incaricato_user_id INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
       incaricato_user_name TEXT DEFAULT '',
       richiesta   TEXT DEFAULT '',
+      offerta     TEXT DEFAULT '',
       motivo      TEXT DEFAULT '',
       note        TEXT DEFAULT '',
       followup_date DATE,
@@ -1205,6 +1208,7 @@ async function createSchema() {
 
     -- Migrazioni safe per DB esistenti
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS classificazione TEXT DEFAULT '';
+    ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS crm_tipo         TEXT NOT NULL DEFAULT 'cliente';
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS contatto_nome   TEXT DEFAULT '';
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS telefono        TEXT DEFAULT '';
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS onboarding_stato TEXT DEFAULT 'in_attesa';
@@ -1213,6 +1217,7 @@ async function createSchema() {
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS sbloccato        BOOLEAN DEFAULT FALSE;
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS onboarding_approvato_da TEXT;
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS onboarding_approvato_at TIMESTAMPTZ;
+    ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS crm_convertito_at TIMESTAMPTZ;
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS codice_fiscale   TEXT DEFAULT '';
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS codice_univoco   TEXT DEFAULT '';
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS pec              TEXT DEFAULT '';
@@ -1264,6 +1269,7 @@ async function createSchema() {
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS incaricato_user_name TEXT DEFAULT '';
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS followup_date DATE;
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS priorita TEXT DEFAULT 'media';
+    ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS offerta TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_nome TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_mime TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_data BYTEA;
@@ -1286,6 +1292,7 @@ async function createSchema() {
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS auto_anagrafato_at TIMESTAMPTZ;
     CREATE INDEX IF NOT EXISTS idx_crm_followup ON clienti_crm_eventi(followup_date);
     UPDATE clienti_crm_eventi SET priorita = 'media' WHERE priorita IS NULL OR priorita = '';
+    UPDATE clienti SET crm_tipo = 'cliente' WHERE crm_tipo IS NULL OR crm_tipo = '';
     ALTER TABLE listini     ALTER COLUMN prezzo DROP NOT NULL;
     UPDATE listini SET scope = CASE WHEN cliente_id IS NULL THEN 'all' ELSE 'cliente' END WHERE scope IS NULL OR scope = '';
     UPDATE listini SET mode = 'final_price' WHERE mode IS NULL OR mode = '';
@@ -1322,6 +1329,22 @@ async function createSchema() {
       ALTER TABLE ordini
         ADD CONSTRAINT ordini_stato_check
         CHECK (stato IN ('attesa','sospeso','preparazione','preparato','consegnato','annullato'));
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END $$;
+
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'clienti_crm_tipo_check'
+          AND conrelid = 'clienti'::regclass
+      ) THEN
+        ALTER TABLE clienti DROP CONSTRAINT clienti_crm_tipo_check;
+      END IF;
+      ALTER TABLE clienti
+        ADD CONSTRAINT clienti_crm_tipo_check
+        CHECK (crm_tipo IN ('cliente','prospect'));
     EXCEPTION
       WHEN duplicate_object THEN NULL;
     END $$;
@@ -2311,6 +2334,7 @@ const zCrmEventoPayload = z.object({
   esito: z.string().max(300).optional().default(''),
   stato_cliente: z.string().max(80).optional().default(''),
   richiesta: z.string().max(2000).optional().default(''),
+  offerta: z.string().max(2000).optional().default(''),
   motivo: z.string().max(2000).optional().default(''),
   note: z.string().max(3000).optional().default(''),
   contatto_nome: z.string().max(180).optional().default(''),
@@ -2319,6 +2343,25 @@ const zCrmEventoPayload = z.object({
   invia_messaggio: z.coerce.boolean().optional().default(false),
   followup_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   priorita: z.string().max(20).optional().default('media'),
+});
+
+const zClienteConversionPayload = z.object({
+  nome: z.string().trim().min(1).max(160),
+  alias: z.string().trim().max(160).optional().default(''),
+  localita: z.string().trim().max(160).optional().default(''),
+  giro: z.string().trim().max(120).optional().default(''),
+  agente_id: z.coerce.number().int().positive().nullable().optional().default(null),
+  autista_di_giro: z.coerce.number().int().positive().nullable().optional().default(null),
+  note: z.string().trim().max(2000).optional().default(''),
+  piva: z.string().trim().min(1).max(32),
+  codice_fiscale: z.string().trim().max(32).optional().default(''),
+  codice_univoco: z.string().trim().max(32).optional().default(''),
+  pec: z.string().trim().max(160).optional().default(''),
+  cond_pagamento: z.string().trim().max(200).optional().default(''),
+  e_fornitore: z.coerce.boolean().optional().default(false),
+  classificazione: z.string().trim().max(120).optional().default(''),
+  contatto_nome: z.string().trim().max(120).optional().default(''),
+  telefono: z.string().trim().max(60).optional().default(''),
 });
 
 const zConsegnaParzialePayload = z.object({
@@ -2994,9 +3037,9 @@ app.post('/api/clienti/lookup-piva', authMiddleware, requirePermission('clienti:
       if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
       if (!String(piva || '').trim()) return res.status(400).json({ error: 'Partita IVA obbligatoria' });
       const r = await q(
-      `INSERT INTO clienti (nome,alias,localita,giro,agente_id,autista_di_giro,note,piva,codice_fiscale,codice_univoco,pec,cond_pagamento,e_fornitore,classificazione,contatto_nome,telefono,onboarding_stato,onboarding_checklist,fido,sbloccato)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'in_attesa',$17::jsonb,0,FALSE)
-         RETURNING id,nome,alias,localita,giro,piva,codice_fiscale,codice_univoco,pec,classificazione,cond_pagamento,e_fornitore,contatto_nome,telefono,onboarding_stato,fido,sbloccato`,
+      `INSERT INTO clienti (nome,crm_tipo,alias,localita,giro,agente_id,autista_di_giro,note,piva,codice_fiscale,codice_univoco,pec,cond_pagamento,e_fornitore,classificazione,contatto_nome,telefono,onboarding_stato,onboarding_checklist,fido,sbloccato)
+         VALUES ($1,'cliente',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'in_attesa',$17::jsonb,0,FALSE)
+         RETURNING id,nome,crm_tipo,alias,localita,giro,piva,codice_fiscale,codice_univoco,pec,classificazione,cond_pagamento,e_fornitore,contatto_nome,telefono,onboarding_stato,fido,sbloccato,created_at,crm_convertito_at`,
       [nome, alias, localita, giro, agente_id||null, autista_di_giro||null, note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, contatto_nome, telefono, JSON.stringify({})]
       );
     const u = req.user;
@@ -3007,7 +3050,7 @@ app.post('/api/clienti/lookup-piva', authMiddleware, requirePermission('clienti:
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-  app.put('/api/clienti/:id', authMiddleware, requirePermission('clienti:update'), async (req, res) => {
+app.put('/api/clienti/:id', authMiddleware, requirePermission('clienti:update'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const { nome, alias='', localita='', giro='', agente_id=null, autista_di_giro=null,
@@ -3022,6 +3065,61 @@ app.post('/api/clienti/lookup-piva', authMiddleware, requirePermission('clienti:
       );
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/clienti/:id/converti-da-crm', authMiddleware, requirePermission('clienti:update'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'ID non valido' });
+    const parsed = zClienteConversionPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const current = await q('SELECT id, nome, crm_tipo FROM clienti WHERE id=$1 LIMIT 1', [id]);
+    if (!current.rows.length) return res.status(404).json({ error: 'Lead CRM non trovato' });
+    if (String(current.rows[0].crm_tipo || 'cliente') !== 'prospect') {
+      return res.status(400).json({ error: 'Il record selezionato non è un prospect CRM' });
+    }
+    const {
+      nome, alias, localita, giro, agente_id, autista_di_giro, note, piva,
+      codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore,
+      classificazione, contatto_nome, telefono,
+    } = parsed.data;
+    const r = await q(
+      `UPDATE clienti
+          SET nome=$1,
+              crm_tipo='cliente',
+              alias=$2,
+              localita=$3,
+              giro=$4,
+              agente_id=$5,
+              autista_di_giro=$6,
+              note=$7,
+              piva=$8,
+              codice_fiscale=$9,
+              codice_univoco=$10,
+              pec=$11,
+              cond_pagamento=$12,
+              e_fornitore=$13,
+              classificazione=$14,
+              contatto_nome=$15,
+              telefono=$16,
+              onboarding_stato='in_attesa',
+              onboarding_checklist=COALESCE(onboarding_checklist, '{}'::jsonb),
+              crm_convertito_at=COALESCE(crm_convertito_at, NOW())
+        WHERE id=$17
+        RETURNING *`,
+      [
+        nome, alias, localita, giro, agente_id || null, autista_di_giro || null, note, piva,
+        codice_fiscale, codice_univoco, pec, cond_pagamento, !!e_fornitore,
+        classificazione, contatto_nome, telefono, id,
+      ]
+    );
+    const actor = `${req.user.nome} ${req.user.cognome || ''}`.trim();
+    await logDB(req.user.id, actor, 'Conversione CRM', `${current.rows[0].nome} -> ${nome}`);
+    notifyNewClientePendingApproval(nome, actor).catch(() => {});
+    res.json(r.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/clienti/tentata/:userId', authMiddleware, async (req, res) => {
@@ -3113,6 +3211,8 @@ app.get('/api/clienti/crm-summary', authMiddleware, async (req, res) => {
           e.tipo,
           e.esito,
           e.stato_cliente,
+          e.richiesta,
+          e.offerta,
           e.followup_date,
           e.priorita,
           e.created_at
@@ -3130,7 +3230,7 @@ app.post('/api/clienti/:id/crm-eventi', authMiddleware, requirePermission('clien
     if (!parsed.success) return validationError(res, parsed);
     const { rows: clientiRows } = await q(`SELECT id, nome FROM clienti WHERE id=$1 LIMIT 1`, [clienteId]);
     if (!clientiRows.length) return res.status(404).json({ error: 'Cliente non trovato' });
-    const { tipo, esito, stato_cliente, richiesta, motivo, note, contatto_nome, telefono, incaricato_user_id, invia_messaggio, followup_date, priorita } = parsed.data;
+    const { tipo, esito, stato_cliente, richiesta, offerta, motivo, note, contatto_nome, telefono, incaricato_user_id, invia_messaggio, followup_date, priorita } = parsed.data;
     const userName = `${req.user.nome} ${req.user.cognome || ''}`.trim();
     let incaricatoUserName = '';
     if (incaricato_user_id) {
@@ -3140,14 +3240,15 @@ app.post('/api/clienti/:id/crm-eventi', authMiddleware, requirePermission('clien
     }
     const r = await q(
       `INSERT INTO clienti_crm_eventi
-        (cliente_id,tipo,esito,stato_cliente,richiesta,motivo,note,contatto_nome,telefono,incaricato_user_id,incaricato_user_name,followup_date,priorita,user_id,user_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+        (cliente_id,tipo,esito,stato_cliente,richiesta,offerta,motivo,note,contatto_nome,telefono,incaricato_user_id,incaricato_user_name,followup_date,priorita,user_id,user_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [
         clienteId,
         String(tipo || 'richiesta'),
         String(esito || ''),
         String(stato_cliente || ''),
         String(richiesta || ''),
+        String(offerta || ''),
         String(motivo || ''),
         String(note || ''),
         String(contatto_nome || ''),
@@ -3176,6 +3277,7 @@ app.post('/api/clienti/:id/crm-eventi', authMiddleware, requirePermission('clien
         contatto_nome ? `Contatto: ${contatto_nome}` : '',
         telefono ? `Telefono: ${telefono}` : '',
         richiesta ? `Richiesta: ${richiesta}` : '',
+        offerta ? `Offerta: ${offerta}` : '',
         note ? `Note: ${note}` : '',
         followup_date ? `Follow-up: ${followup_date}` : '',
       ].filter(Boolean).join('\n');
@@ -3206,13 +3308,13 @@ app.post('/api/clienti/onboarding-lead', authMiddleware, requirePermission('clie
     const userName = `${req.user.nome} ${req.user.cognome || ''}`.trim();
     const createCliente = await q(
       `INSERT INTO clienti
-        (nome,localita,contatto_nome,telefono,onboarding_stato,onboarding_checklist,fido,sbloccato,piva)
-       VALUES ($1,$2,$3,$4,'bozza',$5::jsonb,0,FALSE,'')
+        (nome,crm_tipo,localita,contatto_nome,telefono,onboarding_stato,onboarding_checklist,fido,sbloccato,piva)
+       VALUES ($1,'prospect',$2,$3,$4,'bozza',$5::jsonb,0,FALSE,'')
        RETURNING *`,
       [nome, localita, contattoNome, telefono, JSON.stringify({ lead: true })]
     );
     const cliente = createCliente.rows[0];
-    const { tipo, esito, stato_cliente, richiesta, motivo, note, incaricato_user_id, invia_messaggio, followup_date, priorita } = parsed.data;
+    const { tipo, esito, stato_cliente, richiesta, offerta, motivo, note, incaricato_user_id, invia_messaggio, followup_date, priorita } = parsed.data;
     let incaricatoUserName = '';
     if (incaricato_user_id) {
       const { rows: incaricatoRows } = await q(`SELECT id, nome, cognome FROM utenti WHERE id=$1 LIMIT 1`, [incaricato_user_id]);
@@ -3221,8 +3323,8 @@ app.post('/api/clienti/onboarding-lead', authMiddleware, requirePermission('clie
     }
     const crm = await q(
       `INSERT INTO clienti_crm_eventi
-        (cliente_id,tipo,esito,stato_cliente,richiesta,motivo,note,contatto_nome,telefono,incaricato_user_id,incaricato_user_name,followup_date,priorita,user_id,user_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        (cliente_id,tipo,esito,stato_cliente,richiesta,offerta,motivo,note,contatto_nome,telefono,incaricato_user_id,incaricato_user_name,followup_date,priorita,user_id,user_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        RETURNING *`,
       [
         cliente.id,
@@ -3230,6 +3332,7 @@ app.post('/api/clienti/onboarding-lead', authMiddleware, requirePermission('clie
         String(esito || ''),
         String(stato_cliente || ''),
         String(richiesta || ''),
+        String(offerta || ''),
         String(motivo || ''),
         String(note || ''),
         contattoNome,
@@ -3249,6 +3352,7 @@ app.post('/api/clienti/onboarding-lead', authMiddleware, requirePermission('clie
         `Contatto: ${contattoNome}`,
         `Telefono: ${telefono}`,
         richiesta ? `Richiesta: ${richiesta}` : '',
+        offerta ? `Offerta: ${offerta}` : '',
         note ? `Note: ${note}` : '',
         followup_date ? `Follow-up: ${followup_date}` : '',
       ].filter(Boolean).join('\n');

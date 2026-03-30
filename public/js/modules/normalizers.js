@@ -17,6 +17,7 @@
     return {
       id: c.id,
       nome: c.nome || '',
+      crmTipo: c.crm_tipo || 'cliente',
       alias: c.alias || '',
       localita: c.localita || '',
       giro: c.giro || '',
@@ -38,6 +39,8 @@
       sbloccato: !!c.sbloccato,
       onboardingApprovatoDa: c.onboarding_approvato_da || '',
       onboardingApprovatoAt: c.onboarding_approvato_at || null,
+      createdAt: c.created_at || null,
+      crmConvertitoAt: c.crm_convertito_at || null,
     };
   }
 

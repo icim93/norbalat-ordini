@@ -8,7 +8,7 @@ function resetClientiFilters() {
 
 function getAvailableClientiGiri(extraValues = []) {
   const configured = (state.giriCalendario || []).map(g => String(g.giro || '').trim()).filter(Boolean);
-  const usedByClienti = (state.clienti || []).map(c => String(c.giro || '').trim()).filter(Boolean);
+  const usedByClienti = (state.clienti || []).filter(c => typeof isClienteAnagrafico === 'function' ? isClienteAnagrafico(c) : true).map(c => String(c.giro || '').trim()).filter(Boolean);
   const extras = extraValues.map(v => String(v || '').trim()).filter(Boolean);
   return [...new Set([...configured, ...usedByClienti, ...extras])].sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
 }
@@ -53,7 +53,7 @@ function renderClientiTable() {
   renderClientiGiroSelects();
   const q = (document.getElementById('search-clienti')?.value || '').toLowerCase();
   const filterGiro = document.getElementById('filter-giro')?.value || '';
-  let list = state.clienti.filter(c => !(typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c)));
+  let list = state.clienti.filter(c => typeof isClienteAnagrafico === 'function' ? isClienteAnagrafico(c) : !(typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(c)));
   if (q) list = list.filter(c =>
     c.nome.toLowerCase().includes(q) ||
     (c.alias || '').toLowerCase().includes(q) ||
@@ -157,6 +157,7 @@ function renderClientiTable() {
 
 function openNewCliente() {
   state.editingId = null;
+  state.crmConvertingId = null;
   renderClientiGiroSelects('');
   document.getElementById('modal-cliente-title').textContent = 'Nuovo Cliente';
   document.getElementById('cl-nome').value = '';
@@ -186,6 +187,7 @@ function openNewOnboarding() {
 
 function openEditCliente(id) {
   const c = state.clienti.find(x => x.id === id);
+  state.crmConvertingId = null;
   renderClientiGiroSelects(c?.giro || '');
   state.editingId = id;
   document.getElementById('modal-cliente-title').textContent = 'Modifica Cliente';
@@ -297,15 +299,24 @@ async function saveCliente() {
           agente_id: body.agente_id,
         });
       }
+    } else if (state.crmConvertingId) {
+      const saved = await api('POST', `/api/clienti/${state.crmConvertingId}/converti-da-crm`, body);
+      const idx = state.clienti.findIndex(c => c.id === state.crmConvertingId);
+      if (idx !== -1) state.clienti[idx] = normalizeCliente(saved);
+      state.clienti.sort((a, b) => a.nome.localeCompare(b.nome));
+      if (typeof loadCrmSummary === 'function') await loadCrmSummary();
+      showToast('Prospect convertito in cliente', 'success');
     } else {
       const saved = await api('POST', '/api/clienti', body);
       state.clienti.push(normalizeCliente({ ...body, ...saved, id: saved.id, agente_id: body.agente_id }));
       state.clienti.sort((a, b) => a.nome.localeCompare(b.nome));
     }
     closeModal('modal-cliente');
-    showToast(state.editingId ? 'Cliente aggiornato' : 'Cliente salvato', 'success');
+    if (!state.crmConvertingId) showToast(state.editingId ? 'Cliente aggiornato' : 'Cliente salvato', 'success');
     state.editingId = null;
+    state.crmConvertingId = null;
     renderClientiTable();
+    if (typeof window.renderCrmPage === 'function') window.renderCrmPage();
   } catch (e) {
     showToast(e.message, 'warning');
   }

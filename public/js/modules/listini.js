@@ -79,7 +79,9 @@
 
   function fillListinoSelectors(selectedProdottoId = null) {
     const prodotti = [...window.state.prodotti].sort((a, b) => a.nome.localeCompare(b.nome));
-    const clienti = [...window.state.clienti].sort((a, b) => a.nome.localeCompare(b.nome));
+    const clienti = [...window.state.clienti]
+      .filter(c => typeof window.isClienteAnagrafico === 'function' ? window.isClienteAnagrafico(c) : true)
+      .sort((a, b) => a.nome.localeCompare(b.nome));
     const selProdotto = document.getElementById('ls-prodotto');
     if (selProdotto) {
       selProdotto.innerHTML = '<option value="">Seleziona prodotto</option>' +

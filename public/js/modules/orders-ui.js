@@ -149,7 +149,7 @@ function renderDashboard() {
           <div class="card-header"><div class="card-title">Clienti e follow-up</div></div>
           <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
             <div style="margin-bottom:8px;">Follow-up CRM da gestire: <b>${clienteFollowup}</b></div>
-            <button class="btn btn-outline btn-sm" onclick="goTo('clienti')">Apri clienti</button>
+            <button class="btn btn-outline btn-sm" onclick="goTo('crm')">Apri CRM</button>
           </div>
         </div>`);
     }

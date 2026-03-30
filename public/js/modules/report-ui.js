@@ -3,6 +3,8 @@ function initReportDropdowns() {
   const defs = [
     { contentId: 'chart-week', toggleEl: () => document.querySelector('#chart-week')?.previousElementSibling },
     { contentId: 'chart-agenti', toggleEl: () => document.querySelector('#chart-agenti')?.previousElementSibling },
+    { contentId: 'report-crm-weekly', toggleEl: () => document.querySelector('#report-crm-weekly')?.previousElementSibling },
+    { contentId: 'report-crm-monthly', toggleEl: () => document.querySelector('#report-crm-monthly')?.previousElementSibling },
     { contentId: 'report-top-prodotti', toggleEl: () => document.querySelector('#report-top-prodotti')?.previousElementSibling },
     { contentId: 'report-giri', toggleEl: () => document.querySelector('#report-giri')?.previousElementSibling },
     { contentId: 'report-clienti-inattivi', toggleEl: () => document.querySelector('#report-clienti-inattivi')?.previousElementSibling },
@@ -45,7 +47,7 @@ function isMagazzinoReportOnly() {
 }
 
 function setAllReportSections(open) {
-  const ids = ['chart-week', 'chart-agenti', 'report-top-prodotti', 'report-giri', 'report-clienti-inattivi', 'report-agenti-clienti', 'report-clienti-table', 'activity-log-list'];
+  const ids = ['chart-week', 'chart-agenti', 'report-crm-weekly', 'report-crm-monthly', 'report-top-prodotti', 'report-giri', 'report-clienti-inattivi', 'report-agenti-clienti', 'report-clienti-table', 'activity-log-list'];
   ids.forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -175,6 +177,8 @@ function ensureReportExportButtons() {
   const conf = [
     { selector: '#chart-week', key: 'week' },
     { selector: '#chart-agenti', key: 'agenti' },
+    { selector: '#report-crm-weekly', key: 'crm-weekly' },
+    { selector: '#report-crm-monthly', key: 'crm-monthly' },
     { selector: '#report-top-prodotti', key: 'prodotti' },
     { selector: '#report-giri', key: 'giri' },
     { selector: '#report-clienti-inattivi', key: 'inattivi' },
@@ -329,8 +333,73 @@ async function renderReport() {
   const agChart = document.getElementById('chart-agenti');
   if(agChart) agChart.innerHTML = agData.map(a=>`<div style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;"><span style="font-weight:600;">${a.agente}</span><span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--accent);">${a.ordini}</span></div><div class="progress-bar"><div class="progress-fill" style="width:${a.percentuale}%"></div></div></div>`).join('');
 
-  const clientiReport = state.clienti.filter(cl => !(typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(cl)));
-  const ordiniClientiReport = ordiniReport.filter(o => !(typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(getCliente(o.clienteId))));
+  const clientiReport = state.clienti.filter(cl => typeof isClienteAnagrafico === 'function' ? isClienteAnagrafico(cl) : !(typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(cl)));
+  const ordiniClientiReport = ordiniReport.filter(o => typeof isClienteAnagrafico === 'function' ? isClienteAnagrafico(getCliente(o.clienteId)) : !(typeof isTentataVenditaCliente === 'function' && isTentataVenditaCliente(getCliente(o.clienteId))));
+
+  const prospects = state.clienti.filter(cl => typeof isCrmProspectCliente === 'function' && isCrmProspectCliente(cl));
+  const sameDate = (ts) => String(ts || '').slice(0, 10);
+  const weeklyConv = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const ds = d.toISOString().slice(0, 10);
+    const onboarding = prospects.filter(c => sameDate(c.createdAt) === ds).length;
+    const converted = prospects.filter(c => sameDate(c.crmConvertitoAt) === ds).length;
+    weeklyConv.push({
+      data: ds,
+      giorno: d.toLocaleDateString('it-IT', { weekday: 'short' }),
+      onboarding,
+      convertiti: converted,
+      tasso: onboarding ? Math.round((converted / onboarding) * 100) : 0,
+    });
+  }
+  reportDataCache['crm-weekly'] = weeklyConv;
+  const crmWeeklyEl = document.getElementById('report-crm-weekly');
+  if (crmWeeklyEl) {
+    crmWeeklyEl.innerHTML = weeklyConv.map(item => `
+      <div style="display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+        <div style="font-weight:700;font-size:13px;">${item.giorno}</div>
+        <div>
+          <div style="font-size:12px;color:var(--text2);">Onboarding ${item.onboarding} · Convertiti ${item.convertiti}</div>
+          <div style="margin-top:6px;height:8px;background:var(--border);border-radius:999px;overflow:hidden;">
+            <div style="height:100%;width:${Math.min(item.tasso, 100)}%;background:var(--accent);border-radius:999px;"></div>
+          </div>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-weight:700;color:var(--accent);">${item.tasso}%</div>
+      </div>
+    `).join('');
+  }
+
+  const monthlyConv = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i, 1);
+    const ym = d.toISOString().slice(0, 7);
+    const onboarding = prospects.filter(c => String(c.createdAt || '').slice(0, 7) === ym).length;
+    const converted = prospects.filter(c => String(c.crmConvertitoAt || '').slice(0, 7) === ym).length;
+    monthlyConv.push({
+      mese: d.toLocaleDateString('it-IT', { month: 'short', year: 'numeric' }),
+      onboarding,
+      convertiti: converted,
+      tasso: onboarding ? Math.round((converted / onboarding) * 100) : 0,
+    });
+  }
+  reportDataCache['crm-monthly'] = monthlyConv;
+  const crmMonthlyEl = document.getElementById('report-crm-monthly');
+  if (crmMonthlyEl) {
+    crmMonthlyEl.innerHTML = monthlyConv.map(item => `
+      <div style="display:grid;grid-template-columns:110px 1fr auto;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+        <div style="font-weight:700;font-size:13px;text-transform:capitalize;">${item.mese}</div>
+        <div>
+          <div style="font-size:12px;color:var(--text2);">Onboarding ${item.onboarding} · Convertiti ${item.convertiti}</div>
+          <div style="margin-top:6px;height:8px;background:var(--border);border-radius:999px;overflow:hidden;">
+            <div style="height:100%;width:${Math.min(item.tasso, 100)}%;background:var(--gold);border-radius:999px;"></div>
+          </div>
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-weight:700;color:var(--gold);">${item.tasso}%</div>
+      </div>
+    `).join('');
+  }
   const cliData = clientiReport.map(cl=>({...cl,n:ordiniClientiReport.filter(o=>o.clienteId===cl.id).length})).sort((a,b)=>b.n-a.n);
   reportDataCache['classifica-clienti'] = cliData.map(cl => ({ cliente: cl.nome, localita: cl.localita, giro: cl.giro, ordini: cl.n, percentuale: Math.round(cl.n/total*100) }));
   const cliEl = document.getElementById('report-clienti-table');

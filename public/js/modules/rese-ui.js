@@ -42,7 +42,7 @@
 
   function getFornitoriRese() {
     return [...window.state.clienti]
-      .filter(c => c.eFornitore)
+      .filter(c => c.eFornitore && (typeof window.isClienteAnagrafico === 'function' ? window.isClienteAnagrafico(c) : true))
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }
 
