@@ -10368,40 +10368,6 @@ function updatePDFPreview() {
     return escapeHtml(String(prodotto.nome || 'Prodotto libero').trim() || 'Prodotto libero');
   }
 
-  function buildReportCagliataSummary(reportOrdini) {
-    const totals = new Map();
-    (reportOrdini || []).forEach(o => {
-      (o.linee || []).forEach(l => {
-        const p = l.prodId ? getProdotto(l.prodId) : null;
-        if (!p || String(p.categoria || '').trim().toUpperCase() !== 'CAGLIATA') return;
-        const key = `${p.codice || ''}||${p.nome || ''}`;
-        const entry = totals.get(key) || { nome: p.nome || p.codice || 'Cagliata', pedane: 0, pezzi: 0 };
-        const qty = Number(l.qty || 0);
-        if (!Number.isFinite(qty) || qty <= 0) return;
-        const um = String(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi')).trim().toLowerCase();
-        if (l.isPedana || um === 'pedana' || um === 'pedane') entry.pedane += qty;
-        else entry.pezzi += qty;
-        totals.set(key, entry);
-      });
-    });
-    if (!totals.size) return { html: '', height: 0, count: 0 };
-    const values = Array.from(totals.values())
-      .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' }))
-    const parts = values.map(entry => {
-        const chunks = [];
-        if (entry.pedane > 0) chunks.push(`${Number(entry.pedane).toFixed(2).replace(/\.00$/, '')} ${entry.pedane === 1 ? 'PEDANA' : 'PEDANE'}`);
-        if (entry.pezzi > 0) chunks.push(`${Number(entry.pezzi).toFixed(2).replace(/\.00$/, '')} ${entry.pezzi === 1 ? 'PEZZO' : 'PEZZI'}`);
-        return `<div style="padding:4px 0;border-bottom:1px dotted #ddd;"><b>${escapeHtml(entry.nome)}</b> ${chunks.join(' + ')}</div>`;
-      }).join('');
-    return {
-      html: `
-      <div style="font-weight:700;font-size:14px;margin-bottom:8px;text-transform:uppercase;">Cagliate da uscire dalla cella</div>
-      <div style="font-size:11px;color:#333;">${parts}</div>`,
-      height: 38 + (values.length * 24),
-      count: values.length,
-    };
-  }
-
   // ── REPORT MAGAZZINO: nome prodotto + qtà + unità ──
   function ordineHtmlMag(o) {
     const cl = getCliente(o.clienteId);
@@ -10512,16 +10478,129 @@ function updatePDFPreview() {
   const FIXED_COLUMN_COUNT = Math.min(MAX_COLUMNS, Math.max(1, giri.length));
   const mmToPx = mm => (mm * 96) / 25.4;
   const PAGE_HEIGHT = Math.floor(mmToPx(297 - 16)); // A4 portrait al netto dei margini @page di 8mm sopra/sotto
-  const PAGE_HEADER_HEIGHT = 46;
-  const COLUMN_HEADER_HEIGHT = 52;
-  const ORDER_HEADER_HEIGHT = 22;
-  const ORDER_NOTE_HEIGHT = 14;
-  const ORDER_TABLE_HEADER_HEIGHT = 16;
-  const ORDER_LINE_HEIGHT = 18;
-  const PAGE_FOOTER_HEIGHT = 18;
-  const COLUMN_TOLERANCE = 4;
-  const AVAILABLE_COLUMN_HEIGHT = PAGE_HEIGHT - PAGE_HEADER_HEIGHT - PAGE_FOOTER_HEIGHT;
+  const PAGE_SAFETY_MARGIN = 12;
   const SUMMARY_GAP_HEIGHT = 12;
+  const SUMMARY_BLOCK_GAP = 10;
+
+  function getPrintPageHeaderHtml(pageNumber) {
+    return `<div class="print-page-header">
+      <div style="font-weight:700;font-size:14px;text-transform:uppercase;">NORBALAT — ${titoloTipo} ${formatDate(data)}${giriSel ? ' · ' + giriSel.map(g=>g.toUpperCase()).join(', ') : ''}</div>
+      <div style="font-size:11px;color:#666;">Pagina ${pageNumber}</div>
+    </div>`;
+  }
+
+  function getPrintPageFooterHtml() {
+    return `<div class="print-page-footer">Ordini: <b>${totOrdini}</b> · Righe prodotto: <b>${totLinee}</b> · ${printTimestamp}</div>`;
+  }
+
+  function getReportMeasureRoot() {
+    let root = document.getElementById('report-print-measure-root');
+    if (root) return root;
+    root = document.createElement('div');
+    root.id = 'report-print-measure-root';
+    root.setAttribute('aria-hidden', 'true');
+    root.style.position = 'fixed';
+    root.style.left = '-10000px';
+    root.style.top = '0';
+    root.style.width = '210mm';
+    root.style.visibility = 'hidden';
+    root.style.pointerEvents = 'none';
+    root.style.zIndex = '-1';
+    document.body.appendChild(root);
+    return root;
+  }
+
+  function renderReportMeasureShell({ bodyHtml = '', columnCount = FIXED_COLUMN_COUNT, fullWidth = false, pageNumber = 999 } = {}) {
+    const safeColumnCount = Math.max(1, Number(columnCount || 1));
+    const columnsHtml = Array.from({ length: safeColumnCount }, (_, idx) =>
+      `<div class="print-column"${idx === 0 ? ' data-measure-slot="1"' : ''}>${idx === 0 ? bodyHtml : ''}</div>`
+    ).join('');
+    return `
+      <div style="width:210mm;min-height:297mm;padding:8mm;background:#fff;font-family:Arial,sans-serif;font-size:12px;color:#1a1814;display:flex;flex-direction:column;">
+        ${getPrintPageHeaderHtml(pageNumber)}
+        <div class="print-page-body" style="display:flex;flex-direction:column;gap:12px;min-height:0;">
+          ${fullWidth
+            ? `<div data-measure-slot="1">${bodyHtml}</div>`
+            : `<div class="print-columns print-columns-${safeColumnCount}">${columnsHtml}</div>`}
+        </div>
+        ${getPrintPageFooterHtml()}
+      </div>`;
+  }
+
+  // Misura un blocco usando la stessa larghezza e gli stessi stili della stampa.
+  function measureReportBlock(html, { columnCount = FIXED_COLUMN_COUNT, fullWidth = false } = {}) {
+    const root = getReportMeasureRoot();
+    root.innerHTML = `<style>
+      * { box-sizing: border-box; }
+      .print-page-header {
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-end;
+        gap:12px;
+        border-bottom:2px solid #333;
+        padding-bottom:6px;
+        margin-bottom:8px;
+      }
+      .print-page-body { display:flex; flex-direction:column; gap:12px; min-height:0; }
+      .print-columns { display:grid; gap:10px; align-items:start; }
+      .print-columns-1 { grid-template-columns:minmax(0,1fr); }
+      .print-columns-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .print-columns-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+      .print-column { min-width:0; }
+      .print-page-footer {
+        margin-top:auto;
+        padding-top:6px;
+        border-top:1px solid #ddd;
+        text-align:right;
+        font-size:10px;
+        color:#666;
+      }
+      .print-giro-block { page-break-inside:avoid; break-inside:avoid; }
+      .print-order-block { page-break-inside:avoid; break-inside:avoid; }
+      .print-summary-block { page-break-inside:avoid; break-inside:avoid; }
+    </style>${renderReportMeasureShell({ bodyHtml: html, columnCount, fullWidth })}`;
+    const slot = root.querySelector('[data-measure-slot="1"]');
+    if (!slot) return 0;
+    return Math.ceil(slot.getBoundingClientRect().height);
+  }
+
+  function measureReportPageChrome() {
+    const root = getReportMeasureRoot();
+    root.innerHTML = `<style>
+      * { box-sizing: border-box; }
+      .print-page-header {
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-end;
+        gap:12px;
+        border-bottom:2px solid #333;
+        padding-bottom:6px;
+        margin-bottom:8px;
+      }
+      .print-page-footer {
+        margin-top:auto;
+        padding-top:6px;
+        border-top:1px solid #ddd;
+        text-align:right;
+        font-size:10px;
+        color:#666;
+      }
+    </style>
+    <div style="width:210mm;min-height:297mm;padding:8mm;background:#fff;font-family:Arial,sans-serif;font-size:12px;color:#1a1814;display:flex;flex-direction:column;">
+      ${getPrintPageHeaderHtml(999)}
+      <div style="flex:1;min-height:0;"></div>
+      ${getPrintPageFooterHtml()}
+    </div>`;
+    const header = root.querySelector('.print-page-header');
+    const footer = root.querySelector('.print-page-footer');
+    const headerHeight = Math.ceil(header?.getBoundingClientRect().height || 0);
+    const footerHeight = Math.ceil(footer?.getBoundingClientRect().height || 0);
+    return {
+      headerHeight,
+      footerHeight,
+      bodyHeight: Math.max(0, PAGE_HEIGHT - headerHeight - footerHeight - PAGE_SAFETY_MARGIN),
+    };
+  }
 
   function buildOrderSegments(order) {
     const cl = getCliente(order.clienteId);
@@ -10539,7 +10618,7 @@ function updatePDFPreview() {
         <span style="display:block;min-height:14px;border-bottom:1px solid #999;padding-bottom:1px;">&nbsp;</span>
         <span style="display:block;min-height:14px;border-bottom:1px solid #999;padding-bottom:1px;">&nbsp;</span>
       </div>`;
-      return { html, height: ORDER_LINE_HEIGHT };
+      return { html };
     });
     return {
       clientName: cl.nome,
@@ -10564,6 +10643,48 @@ function updatePDFPreview() {
     </div>`;
   }
 
+  function buildGiroHeaderHtml(stateItem) {
+    return `<div style="background:#f0f4f0;padding:6px 10px;margin-bottom:8px;border-radius:4px;border-left:3px solid #2e7d32;">
+      <div style="font-weight:700;font-size:13px;text-transform:uppercase;">${escapeHtml(stateItem.giro)}${stateItem.pageCount === 0 ? '' : ' <span style="font-weight:400;font-size:10px;color:#666;">(CONTINUA)</span>'}</div>
+      ${stateItem.autista ? `<div style="font-size:11px;color:#555;">👤 ${escapeHtml(stateItem.autista)}</div>` : ''}
+      <div style="font-size:11px;color:#777;">${stateItem.orderCount} ordini</div>
+    </div>`;
+  }
+
+  function buildReportCagliataItems(reportOrdini) {
+    const totals = new Map();
+    (reportOrdini || []).forEach(o => {
+      (o.linee || []).forEach(l => {
+        const p = l.prodId ? getProdotto(l.prodId) : null;
+        if (!p || String(p.categoria || '').trim().toUpperCase() !== 'CAGLIATA') return;
+        const key = `${p.codice || ''}||${p.nome || ''}`;
+        const entry = totals.get(key) || { nome: p.nome || p.codice || 'Cagliata', pedane: 0, pezzi: 0 };
+        const qty = Number(l.qty || 0);
+        if (!Number.isFinite(qty) || qty <= 0) return;
+        const um = String(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi')).trim().toLowerCase();
+        if (l.isPedana || um === 'pedana' || um === 'pedane') entry.pedane += qty;
+        else entry.pezzi += qty;
+        totals.set(key, entry);
+      });
+    });
+    return Array.from(totals.values())
+      .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' }));
+  }
+
+  function buildCagliataChunkHtml(items, continued = false) {
+    if (!items.length) return '';
+    const parts = items.map(entry => {
+      const chunks = [];
+      if (entry.pedane > 0) chunks.push(`${Number(entry.pedane).toFixed(2).replace(/\.00$/, '')} ${entry.pedane === 1 ? 'PEDANA' : 'PEDANE'}`);
+      if (entry.pezzi > 0) chunks.push(`${Number(entry.pezzi).toFixed(2).replace(/\.00$/, '')} ${entry.pezzi === 1 ? 'PEZZO' : 'PEZZI'}`);
+      return `<div style="padding:4px 0;border-bottom:1px dotted #ddd;"><b>${escapeHtml(entry.nome)}</b> ${chunks.join(' + ')}</div>`;
+    }).join('');
+    return `<div class="print-summary-block" style="font-size:11px;color:#333;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px;text-transform:uppercase;">Cagliate da uscire dalla cella${continued ? ' <span style="font-weight:400;font-size:10px;color:#666;">(CONTINUA)</span>' : ''}</div>
+      <div>${parts}</div>
+    </div>`;
+  }
+
   function createGiroState(giroName, giroOrders, autistaName) {
     return {
       giro: giroName,
@@ -10580,26 +10701,56 @@ function updatePDFPreview() {
     return stateItem.segmentIndex < stateItem.segments.length;
   }
 
-  function renderGiroPageChunk(stateItem, availableHeight) {
-    let remaining = availableHeight - COLUMN_HEADER_HEIGHT;
-    let html = `<div style="background:#f0f4f0;padding:6px 10px;margin-bottom:8px;border-radius:4px;border-left:3px solid #2e7d32;">
-      <div style="font-weight:700;font-size:13px;text-transform:uppercase;">${escapeHtml(stateItem.giro)}${stateItem.pageCount === 0 ? '' : ' <span style="font-weight:400;font-size:10px;color:#666;">(CONTINUA)</span>'}</div>
-      ${stateItem.autista ? `<div style="font-size:11px;color:#555;">👤 ${escapeHtml(stateItem.autista)}</div>` : ''}
-      <div style="font-size:11px;color:#777;">${stateItem.orderCount} ordini</div>
-    </div>`;
+  function findFittingSliceLength(maxCount, buildHtml, availableHeight, measureOptions) {
+    if (maxCount <= 0 || availableHeight <= 0) return { count: 0, height: 0 };
+    let low = 1;
+    let high = maxCount;
+    let bestCount = 0;
+    let bestHeight = 0;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const html = buildHtml(mid);
+      const height = measureReportBlock(html, measureOptions);
+      if (height <= availableHeight) {
+        bestCount = mid;
+        bestHeight = height;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return { count: bestCount, height: bestHeight };
+  }
+
+  function renderGiroPageChunk(stateItem, availableHeight, columnCount) {
+    const headerHtml = buildGiroHeaderHtml(stateItem);
+    const headerHeight = measureReportBlock(headerHtml, { columnCount });
+    let usedHeight = headerHeight;
+    let html = headerHtml;
+    let placedAnyChunk = false;
 
     while (stateItem.segmentIndex < stateItem.segments.length) {
       const segment = stateItem.segments[stateItem.segmentIndex];
-      const noteHeight = segment.note ? ORDER_NOTE_HEIGHT : 0;
-      const fixedHeight = ORDER_HEADER_HEIGHT + noteHeight + ORDER_TABLE_HEADER_HEIGHT;
-      const usableForLines = remaining - fixedHeight - COLUMN_TOLERANCE;
-      if (usableForLines < ORDER_LINE_HEIGHT) break;
-      const linesPerChunk = Math.max(1, Math.floor(usableForLines / ORDER_LINE_HEIGHT));
-      const lineSlice = segment.lines.slice(stateItem.lineIndex, stateItem.lineIndex + linesPerChunk);
-      if (!lineSlice.length) break;
-      html += buildOrderChunkHtml(segment, lineSlice, stateItem.lineIndex > 0);
-      remaining -= fixedHeight + (lineSlice.length * ORDER_LINE_HEIGHT) + 4;
-      stateItem.lineIndex += lineSlice.length;
+      const remainingLines = segment.lines.slice(stateItem.lineIndex);
+      if (!remainingLines.length) {
+        stateItem.segmentIndex += 1;
+        stateItem.lineIndex = 0;
+        continue;
+      }
+      const remainingHeight = availableHeight - usedHeight;
+      const buildChunk = count => buildOrderChunkHtml(segment, remainingLines.slice(0, count), stateItem.lineIndex > 0);
+      let fit = findFittingSliceLength(remainingLines.length, buildChunk, remainingHeight, { columnCount });
+      if (!fit.count) {
+        if (placedAnyChunk) break;
+        fit = {
+          count: 1,
+          height: measureReportBlock(buildChunk(1), { columnCount }),
+        };
+      }
+      html += buildChunk(fit.count);
+      usedHeight += fit.height;
+      placedAnyChunk = true;
+      stateItem.lineIndex += fit.count;
       if (stateItem.lineIndex >= segment.lines.length) {
         stateItem.segmentIndex += 1;
         stateItem.lineIndex = 0;
@@ -10607,66 +10758,88 @@ function updatePDFPreview() {
     }
 
     stateItem.pageCount += 1;
-    return {
-      html,
-      usedHeight: availableHeight - remaining,
-    };
+    return { html, usedHeight };
   }
 
-  function paginateMagazzinoPages({ introHeight = 0 } = {}) {
+  function paginateReportBlocks() {
+    const pageChrome = measureReportPageChrome();
+    const availableBodyHeight = pageChrome.bodyHeight;
     const giroStates = giri.map(g => createGiroState(g, giriMap[g] || [], autistaGiro(g)));
     const pages = [];
     for (let batchStart = 0; batchStart < giroStates.length; batchStart += FIXED_COLUMN_COUNT) {
       const batchStates = giroStates.slice(batchStart, batchStart + FIXED_COLUMN_COUNT);
-      let pageInBatch = 0;
       while (batchStates.some(isGiroStateActive)) {
-        const columnAvailableHeight = AVAILABLE_COLUMN_HEIGHT - (pages.length === 0 ? introHeight : 0);
         const columns = [];
         const activeBatchStates = batchStates.filter(isGiroStateActive);
+        const columnCount = Math.max(1, activeBatchStates.length);
         for (const stateItem of activeBatchStates) {
-          const chunk = renderGiroPageChunk(stateItem, columnAvailableHeight);
+          const chunk = renderGiroPageChunk(stateItem, availableBodyHeight, columnCount);
           columns.push({ giro: stateItem.giro, html: chunk.html, usedHeight: chunk.usedHeight });
         }
         pages.push({
-          columnCount: Math.max(1, columns.length),
+          columnCount,
           columns,
           maxUsedHeight: Math.max(...columns.map(col => Number(col.usedHeight || 0)), 0),
-          batchIndex: Math.floor(batchStart / FIXED_COLUMN_COUNT),
-          pageInBatch,
+          tailBlocks: [],
         });
-        pageInBatch += 1;
       }
+    }
+    const cagliataItems = buildReportCagliataItems(ordini);
+    let cagliataIndex = 0;
+    while (cagliataIndex < cagliataItems.length) {
+      let page = pages[pages.length - 1];
+      if (!page) {
+        page = { columnCount: 0, columns: [], maxUsedHeight: 0, tailBlocks: [] };
+        pages.push(page);
+      }
+      const gapBefore = page.tailBlocks.length
+        ? SUMMARY_BLOCK_GAP
+        : (page.columns.length ? SUMMARY_GAP_HEIGHT : 0);
+      const remainingHeight = availableBodyHeight - page.maxUsedHeight - gapBefore;
+      const remainingItems = cagliataItems.slice(cagliataIndex);
+      const buildChunk = count => buildCagliataChunkHtml(remainingItems.slice(0, count), cagliataIndex > 0);
+      let fit = findFittingSliceLength(remainingItems.length, buildChunk, remainingHeight, { fullWidth: true });
+      if (!fit.count) {
+        page = { columnCount: 0, columns: [], maxUsedHeight: 0, tailBlocks: [] };
+        pages.push(page);
+        fit = findFittingSliceLength(remainingItems.length, buildChunk, availableBodyHeight, { fullWidth: true });
+        if (!fit.count) {
+          fit = {
+            count: 1,
+            height: measureReportBlock(buildChunk(1), { fullWidth: true }),
+          };
+        }
+      }
+      const html = buildChunk(fit.count);
+      page.tailBlocks.push({ html, gapBefore: page.tailBlocks.length ? SUMMARY_BLOCK_GAP : (page.columns.length ? SUMMARY_GAP_HEIGHT : 0) });
+      page.maxUsedHeight += (page.tailBlocks[page.tailBlocks.length - 1].gapBefore || 0) + fit.height;
+      cagliataIndex += fit.count;
     }
     return pages;
   }
 
-  const cagliataSummary = buildReportCagliataSummary(ordini);
-  let summaryAtTop = false;
-  let pages = paginateMagazzinoPages();
-  if (cagliataSummary.html && pages.length) {
-    const lastPage = pages[pages.length - 1];
-    const remainingOnLastPage = AVAILABLE_COLUMN_HEIGHT - Number(lastPage.maxUsedHeight || 0);
-    if (remainingOnLastPage < (cagliataSummary.height + SUMMARY_GAP_HEIGHT)) {
-      summaryAtTop = true;
-      pages = paginateMagazzinoPages({ introHeight: cagliataSummary.height + SUMMARY_GAP_HEIGHT });
-    }
-  }
-
-  const pagesHtml = pages.map((page, pageIndex) => `
+  const pages = paginateReportBlocks();
+  const pagesHtml = pages.map((page, pageIndex) => {
+    const columnsHtml = page.columns.length
+      ? `<div class="print-columns print-columns-${page.columnCount}">
+          ${page.columns.map(col => `<div class="print-column">${col.html}</div>`).join('')}
+        </div>`
+      : '';
+    const tailBlocksHtml = (page.tailBlocks || []).map(block =>
+      `<div style="${block.gapBefore ? `margin-top:${block.gapBefore}px;` : ''}">${block.html}</div>`
+    ).join('');
+    return `
     <section class="print-page">
-      <div class="print-page-header">
-        <div style="font-weight:700;font-size:14px;text-transform:uppercase;">NORBALAT — ${titoloTipo} ${formatDate(data)}${giriSel ? ' · ' + giriSel.map(g=>g.toUpperCase()).join(', ') : ''}</div>
-        <div style="font-size:11px;color:#666;">Pagina ${pageIndex + 1}</div>
+      ${getPrintPageHeaderHtml(pageIndex + 1)}
+      <div class="print-page-body">
+        ${columnsHtml}
+        ${tailBlocksHtml}
       </div>
-      ${summaryAtTop && pageIndex === 0 && cagliataSummary.html ? `<div style="margin-bottom:${SUMMARY_GAP_HEIGHT}px;">${cagliataSummary.html}</div>` : ''}
-      <div class="print-columns print-columns-${page.columnCount}">
-        ${page.columns.map(col => `<div class="print-column">${col.html}</div>`).join('')}
-      </div>
-      ${!summaryAtTop && cagliataSummary.html && pageIndex === pages.length - 1 ? `<div style="margin-top:${SUMMARY_GAP_HEIGHT}px;">${cagliataSummary.html}</div>` : ''}
-      <div class="print-page-footer">Ordini: <b>${totOrdini}</b> · Righe prodotto: <b>${totLinee}</b> · ${printTimestamp}</div>
-    </section>`).join('');
+      ${getPrintPageFooterHtml()}
+    </section>`;
+  }).join('');
 
-  preview.innerHTML = `<div class="print-document" data-fixed-columns="${FIXED_COLUMN_COUNT}" data-summary-position="${summaryAtTop ? 'top' : 'bottom'}">${pagesHtml}</div>`;
+  preview.innerHTML = `<div class="print-document" data-fixed-columns="${FIXED_COLUMN_COUNT}" data-pagination-mode="measured">${pagesHtml}</div>`;
 }
 
 function stampaPDFGiornaliero() {
@@ -10703,7 +10876,8 @@ function stampaPDFGiornaliero() {
         padding-bottom: 6px;
         margin-bottom: 8px;
       }
-      .print-columns { display: grid; gap: 10px; flex: 1; align-items: start; }
+      .print-page-body { display:flex; flex-direction:column; gap:12px; min-height:0; }
+      .print-columns { display: grid; gap: 10px; align-items: start; }
       .print-columns-1 { grid-template-columns: minmax(0, 1fr); }
       .print-columns-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .print-columns-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -10718,6 +10892,7 @@ function stampaPDFGiornaliero() {
       }
       .print-giro-block { page-break-inside: avoid; break-inside: avoid; }
       .print-order-block { page-break-inside: avoid; break-inside: avoid; }
+      .print-summary-block { page-break-inside: avoid; break-inside: avoid; }
       @media print {
         @page { margin: 8mm; size: A4 portrait; }
         html, body { margin: 0; padding: 0; }
@@ -10730,8 +10905,10 @@ function stampaPDFGiornaliero() {
           padding: 0;
           box-shadow: none;
         }
+        .print-page-body { gap: 12px; }
         .print-giro-block { page-break-inside: avoid; break-inside: avoid; }
         .print-order-block { page-break-inside: avoid; break-inside: avoid; }
+        .print-summary-block { page-break-inside: avoid; break-inside: avoid; }
       }
     </style>
   </head><body>${content}</body></html>`);
