@@ -84,6 +84,21 @@ const acState = {
 };
 window.acState = acState;
 
+function normalizeClienteGiro(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getClienteAutocompleteGiri() {
+  const configured = (state.giriCalendario || [])
+    .map(g => String(g.giro || '').trim())
+    .filter(Boolean);
+  const usedByClienti = clientiOrdinabili()
+    .map(c => String(c.giro || '').trim())
+    .filter(Boolean);
+  const all = [...new Set([...configured, ...usedByClienti])];
+  return [...all].sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' })).concat(['']);
+}
+
 function acHighlight(text, query) {
   if (!query) return text;
   const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
@@ -155,11 +170,12 @@ function acRender(type) {
     const q = acState['cat-cliente'].query;
     const dd = document.getElementById('ac-cat-cliente-dd');
     if (!dd) return;
-    const giri = ['bari nord','bari/foggia','murgia','taranto','lecce','lecce est','valle itria','calabria','foggia','diretto','stef','variabile',''];
+    const giri = getClienteAutocompleteGiri();
     let html = '';
     let totalShown = 0;
     giri.forEach(g => {
-      let gruppo = clientiOrdinabili().filter(c => c.giro === g);
+      const giroNorm = normalizeClienteGiro(g);
+      let gruppo = clientiOrdinabili().filter(c => normalizeClienteGiro(c.giro) === giroNorm);
       if (q) gruppo = gruppo.filter(c => c.nome.toLowerCase().includes(q) || (c.alias || '').toLowerCase().includes(q) || c.localita.toLowerCase().includes(q));
       if (!gruppo.length) return;
       html += `<div class="ac-group-label">${g ? g.toUpperCase() : 'NON ASSEGNATO'}</div>`;
@@ -193,12 +209,13 @@ function acRender(type) {
   const q = acState.cliente.query;
   const dd = document.getElementById('ac-cliente-dd');
 
-  const giri = ['bari nord','bari/foggia','murgia','taranto','lecce','lecce est','valle itria','calabria','foggia','diretto','stef','variabile',''];
+  const giri = getClienteAutocompleteGiri();
   let html = '';
   let totalShown = 0;
 
   giri.forEach(g => {
-    let gruppo = clientiOrdinabili().filter(c => c.giro === g);
+    const giroNorm = normalizeClienteGiro(g);
+    let gruppo = clientiOrdinabili().filter(c => normalizeClienteGiro(c.giro) === giroNorm);
     if (q) gruppo = gruppo.filter(c =>
       c.nome.toLowerCase().includes(q) ||
       (c.alias || '').toLowerCase().includes(q) ||
