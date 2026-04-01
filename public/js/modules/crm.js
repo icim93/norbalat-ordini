@@ -139,6 +139,29 @@
     if (convertBtn) convertBtn.style.display = (!window.state.crmLeadMode && isProspect(cliente)) ? '' : 'none';
   }
 
+  function addRecurringFollowup(dateStr, value, unit) {
+    const base = String(dateStr || '').slice(0, 10);
+    const step = Number(value || 0);
+    if (!base || !Number.isFinite(step) || step <= 0 || !unit) return '';
+    const d = new Date(`${base}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return '';
+    if (unit === 'mesi') d.setMonth(d.getMonth() + step);
+    else d.setDate(d.getDate() + step);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function prefillRecurringFollowupFromLast() {
+    const last = Array.isArray(window.state.crmEventi) && window.state.crmEventi.length ? window.state.crmEventi[0] : null;
+    if (!last?.followup_date || !last?.followup_repeat_value || !last?.followup_repeat_unit) return;
+    const nextDate = addRecurringFollowup(last.followup_date, last.followup_repeat_value, last.followup_repeat_unit);
+    const fup = document.getElementById('crm-followup-date');
+    const repeatValue = document.getElementById('crm-followup-repeat-value');
+    const repeatUnit = document.getElementById('crm-followup-repeat-unit');
+    if (fup && !fup.value) fup.value = nextDate;
+    if (repeatValue && !repeatValue.value) repeatValue.value = String(last.followup_repeat_value || '');
+    if (repeatUnit && !repeatUnit.value) repeatUnit.value = String(last.followup_repeat_unit || '');
+  }
+
   async function openCrmCliente(clienteId) {
     window.state.crmLeadMode = false;
     window.state.crmClienteId = clienteId;
@@ -156,6 +179,7 @@
       window.showToast(e.message, 'warning');
     }
     renderCrmEventiTable();
+    prefillRecurringFollowupFromLast();
     window.openModal('modal-crm-cliente');
   }
 
@@ -313,6 +337,10 @@
       const crm = window.state.crmSummary?.[c.id];
       const crmText = [crm?.richiesta, crm?.offerta].filter(Boolean).join(' · ');
       const due = crm?.followup_date && String(crm.followup_date).slice(0, 10) <= window.today();
+      const repeatText = crm?.followup_repeat_value && crm?.followup_repeat_unit
+        ? `Ogni ${window.escapeHtml(String(crm.followup_repeat_value))} ${window.escapeHtml(crm.followup_repeat_unit)}`
+        : '';
+      const contattoTipo = c.onboardingContattoTipo || crm?.contatto_tipo || '';
       return `
         <tr class="${due ? 'table-row-critical' : ''}">
           <td>
@@ -328,10 +356,10 @@
               </div>
             </div>
           </td>
-          <td>${window.escapeHtml(c.contattoNome || '-')}${c.telefono ? `<div class="table-subline">${window.escapeHtml(c.telefono)}</div>` : ''}${c.localita ? `<div class="table-subline">${window.escapeHtml(c.localita)}</div>` : ''}</td>
+          <td>${window.escapeHtml(c.contattoNome || '-')}${c.telefono ? `<div class="table-subline">${window.escapeHtml(c.telefono)}</div>` : ''}${contattoTipo ? `<div class="table-subline">Canale: ${window.escapeHtml(contattoTipo)}</div>` : ''}${c.localita ? `<div class="table-subline">${window.escapeHtml(c.localita)}</div>` : ''}</td>
           <td>${crm?.created_at ? window.formatDateTime(crm.created_at) : '<span style="color:var(--text3)">-</span>'}</td>
           <td>${crmText ? window.escapeHtml(crmText) : '<span style="color:var(--text3)">Nessun dettaglio</span>'}</td>
-          <td>${crm?.followup_date ? `<span class="badge ${due ? 'badge-red' : 'badge-orange'}">${window.escapeHtml(fmtDate(crm.followup_date))}</span>` : '<span style="color:var(--text3)">-</span>'}</td>
+          <td>${crm?.followup_date ? `<span class="badge ${due ? 'badge-red' : 'badge-orange'}">${window.escapeHtml(fmtDate(crm.followup_date))}</span>${repeatText ? `<div class="table-subline">${repeatText}</div>` : ''}` : '<span style="color:var(--text3)">-</span>'}</td>
           <td>
             <div class="table-actions">
               <button class="btn btn-outline btn-sm" onclick="openCrmCliente(${c.id})">Apri</button>

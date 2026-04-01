@@ -702,6 +702,31 @@
     color: var(--text3);
     font-size: 13px;
   }
+  .listino-composer-preview {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f3f8fc 100%);
+    padding: 14px;
+  }
+  .listino-composer-preview h4 {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  .listino-composer-preview-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .listino-composer-preview-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: #fff;
+    border: 1px solid var(--border);
+    font-size: 12px;
+  }
   @media (max-width: 1180px) {
     .listini-rule-row {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4464,6 +4489,9 @@
         <div class="field form-full" id="ls-prodotti-multi-wrap">
           <label>Replica la stessa logica su altri prodotti (opzionale)</label>
           <select id="ls-prodotti-multi" multiple style="min-height:110px;"></select>
+        </div>
+        <div class="field form-full">
+          <div class="listino-composer-preview" id="ls-composer-preview"></div>
         </div>
         <div class="field">
           <label>Valido dal</label>

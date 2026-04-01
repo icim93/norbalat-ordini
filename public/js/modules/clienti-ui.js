@@ -148,6 +148,8 @@ function renderClientiTable() {
           </div>
           <span style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">${progress}%</span>
         </div>
+        ${c.onboardingContattoTipo ? `<div class="table-subline">Contatto: ${escapeHtml(c.onboardingContattoTipo)}</div>` : ''}
+        <div class="table-subline">Fase: ${escapeHtml(onboardingLabel)}${checklistCount ? ` · checklist ${checklistCount}/3` : ''}</div>
         ${crm ? `<div class="table-subline">CRM: ${escapeHtml(crm.esito || crm.stato_cliente || crm.tipo || 'aggiornato')}${crmFollowup ? ` · FU ${crmFollowup}` : ''}</div>` : ''}
       </td>
       <td>

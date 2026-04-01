@@ -121,6 +121,7 @@
     if (clienteWrap) clienteWrap.style.display = needClient ? '' : 'none';
     if (clientiMultiWrap) clientiMultiWrap.style.display = (!editingListinoId && needClient) ? '' : 'none';
     if (giroWrap) giroWrap.style.display = (scope === 'giro' || scope === 'giro_cliente') ? '' : 'none';
+    refreshListinoComposerPreview();
   }
 
   function onListinoModeChange() {
@@ -133,6 +134,7 @@
     sh('ls-markup-wrap', mode === 'base_markup');
     sh('ls-discount-wrap', mode === 'discount_pct');
     sh('ls-final-wrap', mode === 'final_price');
+    refreshListinoComposerPreview();
   }
 
   function listinoScopeLabel(l) {
@@ -169,6 +171,61 @@
       return window.eur(b * (1 + m / 100));
     }
     return 'Derivato';
+  }
+
+  function getListinoComposerState() {
+    const prodottoId = document.getElementById('ls-prodotto')?.value ? parseInt(document.getElementById('ls-prodotto').value, 10) : null;
+    const prodottiExtra = [...document.querySelectorAll('#ls-prodotti-multi option:checked')].map(o => parseInt(o.value, 10)).filter(Number.isFinite);
+    const prodottoIds = [...new Set([prodottoId, ...prodottiExtra].filter(Number.isFinite))];
+    const scope = document.getElementById('ls-scope')?.value || 'all';
+    const mode = document.getElementById('ls-mode')?.value || 'base_markup';
+    const clienteId = document.getElementById('ls-cliente')?.value ? parseInt(document.getElementById('ls-cliente').value, 10) : null;
+    const excludedClientIds = [...document.querySelectorAll('#ls-clienti-excluded option:checked')].map(o => parseInt(o.value, 10)).filter(Number.isFinite);
+    const giro = (document.getElementById('ls-giro')?.value || '').trim();
+    const basePrice = document.getElementById('ls-base')?.value !== '' ? parseFloat(document.getElementById('ls-base').value) : null;
+    const markupPct = document.getElementById('ls-markup')?.value !== '' ? parseFloat(document.getElementById('ls-markup').value) : 0;
+    const finalPrice = document.getElementById('ls-final')?.value !== '' ? parseFloat(document.getElementById('ls-final').value) : null;
+    const discountPct = document.getElementById('ls-discount')?.value !== '' ? parseFloat(document.getElementById('ls-discount').value) : 0;
+    return { prodottoIds, scope, mode, clienteId, excludedClientIds, giro, basePrice, markupPct, finalPrice, discountPct };
+  }
+
+  function refreshListinoComposerPreview() {
+    const host = document.getElementById('ls-composer-preview');
+    if (!host) return;
+    const state = getListinoComposerState();
+    const products = state.prodottoIds.map(id => window.getProdotto(id)).filter(Boolean);
+    const cliente = state.clienteId ? window.getCliente(state.clienteId) : null;
+    const target = (() => {
+      if (state.scope === 'all') return 'Tutti i clienti';
+      if (state.scope === 'giro') return `Giro ${state.giro || 'non selezionato'}`;
+      if (state.scope === 'cliente') return `Cliente ${cliente?.nome || 'non selezionato'}`;
+      return `Eccezione ${state.giro || 'giro?'} + ${cliente?.nome || 'cliente?'}`;
+    })();
+    const logic = (() => {
+      if (state.mode === 'base_markup') {
+        const base = Number.isFinite(state.basePrice) ? window.eur(state.basePrice) : 'base n.d.';
+        return `${base} + ${Number(state.markupPct || 0).toFixed(2)}%`;
+      }
+      if (state.mode === 'discount_pct') return `Sconto ${Number(state.discountPct || 0).toFixed(2)}%`;
+      return `Prezzo diretto ${window.eur(state.finalPrice)}`;
+    })();
+    host.innerHTML = `
+      <h4>Anteprima applicazione</h4>
+      <div style="font-size:12px;color:var(--text2);">Target: <strong>${window.escapeHtml(target)}</strong>${state.excludedClientIds.length ? ` · esclusi ${state.excludedClientIds.length}` : ''}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px;">Logica: <strong>${window.escapeHtml(logic)}</strong></div>
+      <div class="listino-composer-preview-list">
+        ${products.length ? products.map(p => `
+          <div class="listino-composer-preview-item">
+            <span>[${window.escapeHtml(p.codice || '')}] ${window.escapeHtml(p.nome || '')}<br><small style="color:var(--text3);">${window.escapeHtml(state.mode === 'base_markup'
+              ? `Base ${Number.isFinite(state.basePrice) ? window.eur(state.basePrice) : 'n.d.'} + ricarico ${Number(state.markupPct || 0).toFixed(2)}%`
+              : (state.mode === 'final_price' ? 'Prezzo vendita diretto' : `Sconto ${Number(state.discountPct || 0).toFixed(2)}%`))}</small></span>
+            <strong>${window.escapeHtml(state.mode === 'base_markup'
+              ? (Number.isFinite(state.basePrice) ? window.eur(state.basePrice * (1 + Number(state.markupPct || 0) / 100)) : '-')
+              : (state.mode === 'final_price' ? window.eur(state.finalPrice) : 'Derivato'))}</strong>
+          </div>
+        `).join('') : `<div style="font-size:12px;color:var(--text3);">Seleziona almeno un prodotto per vedere l'effetto della regola.</div>`}
+      </div>
+    `;
   }
 
   function getFilteredListiniRows() {
@@ -357,6 +414,7 @@
     document.getElementById('ls-note').value = '';
     onListinoScopeChange();
     onListinoModeChange();
+    refreshListinoComposerPreview();
     window.openModal('modal-listini');
   }
 
@@ -393,6 +451,7 @@
     });
     onListinoScopeChange();
     onListinoModeChange();
+    refreshListinoComposerPreview();
     window.openModal('modal-listini');
   }
 
@@ -486,6 +545,20 @@
     renderListiniGroups(rows);
   }
 
+  function initListinoComposerBindings() {
+    ['ls-prodotto', 'ls-prodotti-multi', 'ls-cliente', 'ls-clienti-multi', 'ls-clienti-excluded', 'ls-giro', 'ls-base', 'ls-markup', 'ls-discount', 'ls-final']
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (!el || el.dataset.listinoPreviewBound === '1') return;
+        const evt = (el.tagName === 'SELECT' || el.type === 'date') ? 'change' : 'input';
+        el.addEventListener(evt, refreshListinoComposerPreview);
+        if (evt !== 'change') el.addEventListener('change', refreshListinoComposerPreview);
+        el.dataset.listinoPreviewBound = '1';
+      });
+  }
+
+  initListinoComposerBindings();
+
   window.canManageListini = canManageListini;
   window.applyListinoRuleClient = applyListinoRuleClient;
   window.getListinoPrezzo = getListinoPrezzo;
@@ -505,4 +578,6 @@
   window.saveListinoEntry = saveListinoEntry;
   window.deleteListinoEntry = deleteListinoEntry;
   window.renderListiniPage = renderListiniPage;
+  window.refreshListinoComposerPreview = refreshListinoComposerPreview;
+  window.initListinoComposerBindings = initListinoComposerBindings;
 })();
