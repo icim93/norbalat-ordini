@@ -115,6 +115,10 @@ function renderClientiTable() {
     ].filter(Boolean).join(' ');
     const noteShort = c.note ? escapeHtml(c.note.substring(0, 50)) + (c.note.length > 50 ? '...' : '') : '';
     const tipo = c.classificazione ? escapeHtml(c.classificazione) : '';
+    const checklist = c.onboardingChecklist && typeof c.onboardingChecklist === 'object' ? c.onboardingChecklist : {};
+    const checklistCount = Object.values(checklist).filter(Boolean).length;
+    const progressMap = { bozza: 12, in_attesa: 35, in_verifica: 68, approvato: 100, rifiutato: 100, sospeso: 82 };
+    const progress = Math.max(progressMap[c.onboardingStato] || 20, Math.min(100, checklistCount * 25));
     return `
     <tr class="${rowClass}">
       <td>
@@ -138,6 +142,12 @@ function renderClientiTable() {
       <td><span style="font-family:'DM Mono',monospace;">EUR ${fidoTxt}</span></td>
       <td>
         <span class="badge ${onboardingBadge}">${onboardingLabel}</span>
+        <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;max-width:180px;height:7px;border-radius:999px;background:var(--surface2);overflow:hidden;">
+            <div style="height:100%;width:${progress}%;background:${c.onboardingStato === 'approvato' ? 'var(--success)' : (c.onboardingStato === 'rifiutato' ? 'var(--danger)' : 'var(--accent)')};border-radius:999px;"></div>
+          </div>
+          <span style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">${progress}%</span>
+        </div>
         ${crm ? `<div class="table-subline">CRM: ${escapeHtml(crm.esito || crm.stato_cliente || crm.tipo || 'aggiornato')}${crmFollowup ? ` · FU ${crmFollowup}` : ''}</div>` : ''}
       </td>
       <td>

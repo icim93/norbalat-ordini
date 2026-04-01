@@ -29,6 +29,7 @@
       codiceUnivoco: c.codice_univoco || c.codiceUnivoco || '',
       pec: c.pec || '',
       classificazione: c.classificazione || '',
+      onboardingContattoTipo: c.onboarding_contatto_tipo || '',
       condPagamento: c.cond_pagamento || '',
       contattoNome: c.contatto_nome || c.contattoNome || '',
       telefono: c.telefono || '',

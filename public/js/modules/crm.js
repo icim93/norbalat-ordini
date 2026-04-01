@@ -25,6 +25,15 @@
     return window.state.crmClienteId ? window.getCliente(window.state.crmClienteId) : null;
   }
 
+  function toggleCrmContattoTipoAltro() {
+    const select = document.getElementById('crm-contatto-tipo');
+    const input = document.getElementById('crm-contatto-tipo-altro');
+    if (!select || !input) return;
+    const isAltro = (select.value || '') === 'Altro';
+    input.style.display = isAltro ? '' : 'none';
+    if (!isAltro) input.value = '';
+  }
+
   function resetCrmForm(cliente) {
     const fields = {
       'crm-esito': '',
@@ -36,20 +45,35 @@
       'crm-localita': cliente?.localita || '',
       'crm-contatto-nome': cliente?.contattoNome || cliente?.nome || '',
       'crm-telefono': cliente?.telefono || '',
+      'crm-contatto-tipo': cliente?.onboardingContattoTipo || '',
+      'crm-contatto-tipo-altro': '',
       'crm-lead-nome': cliente?.nome || '',
     };
     Object.entries(fields).forEach(([id, value]) => {
       const el = document.getElementById(id);
       if (el) el.value = value;
     });
+    const contattoTipo = String(cliente?.onboardingContattoTipo || '').trim();
+    const contattoSelect = document.getElementById('crm-contatto-tipo');
+    const contattoAltro = document.getElementById('crm-contatto-tipo-altro');
+    if (contattoSelect) {
+      const standard = ['Passaggio autista', 'E-mail', 'Passaparola', 'Sito Norbalat', 'Europages'];
+      contattoSelect.value = standard.includes(contattoTipo) ? contattoTipo : (contattoTipo ? 'Altro' : '');
+    }
+    if (contattoAltro) contattoAltro.value = contattoTipo && !['Passaggio autista', 'E-mail', 'Passaparola', 'Sito Norbalat', 'Europages'].includes(contattoTipo) ? contattoTipo : '';
     const tipo = document.getElementById('crm-tipo');
     if (tipo) tipo.value = 'richiesta';
     const fup = document.getElementById('crm-followup-date');
     if (fup) fup.value = '';
+    const fupRepeatValue = document.getElementById('crm-followup-repeat-value');
+    if (fupRepeatValue) fupRepeatValue.value = '';
+    const fupRepeatUnit = document.getElementById('crm-followup-repeat-unit');
+    if (fupRepeatUnit) fupRepeatUnit.value = '';
     const pr = document.getElementById('crm-priorita');
     if (pr) pr.value = 'media';
     const incaricato = document.getElementById('crm-incaricato-user');
     if (incaricato) incaricato.value = '';
+    toggleCrmContattoTipoAltro();
   }
 
   function renderCrmCompilerMeta() {
@@ -82,8 +106,8 @@
         <td>${window.formatDateTime(e.created_at || e.createdAt)}</td>
         <td>${window.escapeHtml(e.tipo || '')}</td>
         <td>${window.escapeHtml(e.esito || '')}</td>
-        <td>${window.escapeHtml(e.stato_cliente || '-')} ${e.followup_date ? `<div style="font-size:11px;color:var(--text3);">FU ${fmtDate(e.followup_date)}</div>` : ''} <div style="margin-top:2px;">${crmPriorityBadge(e.priorita)}</div></td>
-        <td>${window.escapeHtml(e.contatto_nome || '')}${e.telefono ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">${window.escapeHtml(e.telefono)}</div>` : ''}</td>
+        <td>${window.escapeHtml(e.stato_cliente || '-')} ${e.followup_date ? `<div style="font-size:11px;color:var(--text3);">FU ${fmtDate(e.followup_date)}${e.followup_repeat_value && e.followup_repeat_unit ? ` · ogni ${window.escapeHtml(String(e.followup_repeat_value))} ${window.escapeHtml(e.followup_repeat_unit)}` : ''}</div>` : ''} <div style="margin-top:2px;">${crmPriorityBadge(e.priorita)}</div></td>
+        <td>${window.escapeHtml(e.contatto_nome || '')}${e.telefono ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">${window.escapeHtml(e.telefono)}</div>` : ''}${e.contatto_tipo ? `<div style="font-size:11px;color:var(--blue);margin-top:2px;">${window.escapeHtml(e.contatto_tipo)}</div>` : ''}</td>
         <td>${window.escapeHtml(e.richiesta || '')}${e.offerta ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">Offerta: ${window.escapeHtml(e.offerta)}</div>` : ''}${e.note ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;">${window.escapeHtml(e.note)}</div>` : ''}</td>
         <td>${window.escapeHtml(e.incaricato_user_name || '')}</td>
         <td>${window.escapeHtml(e.user_name || '')}</td>
@@ -147,6 +171,11 @@
   }
 
   function buildCrmPayload(inviaMessaggio) {
+    const contattoTipoAltro = document.getElementById('crm-contatto-tipo-altro');
+    const contattoTipoRaw = (document.getElementById('crm-contatto-tipo').value || '').trim();
+    const contattoTipo = contattoTipoRaw === 'Altro'
+      ? (contattoTipoAltro?.value || '').trim()
+      : contattoTipoRaw;
     return {
       nome: document.getElementById('crm-lead-nome').value.trim(),
       localita: document.getElementById('crm-localita').value.trim(),
@@ -159,9 +188,12 @@
       note: document.getElementById('crm-note').value.trim(),
       contatto_nome: document.getElementById('crm-contatto-nome').value.trim(),
       telefono: document.getElementById('crm-telefono').value.trim(),
+      contatto_tipo: contattoTipo,
       incaricato_user_id: parseInt(document.getElementById('crm-incaricato-user').value || '0', 10) || null,
       invia_messaggio: !!inviaMessaggio,
       followup_date: document.getElementById('crm-followup-date').value || null,
+      followup_repeat_value: parseInt(document.getElementById('crm-followup-repeat-value').value || '0', 10) || null,
+      followup_repeat_unit: document.getElementById('crm-followup-repeat-unit').value || null,
       priorita: document.getElementById('crm-priorita').value || 'media',
     };
   }
@@ -196,6 +228,7 @@
         if (idx !== -1) {
           window.state.clienti[idx].contattoNome = body.contatto_nome || window.state.clienti[idx].contattoNome || '';
           window.state.clienti[idx].telefono = body.telefono || window.state.clienti[idx].telefono || '';
+          window.state.clienti[idx].onboardingContattoTipo = body.contatto_tipo || window.state.clienti[idx].onboardingContattoTipo || '';
         }
       }
       await loadCrmSummary();
@@ -317,4 +350,5 @@
   window.saveCrmEvento = saveCrmEvento;
   window.renderCrmPage = renderCrmPage;
   window.convertCrmProspectToCliente = convertCrmProspectToCliente;
+  window.toggleCrmContattoTipoAltro = toggleCrmContattoTipoAltro;
 })();

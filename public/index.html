@@ -4394,13 +4394,9 @@
     </div>
     <div class="modal-body">
       <div class="form-row">
-        <div class="field form-full">
-          <label>Prodotto *</label>
-          <select id="ls-prodotto"></select>
-        </div>
-        <div class="field form-full" id="ls-prodotti-multi-wrap">
-          <label>Applica anche ad altri prodotti (opzionale)</label>
-          <select id="ls-prodotti-multi" multiple style="min-height:110px;"></select>
+        <div class="field form-full" style="margin-bottom:0;">
+          <label style="font-size:12px;color:var(--accent);font-weight:800;">1. Destinazione listino</label>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Scegli prima se il listino vale per tutti, per un cliente specifico o con eccezioni.</div>
         </div>
         <div class="field">
           <label>Ambito</label>
@@ -4409,14 +4405,6 @@
             <option value="giro">Tutti i clienti del giro</option>
             <option value="cliente">Cliente singolo</option>
             <option value="giro_cliente">Cliente + giro (eccezione)</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Regola prezzo</label>
-          <select id="ls-mode" onchange="onListinoModeChange()">
-            <option value="base_markup">Base + ricarico %</option>
-            <option value="discount_pct">Sconto % sul prezzo corrente</option>
-            <option value="final_price">Prezzo finale diretto</option>
           </select>
         </div>
         <div class="field" id="ls-giro-wrap" style="display:none;">
@@ -4437,6 +4425,18 @@
           <label>Escludi clienti (opzionale)</label>
           <select id="ls-clienti-excluded" multiple style="min-height:110px;"></select>
         </div>
+        <div class="field form-full" style="margin-bottom:0;margin-top:8px;">
+          <label style="font-size:12px;color:var(--accent);font-weight:800;">2. Regola prezzo</label>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Per i prodotti selezionati puoi applicare prezzo base + ricarico oppure un prezzo vendita diretto.</div>
+        </div>
+        <div class="field">
+          <label>Regola prezzo</label>
+          <select id="ls-mode" onchange="onListinoModeChange()">
+            <option value="base_markup">Prezzo base acquisto + ricarico %</option>
+            <option value="final_price">Prezzo vendita diretto</option>
+            <option value="discount_pct">Sconto % sul prezzo corrente (legacy)</option>
+          </select>
+        </div>
         <div class="field" id="ls-base-wrap">
           <label>Prezzo base</label>
           <input type="number" id="ls-base" min="0" step="0.01" placeholder="es. 10.00">
@@ -4452,6 +4452,18 @@
         <div class="field" id="ls-final-wrap" style="display:none;">
           <label>Prezzo finale</label>
           <input type="number" id="ls-final" min="0" step="0.01" placeholder="es. 9.90">
+        </div>
+        <div class="field form-full" style="margin-bottom:0;margin-top:8px;">
+          <label style="font-size:12px;color:var(--accent);font-weight:800;">3. Prodotti</label>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Il listino viene sempre creato per prodotto. Puoi selezionare un prodotto principale e, se serve, replicare la stessa logica su altri prodotti.</div>
+        </div>
+        <div class="field form-full">
+          <label>Prodotto principale *</label>
+          <select id="ls-prodotto"></select>
+        </div>
+        <div class="field form-full" id="ls-prodotti-multi-wrap">
+          <label>Replica la stessa logica su altri prodotti (opzionale)</label>
+          <select id="ls-prodotti-multi" multiple style="min-height:110px;"></select>
         </div>
         <div class="field">
           <label>Valido dal</label>
@@ -4580,12 +4592,33 @@
           <label>Follow-up</label>
           <input type="date" id="crm-followup-date">
         </div>
+        <div class="field">
+          <label>Ripeti ogni</label>
+          <div style="display:grid;grid-template-columns:90px 1fr;gap:8px;">
+            <input type="number" id="crm-followup-repeat-value" min="1" step="1" placeholder="N">
+            <select id="crm-followup-repeat-unit">
+              <option value="">Nessuna</option>
+              <option value="giorni">Giorni</option>
+              <option value="mesi">Mesi</option>
+            </select>
+          </div>
+        </div>
         <div class="field form-full">
           <label>Contatti</label>
-          <div style="display:grid;grid-template-columns:1fr 180px;gap:8px;">
+          <div style="display:grid;grid-template-columns:1fr 180px 220px;gap:8px;">
             <input type="text" id="crm-contatto-nome" placeholder="Nome contatto">
             <input type="text" id="crm-telefono" placeholder="Telefono">
+            <select id="crm-contatto-tipo" onchange="toggleCrmContattoTipoAltro()">
+              <option value="">Tipo contatto onboarding</option>
+              <option value="Passaggio autista">Passaggio autista</option>
+              <option value="E-mail">E-mail</option>
+              <option value="Passaparola">Passaparola</option>
+              <option value="Sito Norbalat">Sito Norbalat</option>
+              <option value="Europages">Europages</option>
+              <option value="Altro">Altro</option>
+            </select>
           </div>
+          <input type="text" id="crm-contatto-tipo-altro" placeholder="Descrivi il tipo di contatto" style="display:none;margin-top:8px;">
         </div>
         <div class="field form-full">
           <label>Incaricato da avvisare</label>
@@ -5141,6 +5174,14 @@
           <input type="date" id="ferie-data-fine">
         </div>
         <div class="field">
+          <label>Ora inizio</label>
+          <input type="time" id="ferie-ora-inizio">
+        </div>
+        <div class="field">
+          <label>Ora fine</label>
+          <input type="time" id="ferie-ora-fine">
+        </div>
+        <div class="field">
           <label>Tipo</label>
           <select id="ferie-tipo" onchange="onFerieTypeChange()">
             <option value="ferie">Ferie</option>
@@ -5154,6 +5195,7 @@
             <option value="programmata">Programmata</option>
             <option value="confermata">Confermata</option>
             <option value="da_approvare">Da approvare</option>
+            <option value="respinta">Respinta</option>
           </select>
         </div>
         <div class="field form-full">
@@ -8190,7 +8232,7 @@ function getFerieTipoLabel(tipo) {
 }
 
 function getFerieStatoBadge(stato) {
-  const map = { programmata: 'badge-blue', confermata: 'badge-green', da_approvare: 'badge-orange' };
+  const map = { programmata: 'badge-blue', confermata: 'badge-green', da_approvare: 'badge-orange', respinta: 'badge-red' };
   const key = String(stato || 'programmata');
   const label = key.replaceAll('_', ' ');
   return `<span class="badge ${map[key] || 'badge-gray'}">${escapeHtml(label.charAt(0).toUpperCase() + label.slice(1))}</span>`;
@@ -8613,14 +8655,113 @@ function canEditFerieItem(item = {}) {
   return Number(item.created_by) === Number(state.currentUser?.id);
 }
 
+function canApproveFerieItem() {
+  return ['admin', 'direzione'].includes(state.currentUser?.ruolo || '');
+}
+
+function getItalianHolidayRows(anchorDate = today()) {
+  const year = Number(String(anchorDate || today()).slice(0, 4)) || Number(today().slice(0, 4));
+  const easter = (() => {
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const month = Math.floor((h + l - 7 * m + 114) / 31);
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(year, month - 1, day);
+  })();
+  const nextDay = date => {
+    const d = new Date(date);
+    d.setDate(d.getDate() + 1);
+    return d;
+  };
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return [
+    ['Capodanno', `${year}-01-01`],
+    ['Epifania', `${year}-01-06`],
+    ['Pasqua', fmt(easter)],
+    ['Lunedi dell\'Angelo', fmt(nextDay(easter))],
+    ['Liberazione', `${year}-04-25`],
+    ['Festa del Lavoro', `${year}-05-01`],
+    ['Festa della Repubblica', `${year}-06-02`],
+    ['Ferragosto', `${year}-08-15`],
+    ['Ognissanti', `${year}-11-01`],
+    ['Immacolata', `${year}-12-08`],
+    ['Natale', `${year}-12-25`],
+    ['Santo Stefano', `${year}-12-26`],
+  ].map(([titolo, date], idx) => ({
+    id: `festivo-${year}-${idx}`,
+    titolo,
+    tipo: 'evento',
+    stato: 'confermata',
+    data_inizio: date,
+    data_fine: date,
+    nome: 'Calendario',
+    cognome: 'Italia',
+    utente_id: 0,
+    isHoliday: true,
+    presenza_stato: 'non_richiesta',
+  }));
+}
+
+function applyFerieSavedLocally(saved) {
+  const user = state.utenti.find(u => Number(u.id) === Number(saved.utente_id));
+  const creator = state.utenti.find(u => Number(u.id) === Number(saved.created_by));
+  const normalized = {
+    ...saved,
+    nome: saved.nome || user?.nome || '',
+    cognome: saved.cognome || user?.cognome || '',
+    ruolo: saved.ruolo || user?.ruolo || '',
+    created_by_nome: saved.created_by_nome || creator?.nome || '',
+    created_by_cognome: saved.created_by_cognome || creator?.cognome || '',
+    visibilita_ruoli: Array.isArray(saved.visibilita_ruoli) ? saved.visibilita_ruoli : [],
+    visibilita_utenti: Array.isArray(saved.visibilita_utenti) ? saved.visibilita_utenti : [],
+    visibilita_solo_creator: !!saved.visibilita_solo_creator,
+  };
+  const idx = state.ferie.findIndex(f => Number(f.id) === Number(saved.id));
+  if (idx >= 0) state.ferie[idx] = normalized;
+  else state.ferie.unshift(normalized);
+}
+
+async function setFerieDecision(id, stato) {
+  if (!canApproveFerieItem()) return;
+  try {
+    const saved = await api('PUT', `/api/ferie/${id}`, { ...(state.ferie.find(f => Number(f.id) === Number(id)) || {}), stato });
+    applyFerieSavedLocally(saved);
+    renderFeriePage();
+    showToast(`Richiesta ferie ${stato === 'confermata' ? 'confermata' : 'respinta'}`, 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore aggiornamento ferie', 'warning');
+  }
+}
+
+async function setFeriePresence(id, presenzaStato) {
+  try {
+    const saved = await api('PATCH', `/api/ferie/${id}/presenza`, { presenza_stato: presenzaStato });
+    applyFerieSavedLocally(saved);
+    renderFeriePage();
+    showToast(`Presenza evento: ${presenzaStato}`, 'success');
+  } catch (e) {
+    showToast(e.message || 'Errore conferma presenza', 'warning');
+  }
+}
+
 function buildFerieCalendarHtml(ferieRows) {
   const anchor = state.ferieCalendarAnchor || today();
   state.ferieCalendarAnchor = anchor;
-  const events = ferieRows.map(item => ({
+  const events = [...ferieRows, ...getItalianHolidayRows(anchor)].map(item => ({
     ...item,
     start: new Date(`${getFerieDateOnly(item.data_inizio)}T00:00:00`),
     end: new Date(`${getFerieDateOnly(item.data_fine)}T00:00:00`),
-    color: getFerieTypeColor(item.tipo),
+    color: item.isHoliday ? '#b45309' : getFerieTypeColor(item.tipo),
     fullName: `${item.nome || ''} ${item.cognome || ''}`.trim(),
   })).filter(item => !Number.isNaN(item.start.getTime()) && !Number.isNaN(item.end.getTime()));
   const isMese = state.ferieCalendarMode !== 'settimana';
@@ -8788,9 +8929,18 @@ function syncFerieTypeUI(forceTitle = false) {
   const titleLabel = document.getElementById('ferie-titolo-label');
   const userLabel = document.getElementById('ferie-utente-label');
   const titleInput = document.getElementById('ferie-titolo');
+  const statoSelect = document.getElementById('ferie-stato');
   const isFerie = type === 'ferie';
   if (titleLabel) titleLabel.textContent = isFerie ? 'Titolo ferie *' : 'Titolo evento *';
   if (userLabel) userLabel.textContent = isFerie ? 'Ferie di *' : 'Referente *';
+  if (statoSelect) {
+    if (isFerie && !canApproveFerieItem()) {
+      statoSelect.value = 'da_approvare';
+      statoSelect.disabled = true;
+    } else {
+      statoSelect.disabled = false;
+    }
+  }
   if (!titleInput) return;
   const selectedName = getFerieSelectedUserName();
   const suggested = isFerie
@@ -8832,6 +8982,8 @@ function openNewFerie() {
   fillFerieUsersSelect(state.currentUser?.id || '');
   document.getElementById('ferie-data-inizio').value = today();
   document.getElementById('ferie-data-fine').value = today();
+  document.getElementById('ferie-ora-inizio').value = '';
+  document.getElementById('ferie-ora-fine').value = '';
   document.getElementById('ferie-tipo').value = 'evento';
   document.getElementById('ferie-stato').value = 'programmata';
   document.getElementById('ferie-note').value = '';
@@ -8852,6 +9004,8 @@ function openEditFerie(id) {
   fillFerieUsersSelect(item.utente_id);
   document.getElementById('ferie-data-inizio').value = getFerieDateOnly(item.data_inizio);
   document.getElementById('ferie-data-fine').value = getFerieDateOnly(item.data_fine);
+  document.getElementById('ferie-ora-inizio').value = item.ora_inizio || '';
+  document.getElementById('ferie-ora-fine').value = item.ora_fine || '';
   document.getElementById('ferie-tipo').value = normalizeFerieType(item.tipo);
   document.getElementById('ferie-stato').value = item.stato || 'programmata';
   document.getElementById('ferie-note').value = item.note || '';
@@ -8866,11 +9020,14 @@ function openEditFerie(id) {
 async function saveFerie() {
   const id = Number(document.getElementById('ferie-id').value);
   const creatorOnly = !!document.getElementById('ferie-vis-solo-creator').checked;
+  const item = id ? (state.ferie || []).find(f => Number(f.id) === Number(id)) : null;
   const body = {
     titolo: document.getElementById('ferie-titolo').value.trim(),
     utente_id: Number(document.getElementById('ferie-utente').value),
     data_inizio: document.getElementById('ferie-data-inizio').value,
     data_fine: document.getElementById('ferie-data-fine').value,
+    ora_inizio: document.getElementById('ferie-ora-inizio').value || '',
+    ora_fine: document.getElementById('ferie-ora-fine').value || '',
     tipo: document.getElementById('ferie-tipo').value,
     stato: document.getElementById('ferie-stato').value,
     note: document.getElementById('ferie-note').value.trim(),
@@ -8882,31 +9039,22 @@ async function saveFerie() {
     showToast('Compila titolo, referente e periodo', 'warning');
     return;
   }
+  if (body.ora_inizio && body.ora_fine && body.ora_fine < body.ora_inizio) {
+    showToast('L\'orario fine non puo essere precedente all\'orario inizio', 'warning');
+    return;
+  }
+  if (body.tipo === 'ferie' && !id) body.stato = 'da_approvare';
+  if (body.tipo === 'ferie' && id && !canApproveFerieItem()) body.stato = item?.stato === 'confermata' ? 'confermata' : 'da_approvare';
   if (!creatorOnly && !body.visibilita_ruoli.length && !body.visibilita_utenti.length) {
     showToast('Seleziona almeno un reparto, un utente o usa "solo chi ha inserito"', 'warning');
     return;
   }
   try {
     const saved = id ? await api('PUT', `/api/ferie/${id}`, body) : await api('POST', '/api/ferie', body);
-    const user = state.utenti.find(u => Number(u.id) === Number(saved.utente_id));
-    const creator = state.utenti.find(u => Number(u.id) === Number(saved.created_by));
-    const normalized = {
-      ...saved,
-      nome: saved.nome || user?.nome || '',
-      cognome: saved.cognome || user?.cognome || '',
-      ruolo: saved.ruolo || user?.ruolo || '',
-      created_by_nome: saved.created_by_nome || creator?.nome || '',
-      created_by_cognome: saved.created_by_cognome || creator?.cognome || '',
-      visibilita_ruoli: Array.isArray(saved.visibilita_ruoli) ? saved.visibilita_ruoli : [],
-      visibilita_utenti: Array.isArray(saved.visibilita_utenti) ? saved.visibilita_utenti : [],
-      visibilita_solo_creator: !!saved.visibilita_solo_creator,
-    };
-    const idx = state.ferie.findIndex(f => Number(f.id) === Number(saved.id));
-    if (idx >= 0) state.ferie[idx] = normalized;
-    else state.ferie.unshift(normalized);
+    applyFerieSavedLocally(saved);
     closeModal('modal-ferie');
     renderFeriePage();
-    showToast('Evento calendario salvato', 'success');
+    showToast(body.tipo === 'ferie' && body.stato === 'da_approvare' ? 'Richiesta ferie inviata' : 'Evento calendario salvato', 'success');
   } catch (e) {
     showToast(e.message || 'Errore salvataggio evento', 'warning');
   }
@@ -9036,11 +9184,21 @@ function renderFeriePage() {
                     </div>
                   </div>
                 </td>
-                <td style="white-space:nowrap;font-size:12px;">${formatDate(getFerieDateOnly(item.data_inizio))}<br><span style="color:var(--text3);">→ ${formatDate(getFerieDateOnly(item.data_fine))}</span></td>
+                <td style="white-space:nowrap;font-size:12px;">${formatDate(getFerieDateOnly(item.data_inizio))}<br><span style="color:var(--text3);">→ ${formatDate(getFerieDateOnly(item.data_fine))}${item.ora_inizio || item.ora_fine ? ` · ${(item.ora_inizio || '--:--')} - ${(item.ora_fine || '--:--')}` : ''}</span></td>
                 <td style="font-weight:700;text-align:center;">${getFerieDays(item)}</td>
                 <td>${getFerieTipoBadge(item.tipo)}</td>
-                <td>${getFerieStatoBadge(item.stato)}</td>
-                <td>${canEditFerieItem(item) ? `<div style="display:flex;gap:4px;"><button class="btn btn-outline btn-sm" onclick="openEditFerie(${item.id})" title="Modifica">✏️</button><button class="btn btn-outline btn-sm" style="border-color:var(--danger);color:var(--danger);" onclick="deleteFerie(${item.id})" title="Elimina">🗑</button></div>` : '<span style="color:var(--text3);font-size:11px;">Solo lettura</span>'}</td>
+                <td>${getFerieStatoBadge(item.stato)}${item.tipo === 'evento' && item.presenza_stato && item.presenza_stato !== 'non_richiesta' ? `<div style="margin-top:4px;font-size:11px;color:var(--text3);">Presenza: ${escapeHtml(String(item.presenza_stato).replaceAll('_', ' '))}</div>` : ''}</td>
+                <td>
+                  <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                    ${canEditFerieItem(item) ? `<button class="btn btn-outline btn-sm" onclick="openEditFerie(${item.id})" title="Modifica">✏️</button>` : ''}
+                    ${canEditFerieItem(item) ? `<button class="btn btn-outline btn-sm" style="border-color:var(--danger);color:var(--danger);" onclick="deleteFerie(${item.id})" title="Elimina">🗑</button>` : ''}
+                    ${canApproveFerieItem() && item.tipo === 'ferie' && item.stato === 'da_approvare' ? `<button class="btn btn-green btn-sm" onclick="setFerieDecision(${item.id},'confermata')">Conferma</button>` : ''}
+                    ${canApproveFerieItem() && item.tipo === 'ferie' && item.stato === 'da_approvare' ? `<button class="btn btn-danger btn-sm" onclick="setFerieDecision(${item.id},'respinta')">Respinge</button>` : ''}
+                    ${item.tipo === 'evento' && Number(item.utente_id) === Number(state.currentUser?.id) && item.presenza_stato !== 'presente' ? `<button class="btn btn-green btn-sm" onclick="setFeriePresence(${item.id},'presente')">Presente</button>` : ''}
+                    ${item.tipo === 'evento' && Number(item.utente_id) === Number(state.currentUser?.id) && item.presenza_stato !== 'assente' ? `<button class="btn btn-outline btn-sm" onclick="setFeriePresence(${item.id},'assente')">Assente</button>` : ''}
+                    ${!canEditFerieItem(item) && !canApproveFerieItem() && !(item.tipo === 'evento' && Number(item.utente_id) === Number(state.currentUser?.id)) ? '<span style="color:var(--text3);font-size:11px;">Solo lettura</span>' : ''}
+                  </div>
+                </td>
               </tr>`;
             }).join('') : `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px;">Nessun evento per i filtri selezionati.</td></tr>`}
           </tbody>
@@ -9057,7 +9215,7 @@ function renderFeriePage() {
                 <div style="min-width:0;flex:1;">
                   <div style="font-weight:700;font-size:13px;color:var(--text1);">${escapeHtml(item.titolo||'Evento')}</div>
                   <div style="font-size:11px;color:var(--text2);margin-top:2px;">${escapeHtml(`${item.nome||''} ${item.cognome||''}`.trim())} · ${getFerieDays(item)} gg</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:1px;">${formatDate(getFerieDateOnly(item.data_inizio))} → ${formatDate(getFerieDateOnly(item.data_fine))}</div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:1px;">${formatDate(getFerieDateOnly(item.data_inizio))} → ${formatDate(getFerieDateOnly(item.data_fine))}${item.ora_inizio || item.ora_fine ? ` · ${(item.ora_inizio || '--:--')} - ${(item.ora_fine || '--:--')}` : ''}</div>
                 </div>
                 ${getFerieStatoBadge(item.stato)}
               </div>`;

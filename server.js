@@ -860,6 +860,7 @@ async function createSchema() {
       cond_pagamento   TEXT DEFAULT '',
       e_fornitore      BOOLEAN DEFAULT FALSE,
       classificazione  TEXT DEFAULT '',
+      onboarding_contatto_tipo TEXT DEFAULT '',
       onboarding_stato TEXT DEFAULT 'in_attesa',
       onboarding_checklist JSONB DEFAULT '{}'::jsonb,
       fido             NUMERIC DEFAULT 0,
@@ -1030,6 +1031,7 @@ async function createSchema() {
       id          SERIAL PRIMARY KEY,
       cliente_id  INTEGER NOT NULL REFERENCES clienti(id) ON DELETE CASCADE,
       tipo        TEXT NOT NULL DEFAULT 'richiesta',
+      contatto_tipo TEXT DEFAULT '',
       esito       TEXT DEFAULT '',
       stato_cliente TEXT DEFAULT '',
       contatto_nome TEXT DEFAULT '',
@@ -1041,6 +1043,8 @@ async function createSchema() {
       motivo      TEXT DEFAULT '',
       note        TEXT DEFAULT '',
       followup_date DATE,
+      followup_repeat_value INTEGER,
+      followup_repeat_unit TEXT DEFAULT '',
       priorita    TEXT DEFAULT 'media',
       user_id     INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
       user_name   TEXT NOT NULL DEFAULT 'Sistema',
@@ -1257,19 +1261,28 @@ async function createSchema() {
     ALTER TABLE doc_folders ADD COLUMN IF NOT EXISTS allowed_roles JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE doc_folders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS titolo TEXT DEFAULT '';
+    ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS ora_inizio TEXT DEFAULT '';
+    ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS ora_fine TEXT DEFAULT '';
+    ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS presenza_stato TEXT NOT NULL DEFAULT 'non_richiesta';
+    ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS presenza_note TEXT DEFAULT '';
+    ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS presenza_updated_at TIMESTAMPTZ;
     ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS visibilita_ruoli JSONB NOT NULL DEFAULT '["admin","amministrazione","direzione"]'::jsonb;
     ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS visibilita_utenti JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS visibilita_solo_creator BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE doc_files   ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT 'application/octet-stream';
     ALTER TABLE doc_files   ADD COLUMN IF NOT EXISTS size_bytes INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS stato_cliente TEXT DEFAULT '';
+    ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS contatto_tipo TEXT DEFAULT '';
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS contatto_nome TEXT DEFAULT '';
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS telefono TEXT DEFAULT '';
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS incaricato_user_id INTEGER REFERENCES utenti(id) ON DELETE SET NULL;
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS incaricato_user_name TEXT DEFAULT '';
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS followup_date DATE;
+    ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS followup_repeat_value INTEGER;
+    ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS followup_repeat_unit TEXT DEFAULT '';
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS priorita TEXT DEFAULT 'media';
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS offerta TEXT DEFAULT '';
+    ALTER TABLE clienti ADD COLUMN IF NOT EXISTS onboarding_contatto_tipo TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_nome TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_mime TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_data BYTEA;
@@ -1475,8 +1488,13 @@ async function createSchema() {
       data_inizio     DATE NOT NULL,
       data_fine       DATE NOT NULL,
       titolo          TEXT DEFAULT '',
+      ora_inizio      TEXT DEFAULT '',
+      ora_fine        TEXT DEFAULT '',
       tipo            TEXT NOT NULL DEFAULT 'ferie',
       stato           TEXT NOT NULL DEFAULT 'programmata',
+      presenza_stato  TEXT NOT NULL DEFAULT 'non_richiesta',
+      presenza_note   TEXT DEFAULT '',
+      presenza_updated_at TIMESTAMPTZ,
       note            TEXT DEFAULT '',
       visibilita_ruoli JSONB NOT NULL DEFAULT '["admin","amministrazione","direzione"]'::jsonb,
       visibilita_utenti JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -1948,7 +1966,12 @@ function normalizeCalendarEventType(raw) {
 
 function normalizeCalendarEventStatus(raw) {
   const value = String(raw || 'programmata').trim().toLowerCase();
-  return ['programmata', 'confermata', 'da_approvare'].includes(value) ? value : 'programmata';
+  return ['programmata', 'confermata', 'da_approvare', 'respinta'].includes(value) ? value : 'programmata';
+}
+
+function canApproveCalendarFerie(reqUser) {
+  const role = String(reqUser?.ruolo || '').trim();
+  return role === 'admin' || role === 'direzione';
 }
 
 function normalizeCalendarVisibility(raw = {}) {
@@ -2331,6 +2354,7 @@ const zResaPayload = z.object({
 
 const zCrmEventoPayload = z.object({
   tipo: z.string().min(1).max(80).optional().default('richiesta'),
+  contatto_tipo: z.string().max(120).optional().default(''),
   esito: z.string().max(300).optional().default(''),
   stato_cliente: z.string().max(80).optional().default(''),
   richiesta: z.string().max(2000).optional().default(''),
@@ -2342,6 +2366,8 @@ const zCrmEventoPayload = z.object({
   incaricato_user_id: z.coerce.number().int().positive().nullable().optional().default(null),
   invia_messaggio: z.coerce.boolean().optional().default(false),
   followup_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  followup_repeat_value: z.coerce.number().int().positive().nullable().optional().default(null),
+  followup_repeat_unit: z.enum(['giorni', 'mesi']).nullable().optional().default(null),
   priorita: z.string().max(20).optional().default('media'),
 });
 
@@ -2846,14 +2872,20 @@ app.post('/api/ferie', authMiddleware, async (req, res) => {
     const dataInizio = String(req.body?.data_inizio || '').trim();
     const dataFine = String(req.body?.data_fine || '').trim();
     const titolo = String(req.body?.titolo || '').trim();
+    const oraInizio = String(req.body?.ora_inizio || '').trim();
+    const oraFine = String(req.body?.ora_fine || '').trim();
     const tipo = normalizeCalendarEventType(req.body?.tipo);
-    const stato = normalizeCalendarEventStatus(req.body?.stato);
+    const requestedStatus = normalizeCalendarEventStatus(req.body?.stato);
     const note = String(req.body?.note || '').trim();
     const visibility = normalizeCalendarVisibility(req.body || {});
+    const stato = tipo === 'ferie' ? 'da_approvare' : requestedStatus;
+    const presenzaStato = tipo === 'evento' ? 'in_attesa' : 'non_richiesta';
     if (!Number.isFinite(utenteId) || utenteId <= 0) return res.status(400).json({ error: 'Referente non valido' });
     if (!titolo) return res.status(400).json({ error: 'Titolo obbligatorio' });
     if (!dataInizio || !dataFine) return res.status(400).json({ error: 'Periodo obbligatorio' });
     if (dataFine < dataInizio) return res.status(400).json({ error: 'La data fine non puo essere precedente alla data inizio' });
+    if ((oraInizio && !/^\d{2}:\d{2}$/.test(oraInizio)) || (oraFine && !/^\d{2}:\d{2}$/.test(oraFine))) return res.status(400).json({ error: 'Orario non valido' });
+    if (oraInizio && oraFine && oraFine < oraInizio) return res.status(400).json({ error: 'L\'orario fine non puo essere precedente all\'orario inizio' });
     const { rows: userRows } = await q('SELECT id FROM utenti WHERE id=$1 LIMIT 1', [utenteId]);
     if (!userRows.length) return res.status(404).json({ error: 'Referente non trovato' });
     const allowedUsers = visibility.visibilita_utenti;
@@ -2863,18 +2895,21 @@ app.post('/api/ferie', authMiddleware, async (req, res) => {
     }
     const { rows } = await q(
       `INSERT INTO ferie_dipendenti (
-         utente_id, data_inizio, data_fine, titolo, tipo, stato, note,
+         utente_id, data_inizio, data_fine, titolo, ora_inizio, ora_fine, tipo, stato, presenza_stato, note,
          visibilita_ruoli, visibilita_utenti, visibilita_solo_creator, created_by, updated_at
        )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,NOW())
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,NOW())
        RETURNING *`,
       [
         utenteId,
         dataInizio,
         dataFine,
         titolo,
+        oraInizio,
+        oraFine,
         tipo,
         stato,
+        presenzaStato,
         note,
         JSON.stringify(visibility.visibilita_ruoli),
         JSON.stringify(visibility.visibilita_utenti),
@@ -2893,8 +2928,10 @@ app.put('/api/ferie/:id', authMiddleware, async (req, res) => {
     const dataInizio = String(req.body?.data_inizio || '').trim();
     const dataFine = String(req.body?.data_fine || '').trim();
     const titolo = String(req.body?.titolo || '').trim();
+    const oraInizio = String(req.body?.ora_inizio || '').trim();
+    const oraFine = String(req.body?.ora_fine || '').trim();
     const tipo = normalizeCalendarEventType(req.body?.tipo);
-    const stato = normalizeCalendarEventStatus(req.body?.stato);
+    const requestedStatus = normalizeCalendarEventStatus(req.body?.stato);
     const note = String(req.body?.note || '').trim();
     const visibility = normalizeCalendarVisibility(req.body || {});
     if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'ID non valido' });
@@ -2902,9 +2939,22 @@ app.put('/api/ferie/:id', authMiddleware, async (req, res) => {
     if (!titolo) return res.status(400).json({ error: 'Titolo obbligatorio' });
     if (!dataInizio || !dataFine) return res.status(400).json({ error: 'Periodo obbligatorio' });
     if (dataFine < dataInizio) return res.status(400).json({ error: 'La data fine non puo essere precedente alla data inizio' });
+    if ((oraInizio && !/^\d{2}:\d{2}$/.test(oraInizio)) || (oraFine && !/^\d{2}:\d{2}$/.test(oraFine))) return res.status(400).json({ error: 'Orario non valido' });
+    if (oraInizio && oraFine && oraFine < oraInizio) return res.status(400).json({ error: 'L\'orario fine non puo essere precedente all\'orario inizio' });
     const current = await q('SELECT * FROM ferie_dipendenti WHERE id=$1 LIMIT 1', [id]);
     if (!current.rows.length) return res.status(404).json({ error: 'Evento non trovato' });
     if (!userCanManageCalendarEvent(req.user, current.rows[0])) return res.status(403).json({ error: 'Permesso negato' });
+    const currentRow = current.rows[0];
+    let stato = requestedStatus;
+    if (tipo === 'ferie' && !canApproveCalendarFerie(req.user)) {
+      stato = currentRow.stato === 'confermata' ? 'confermata' : 'da_approvare';
+    }
+    let presenzaStato = String(currentRow.presenza_stato || 'non_richiesta');
+    if (tipo === 'evento') {
+      if (!['presente', 'assente'].includes(presenzaStato)) presenzaStato = 'in_attesa';
+    } else {
+      presenzaStato = 'non_richiesta';
+    }
     const { rows: userRows } = await q('SELECT id FROM utenti WHERE id=$1 LIMIT 1', [utenteId]);
     if (!userRows.length) return res.status(404).json({ error: 'Referente non trovato' });
     const allowedUsers = visibility.visibilita_utenti;
@@ -2914,17 +2964,20 @@ app.put('/api/ferie/:id', authMiddleware, async (req, res) => {
     }
     const { rows } = await q(
       `UPDATE ferie_dipendenti
-       SET utente_id=$1, data_inizio=$2, data_fine=$3, titolo=$4, tipo=$5, stato=$6, note=$7,
-           visibilita_ruoli=$8::jsonb, visibilita_utenti=$9::jsonb, visibilita_solo_creator=$10, updated_at=NOW()
-       WHERE id=$11
+       SET utente_id=$1, data_inizio=$2, data_fine=$3, titolo=$4, ora_inizio=$5, ora_fine=$6, tipo=$7, stato=$8, presenza_stato=$9, note=$10,
+           visibilita_ruoli=$11::jsonb, visibilita_utenti=$12::jsonb, visibilita_solo_creator=$13, updated_at=NOW()
+       WHERE id=$14
        RETURNING *`,
       [
         utenteId,
         dataInizio,
         dataFine,
         titolo,
+        oraInizio,
+        oraFine,
         tipo,
         stato,
+        presenzaStato,
         note,
         JSON.stringify(visibility.visibilita_ruoli),
         JSON.stringify(visibility.visibilita_utenti),
@@ -2932,6 +2985,17 @@ app.put('/api/ferie/:id', authMiddleware, async (req, res) => {
         id,
       ]
     );
+    if (tipo === 'ferie' && ['confermata', 'respinta'].includes(stato) && String(currentRow.stato || '') !== stato) {
+      await createInternalConversation({
+        senderUser: req.user,
+        destinatarioUserId: utenteId,
+        oggetto: `Ferie ${stato === 'confermata' ? 'confermate' : 'respinte'}`,
+        testo: stato === 'confermata'
+          ? `Le ferie sono state confermate.\nPeriodo: ${dataInizio} - ${dataFine}\nTitolo: ${titolo}`
+          : `Le ferie sono state respinte.\nPeriodo: ${dataInizio} - ${dataFine}\nTitolo: ${titolo}`,
+        priorita: 'media',
+      }).catch(() => {});
+    }
     res.json(rows[0]);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -2946,6 +3010,32 @@ app.delete('/api/ferie/:id', authMiddleware, async (req, res) => {
     await q('DELETE FROM ferie_dipendenti WHERE id=$1', [id]);
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/ferie/:id/presenza', authMiddleware, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const presenzaStato = String(req.body?.presenza_stato || '').trim().toLowerCase();
+    const presenzaNote = String(req.body?.presenza_note || '').trim();
+    if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ error: 'ID non valido' });
+    if (!['presente', 'assente'].includes(presenzaStato)) return res.status(400).json({ error: 'Stato presenza non valido' });
+    const current = await q('SELECT * FROM ferie_dipendenti WHERE id=$1 LIMIT 1', [id]);
+    if (!current.rows.length) return res.status(404).json({ error: 'Evento non trovato' });
+    const row = current.rows[0];
+    if (normalizeCalendarEventType(row.tipo) !== 'evento') return res.status(400).json({ error: 'La conferma presenza vale solo per gli eventi' });
+    const canRespond = Number(row.utente_id) === Number(req.user.id) || canApproveCalendarFerie(req.user);
+    if (!canRespond) return res.status(403).json({ error: 'Permesso negato' });
+    const { rows } = await q(
+      `UPDATE ferie_dipendenti
+       SET presenza_stato=$1, presenza_note=$2, presenza_updated_at=NOW(), updated_at=NOW()
+       WHERE id=$3
+       RETURNING *`,
+      [presenzaStato, presenzaNote, id]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/clienti', authMiddleware, async (req, res) => {
@@ -3039,7 +3129,7 @@ app.post('/api/clienti/lookup-piva', authMiddleware, requirePermission('clienti:
       const r = await q(
       `INSERT INTO clienti (nome,crm_tipo,alias,localita,giro,agente_id,autista_di_giro,note,piva,codice_fiscale,codice_univoco,pec,cond_pagamento,e_fornitore,classificazione,contatto_nome,telefono,onboarding_stato,onboarding_checklist,fido,sbloccato)
          VALUES ($1,'cliente',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'in_attesa',$17::jsonb,0,FALSE)
-         RETURNING id,nome,crm_tipo,alias,localita,giro,piva,codice_fiscale,codice_univoco,pec,classificazione,cond_pagamento,e_fornitore,contatto_nome,telefono,onboarding_stato,fido,sbloccato,created_at,crm_convertito_at`,
+         RETURNING id,nome,crm_tipo,alias,localita,giro,piva,codice_fiscale,codice_univoco,pec,classificazione,cond_pagamento,e_fornitore,contatto_nome,telefono,onboarding_contatto_tipo,onboarding_stato,fido,sbloccato,created_at,crm_convertito_at`,
       [nome, alias, localita, giro, agente_id||null, autista_di_giro||null, note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, contatto_nome, telefono, JSON.stringify({})]
       );
     const u = req.user;
@@ -3102,6 +3192,7 @@ app.post('/api/clienti/:id/converti-da-crm', authMiddleware, requirePermission('
               classificazione=$14,
               contatto_nome=$15,
               telefono=$16,
+              onboarding_contatto_tipo=COALESCE(NULLIF(onboarding_contatto_tipo, ''), onboarding_contatto_tipo),
               onboarding_stato='in_attesa',
               onboarding_checklist=COALESCE(onboarding_checklist, '{}'::jsonb),
               crm_convertito_at=COALESCE(crm_convertito_at, NOW())
@@ -3181,6 +3272,28 @@ app.patch('/api/clienti/:id/onboarding', authMiddleware, requirePermission('onbo
       note: note || '',
     });
     await logDB(req.user.id, approvatore, 'Onboarding cliente', `${r.rows[0].nome} | ${old.onboarding_stato} -> ${newStato} | fido ${newFido}`);
+    const { rows: relatedUsers } = await q(
+      `SELECT DISTINCT user_id
+         FROM clienti_crm_eventi
+        WHERE cliente_id = $1
+          AND user_id IS NOT NULL
+        ORDER BY user_id DESC
+        LIMIT 1`,
+      [id]
+    );
+    const notifyUserId = Number(relatedUsers[0]?.user_id || 0) || null;
+    if (notifyUserId && ['approvato', 'rifiutato'].includes(newStato)) {
+      await createInternalConversation({
+        senderUser: req.user,
+        destinatarioUserId: notifyUserId,
+        oggetto: `Onboarding ${newStato === 'approvato' ? 'approvato' : 'rifiutato'}`,
+        testo: newStato === 'approvato'
+          ? `Il cliente ${r.rows[0].nome} e stato approvato.`
+          : `Il cliente ${r.rows[0].nome} e stato rifiutato.`,
+        clienteId: id,
+        priorita: 'media',
+      }).catch(() => {});
+    }
     res.json(r.rows[0]);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -3209,11 +3322,14 @@ app.get('/api/clienti/crm-summary', authMiddleware, async (req, res) => {
       `SELECT DISTINCT ON (e.cliente_id)
           e.cliente_id,
           e.tipo,
+          e.contatto_tipo,
           e.esito,
           e.stato_cliente,
           e.richiesta,
           e.offerta,
           e.followup_date,
+          e.followup_repeat_value,
+          e.followup_repeat_unit,
           e.priorita,
           e.created_at
        FROM clienti_crm_eventi e
@@ -3230,7 +3346,10 @@ app.post('/api/clienti/:id/crm-eventi', authMiddleware, requirePermission('clien
     if (!parsed.success) return validationError(res, parsed);
     const { rows: clientiRows } = await q(`SELECT id, nome FROM clienti WHERE id=$1 LIMIT 1`, [clienteId]);
     if (!clientiRows.length) return res.status(404).json({ error: 'Cliente non trovato' });
-    const { tipo, esito, stato_cliente, richiesta, offerta, motivo, note, contatto_nome, telefono, incaricato_user_id, invia_messaggio, followup_date, priorita } = parsed.data;
+    const {
+      tipo, contatto_tipo, esito, stato_cliente, richiesta, offerta, motivo, note, contatto_nome, telefono,
+      incaricato_user_id, invia_messaggio, followup_date, followup_repeat_value, followup_repeat_unit, priorita,
+    } = parsed.data;
     const userName = `${req.user.nome} ${req.user.cognome || ''}`.trim();
     let incaricatoUserName = '';
     if (incaricato_user_id) {
@@ -3240,11 +3359,12 @@ app.post('/api/clienti/:id/crm-eventi', authMiddleware, requirePermission('clien
     }
     const r = await q(
       `INSERT INTO clienti_crm_eventi
-        (cliente_id,tipo,esito,stato_cliente,richiesta,offerta,motivo,note,contatto_nome,telefono,incaricato_user_id,incaricato_user_name,followup_date,priorita,user_id,user_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+        (cliente_id,tipo,contatto_tipo,esito,stato_cliente,richiesta,offerta,motivo,note,contatto_nome,telefono,incaricato_user_id,incaricato_user_name,followup_date,followup_repeat_value,followup_repeat_unit,priorita,user_id,user_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
       [
         clienteId,
         String(tipo || 'richiesta'),
+        String(contatto_tipo || ''),
         String(esito || ''),
         String(stato_cliente || ''),
         String(richiesta || ''),
@@ -3256,18 +3376,21 @@ app.post('/api/clienti/:id/crm-eventi', authMiddleware, requirePermission('clien
         incaricato_user_id || null,
         incaricatoUserName,
         followup_date || null,
+        followup_repeat_value || null,
+        followup_repeat_unit || null,
         String(priorita || 'media'),
         req.user.id || null,
         userName || 'Sistema',
       ]
     );
-    if (contatto_nome || telefono) {
+    if (contatto_nome || telefono || contatto_tipo) {
       await q(
         `UPDATE clienti
             SET contatto_nome = CASE WHEN $2 <> '' THEN $2 ELSE contatto_nome END,
-                telefono = CASE WHEN $3 <> '' THEN $3 ELSE telefono END
+                telefono = CASE WHEN $3 <> '' THEN $3 ELSE telefono END,
+                onboarding_contatto_tipo = CASE WHEN $4 <> '' THEN $4 ELSE onboarding_contatto_tipo END
           WHERE id = $1`,
-        [clienteId, String(contatto_nome || '').trim(), String(telefono || '').trim()]
+        [clienteId, String(contatto_nome || '').trim(), String(telefono || '').trim(), String(contatto_tipo || '').trim()]
       );
     }
     if (invia_messaggio && incaricato_user_id) {
@@ -3276,10 +3399,12 @@ app.post('/api/clienti/:id/crm-eventi', authMiddleware, requirePermission('clien
         `Cliente: ${clientiRows[0].nome}`,
         contatto_nome ? `Contatto: ${contatto_nome}` : '',
         telefono ? `Telefono: ${telefono}` : '',
+        contatto_tipo ? `Tipo contatto: ${contatto_tipo}` : '',
         richiesta ? `Richiesta: ${richiesta}` : '',
         offerta ? `Offerta: ${offerta}` : '',
         note ? `Note: ${note}` : '',
         followup_date ? `Follow-up: ${followup_date}` : '',
+        (followup_repeat_value && followup_repeat_unit) ? `Ripetizione: ogni ${followup_repeat_value} ${followup_repeat_unit}` : '',
       ].filter(Boolean).join('\n');
       await createInternalConversation({
         senderUser: req.user,
@@ -3308,13 +3433,16 @@ app.post('/api/clienti/onboarding-lead', authMiddleware, requirePermission('clie
     const userName = `${req.user.nome} ${req.user.cognome || ''}`.trim();
     const createCliente = await q(
       `INSERT INTO clienti
-        (nome,crm_tipo,localita,contatto_nome,telefono,onboarding_stato,onboarding_checklist,fido,sbloccato,piva)
-       VALUES ($1,'prospect',$2,$3,$4,'bozza',$5::jsonb,0,FALSE,'')
+        (nome,crm_tipo,localita,contatto_nome,telefono,onboarding_contatto_tipo,onboarding_stato,onboarding_checklist,fido,sbloccato,piva)
+       VALUES ($1,'prospect',$2,$3,$4,$5,'bozza',$6::jsonb,0,FALSE,'')
        RETURNING *`,
-      [nome, localita, contattoNome, telefono, JSON.stringify({ lead: true })]
+      [nome, localita, contattoNome, telefono, String(parsed.data.contatto_tipo || ''), JSON.stringify({ lead: true })]
     );
     const cliente = createCliente.rows[0];
-    const { tipo, esito, stato_cliente, richiesta, offerta, motivo, note, incaricato_user_id, invia_messaggio, followup_date, priorita } = parsed.data;
+    const {
+      tipo, contatto_tipo, esito, stato_cliente, richiesta, offerta, motivo, note,
+      incaricato_user_id, invia_messaggio, followup_date, followup_repeat_value, followup_repeat_unit, priorita,
+    } = parsed.data;
     let incaricatoUserName = '';
     if (incaricato_user_id) {
       const { rows: incaricatoRows } = await q(`SELECT id, nome, cognome FROM utenti WHERE id=$1 LIMIT 1`, [incaricato_user_id]);
@@ -3323,12 +3451,13 @@ app.post('/api/clienti/onboarding-lead', authMiddleware, requirePermission('clie
     }
     const crm = await q(
       `INSERT INTO clienti_crm_eventi
-        (cliente_id,tipo,esito,stato_cliente,richiesta,offerta,motivo,note,contatto_nome,telefono,incaricato_user_id,incaricato_user_name,followup_date,priorita,user_id,user_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        (cliente_id,tipo,contatto_tipo,esito,stato_cliente,richiesta,offerta,motivo,note,contatto_nome,telefono,incaricato_user_id,incaricato_user_name,followup_date,followup_repeat_value,followup_repeat_unit,priorita,user_id,user_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        RETURNING *`,
       [
         cliente.id,
         String(tipo || 'richiesta'),
+        String(contatto_tipo || ''),
         String(esito || ''),
         String(stato_cliente || ''),
         String(richiesta || ''),
@@ -3340,6 +3469,8 @@ app.post('/api/clienti/onboarding-lead', authMiddleware, requirePermission('clie
         incaricato_user_id || null,
         incaricatoUserName,
         followup_date || null,
+        followup_repeat_value || null,
+        followup_repeat_unit || null,
         String(priorita || 'media'),
         req.user.id || null,
         userName || 'Sistema',
@@ -3351,10 +3482,12 @@ app.post('/api/clienti/onboarding-lead', authMiddleware, requirePermission('clie
         `Cliente: ${nome}`,
         `Contatto: ${contattoNome}`,
         `Telefono: ${telefono}`,
+        contatto_tipo ? `Tipo contatto: ${contatto_tipo}` : '',
         richiesta ? `Richiesta: ${richiesta}` : '',
         offerta ? `Offerta: ${offerta}` : '',
         note ? `Note: ${note}` : '',
         followup_date ? `Follow-up: ${followup_date}` : '',
+        (followup_repeat_value && followup_repeat_unit) ? `Ripetizione: ogni ${followup_repeat_value} ${followup_repeat_unit}` : '',
       ].filter(Boolean).join('\n');
       await createInternalConversation({
         senderUser: req.user,
