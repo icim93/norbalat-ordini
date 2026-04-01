@@ -564,6 +564,166 @@
     text-transform: uppercase;
     color: var(--text3);
   }
+  .listini-summary-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(220,238,250,0.45) 0%, rgba(255,255,255,0.96) 100%);
+    color: var(--text2);
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+  .listini-groups {
+    display: grid;
+    gap: 16px;
+    padding: 18px;
+  }
+  .listini-group-card {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: linear-gradient(180deg, #ffffff 0%, #f9fbfd 100%);
+    overflow: hidden;
+  }
+  .listini-group-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 18px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .listini-group-title {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .listini-group-title strong {
+    font-size: 16px;
+    letter-spacing: -0.2px;
+  }
+  .listini-group-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    color: var(--text2);
+    font-size: 12px;
+  }
+  .listini-price-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: var(--accent-light);
+    color: var(--accent-dark);
+    font-size: 12px;
+    font-weight: 700;
+    font-family: 'DM Mono', monospace;
+  }
+  .listini-scope-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 0 18px 16px;
+  }
+  .listini-scope-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--surface2);
+    color: var(--text2);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .listini-rules {
+    display: grid;
+    gap: 10px;
+    padding: 0 18px 18px;
+  }
+  .listini-rule-row {
+    display: grid;
+    grid-template-columns: minmax(170px, 1.2fr) minmax(160px, 1fr) minmax(120px, 0.7fr) minmax(140px, 0.8fr) minmax(170px, 1.1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+  }
+  .listini-rule-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .listini-rule-main strong {
+    font-size: 13px;
+  }
+  .listini-rule-sub {
+    color: var(--text3);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .listini-rule-block {
+    min-width: 0;
+  }
+  .listini-rule-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+  }
+  .listini-rule-value {
+    font-size: 13px;
+    color: var(--text1);
+  }
+  .listini-rule-value.mono {
+    font-family: 'DM Mono', monospace;
+    font-weight: 700;
+  }
+  .listini-rule-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .listini-empty {
+    padding: 28px 20px;
+    text-align: center;
+    color: var(--text3);
+    font-size: 13px;
+  }
+  @media (max-width: 1180px) {
+    .listini-rule-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .listini-rule-actions {
+      grid-column: 1 / -1;
+      justify-content: flex-start;
+    }
+  }
+  @media (max-width: 720px) {
+    .listini-summary-bar,
+    .listini-group-head {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .listini-rule-row {
+      grid-template-columns: 1fr;
+    }
+    .listini-group-title strong {
+      font-size: 15px;
+    }
+  }
   .toolbar-select,
   .toolbar-field input[type="date"],
   .toolbar-field input[type="text"] {
@@ -2957,43 +3117,43 @@
           <div class="page-title">Listini</div>
           <div class="page-sub">Gestione regole prezzo</div>
         </div>
+        <div class="stats-grid" id="listini-kpi-grid"></div>
         <div class="card">
           <div class="card-header">
-            <input type="text" class="search-input" id="search-listini" placeholder="🔍 Cerca prodotto, ambito, note…" oninput="renderListiniPage()">
-            <div style="display:flex;gap:8px;">
-              <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-scope-listini" onchange="renderListiniPage()">
-                <option value="">Tutti gli ambiti</option>
-                <option value="all">Tutti</option>
-                <option value="giro">Giro</option>
-                <option value="cliente">Cliente</option>
-                <option value="giro_cliente">Giro + cliente</option>
-              </select>
-              <select style="width:auto;padding:8px 12px;font-size:13px;" id="filter-stato-listini" onchange="renderListiniPage()">
-                <option value="">Tutti gli stati</option>
-                <option value="attivo">Attivi</option>
-                <option value="futuro">Futuri</option>
-                <option value="scaduto">Scaduti</option>
-              </select>
-              <button class="btn btn-outline" onclick="exportListiniPdf()">📄 PDF</button>
-              <button class="btn btn-green" id="listini-new-btn" onclick="openNewListino()">+ Nuovo Listino</button>
+            <div class="toolbar-shell">
+              <div class="toolbar-filters">
+                <div class="toolbar-field grow">
+                  <label class="toolbar-label">Ricerca</label>
+                  <input type="text" class="search-input" id="search-listini" placeholder="🔍 Cerca prodotto, ambito, note…" oninput="renderListiniPage()" style="width:100%;">
+                </div>
+                <div class="toolbar-field">
+                  <label class="toolbar-label">Ambito</label>
+                  <select class="toolbar-select" id="filter-scope-listini" onchange="renderListiniPage()">
+                    <option value="">Tutti gli ambiti</option>
+                    <option value="all">Tutti</option>
+                    <option value="giro">Giro</option>
+                    <option value="cliente">Cliente</option>
+                    <option value="giro_cliente">Giro + cliente</option>
+                  </select>
+                </div>
+                <div class="toolbar-field">
+                  <label class="toolbar-label">Stato</label>
+                  <select class="toolbar-select" id="filter-stato-listini" onchange="renderListiniPage()">
+                    <option value="">Tutti gli stati</option>
+                    <option value="attivo">Attivi</option>
+                    <option value="futuro">Futuri</option>
+                    <option value="scaduto">Scaduti</option>
+                  </select>
+                </div>
+              </div>
+              <div class="toolbar-actions">
+                <button class="btn btn-outline" onclick="exportListiniPdf()">📄 PDF</button>
+                <button class="btn btn-green" id="listini-new-btn" onclick="openNewListino()">+ Nuovo Listino</button>
+              </div>
             </div>
           </div>
-          <div class="table-scroll-wrap"><table>
-            <thead>
-              <tr>
-                <th>Prodotto</th>
-                <th>Ambito</th>
-                <th>Regola</th>
-                <th>Prezzo</th>
-                <th>Dal</th>
-                <th>Al</th>
-                <th>Stato</th>
-                <th>Note</th>
-                <th>Azioni</th>
-              </tr>
-            </thead>
-            <tbody id="listini-page-table"></tbody>
-          </table></div>
+          <div class="listini-summary-bar" id="listini-page-summary"></div>
+          <div class="listini-groups" id="listini-page-table"></div>
         </div>
       </div>
 

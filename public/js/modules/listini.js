@@ -171,6 +171,168 @@
     return 'Derivato';
   }
 
+  function getFilteredListiniRows() {
+    const q = (document.getElementById('search-listini')?.value || '').toLowerCase();
+    const scopeFilter = document.getElementById('filter-scope-listini')?.value || '';
+    const statoFilter = document.getElementById('filter-stato-listini')?.value || '';
+    let rows = [...window.state.listini];
+    if (scopeFilter) rows = rows.filter(l => l.scope === scopeFilter);
+    if (statoFilter) rows = rows.filter(l => getListinoStato(l) === statoFilter);
+    if (q) {
+      rows = rows.filter(l => {
+        const p = window.getProdotto(l.prodottoId);
+        const text = [
+          p.codice || '',
+          p.nome || '',
+          p.categoria || '',
+          listinoScopeLabel(l),
+          listinoExcludedLabel(l),
+          l.note || '',
+        ].join(' ').toLowerCase();
+        return text.includes(q);
+      });
+    }
+    const statoRank = { attivo: 0, futuro: 1, scaduto: 2 };
+    rows.sort((a, b) => {
+      const sa = statoRank[getListinoStato(a)] ?? 9;
+      const sb = statoRank[getListinoStato(b)] ?? 9;
+      if (sa !== sb) return sa - sb;
+      const pa = window.getProdotto(a.prodottoId).nome || '';
+      const pb = window.getProdotto(b.prodottoId).nome || '';
+      if (pa !== pb) return pa.localeCompare(pb);
+      if ((a.validoDal || '') !== (b.validoDal || '')) return (a.validoDal || '') < (b.validoDal || '') ? 1 : -1;
+      return b.id - a.id;
+    });
+    return rows;
+  }
+
+  function renderListiniKpi(filteredRows) {
+    const host = document.getElementById('listini-kpi-grid');
+    if (!host) return;
+    const totalRows = window.state.listini.length;
+    const totalProdotti = new Set(filteredRows.map(l => l.prodottoId)).size;
+    const attivi = filteredRows.filter(l => getListinoStato(l) === 'attivo').length;
+    const esclusi = new Set(filteredRows.flatMap(l => Array.isArray(l.excludedClientIds) ? l.excludedClientIds : [])).size;
+    const diretti = filteredRows.filter(l => l.mode === 'final_price').length;
+    host.innerHTML = `
+      <div class="stat-card blue">
+        <div class="stat-label">Regole visibili</div>
+        <div class="stat-value" style="font-size:28px;">${filteredRows.length}</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">Prodotti coperti</div>
+        <div class="stat-value" style="font-size:28px;">${totalProdotti}</div>
+      </div>
+      <div class="stat-card orange">
+        <div class="stat-label">Regole attive</div>
+        <div class="stat-value" style="font-size:28px;">${attivi}</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">Eccezioni clienti</div>
+        <div class="stat-value" style="font-size:28px;">${esclusi}</div>
+        <div style="font-size:11px;color:var(--text3);">${diretti} a prezzo diretto · ${totalRows} totali</div>
+      </div>
+    `;
+  }
+
+  function renderListiniSummary(filteredRows) {
+    const summary = document.getElementById('listini-page-summary');
+    if (!summary) return;
+    const prodotti = new Set(filteredRows.map(l => l.prodottoId)).size;
+    const ambiti = ['all', 'giro', 'cliente', 'giro_cliente']
+      .map(scope => {
+        const count = filteredRows.filter(l => l.scope === scope).length;
+        if (!count) return '';
+        const label = scope === 'all' ? 'tutti' : (scope === 'giro' ? 'giro' : (scope === 'cliente' ? 'cliente' : 'giro + cliente'));
+        return `${count} ${label}`;
+      })
+      .filter(Boolean)
+      .join(' · ');
+    summary.innerHTML = `
+      <div><strong>${filteredRows.length}</strong> regole in vista su <strong>${window.state.listini.length}</strong> totali · <strong>${prodotti}</strong> prodotti</div>
+      <div>${ambiti || 'Nessun ambito visibile con i filtri correnti'}</div>
+    `;
+  }
+
+  function renderListiniGroups(filteredRows) {
+    const host = document.getElementById('listini-page-table');
+    if (!host) return;
+    if (!filteredRows.length) {
+      host.innerHTML = '<div class="listini-empty">Nessun listino configurato con i filtri correnti</div>';
+      return;
+    }
+    const groups = new Map();
+    filteredRows.forEach(l => {
+      if (!groups.has(l.prodottoId)) groups.set(l.prodottoId, []);
+      groups.get(l.prodottoId).push(l);
+    });
+    const html = [...groups.entries()].map(([prodottoId, rules]) => {
+      const p = window.getProdotto(prodottoId);
+      const prodottoLabel = p.id ? `[${window.escapeHtml(p.codice || '')}] ${window.escapeHtml(p.nome || '')}` : `Prodotto #${prodottoId}`;
+      const prezzoBase = window.getListinoBaseProdotto(prodottoId);
+      const scopeCounts = {};
+      rules.forEach(l => { scopeCounts[l.scope || 'all'] = (scopeCounts[l.scope || 'all'] || 0) + 1; });
+      const chips = Object.entries(scopeCounts).map(([scope, count]) => {
+        const label = scope === 'all' ? 'Tutti' : (scope === 'giro' ? 'Giro' : (scope === 'cliente' ? 'Cliente' : 'Giro + cliente'));
+        return `<span class="listini-scope-chip">${window.escapeHtml(label)} <strong>${count}</strong></span>`;
+      }).join('');
+      const rulesHtml = rules.map(l => {
+        const note = l.note ? window.escapeHtml(l.note) : 'Nessuna nota';
+        const validita = `${window.escapeHtml(l.validoDal || '-')} → ${window.escapeHtml(l.validoAl || '∞')}`;
+        return `
+          <div class="listini-rule-row">
+            <div class="listini-rule-main">
+              <strong>${window.escapeHtml(listinoScopeLabel(l))}</strong>
+              <div class="listini-rule-sub">${window.escapeHtml(listinoExcludedLabel(l).replace(/^\s*\|\s*/, '') || 'Nessuna esclusione cliente')}</div>
+            </div>
+            <div class="listini-rule-block">
+              <div class="listini-rule-label">Regola</div>
+              <div class="listini-rule-value">${window.escapeHtml(listinoRuleLabel(l))}</div>
+            </div>
+            <div class="listini-rule-block">
+              <div class="listini-rule-label">Preview</div>
+              <div class="listini-rule-value mono">${window.escapeHtml(listinoPreviewPrezzo(l))}</div>
+            </div>
+            <div class="listini-rule-block">
+              <div class="listini-rule-label">Validità</div>
+              <div class="listini-rule-value">${validita}</div>
+            </div>
+            <div class="listini-rule-block">
+              <div class="listini-rule-label">Stato / note</div>
+              <div class="listini-rule-value">${listinoStatoBadge(l)}</div>
+              <div class="listini-rule-sub" style="margin-top:4px;">${note}</div>
+            </div>
+            <div class="listini-rule-actions">
+              ${canManageListini() ? `<button class="btn btn-outline btn-sm" onclick="editListinoEntry(${l.id})">Modifica</button>` : ''}
+              ${canManageListini() ? `<button class="btn btn-danger btn-sm" onclick="deleteListinoEntry(${l.id})">Elimina</button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+      return `
+        <div class="listini-group-card">
+          <div class="listini-group-head">
+            <div class="listini-group-title">
+              <strong>${prodottoLabel}</strong>
+              <div class="listini-group-meta">
+                <span>${window.escapeHtml(p.categoria || 'Categoria n.d.')}</span>
+                <span>${window.escapeHtml(p.um || 'UM n.d.')}</span>
+                ${p.packaging ? `<span>${window.escapeHtml(p.packaging)}</span>` : ''}
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <span class="listini-price-pill">Prezzo base attivo ${window.escapeHtml(window.eur(prezzoBase))}</span>
+              ${canManageListini() ? `<button class="btn btn-green btn-sm" onclick="openListiniModal(${prodottoId})">+ Regola</button>` : ''}
+            </div>
+          </div>
+          <div class="listini-scope-chips">${chips}</div>
+          <div class="listini-rules">${rulesHtml}</div>
+        </div>
+      `;
+    }).join('');
+    host.innerHTML = html;
+  }
+
   function openListiniModal(prodottoId = null) {
     if (!canManageListini()) return;
     editingListinoId = null;
@@ -318,53 +480,10 @@
   function renderListiniPage() {
     const newBtn = document.getElementById('listini-new-btn');
     if (newBtn) newBtn.style.display = canManageListini() ? '' : 'none';
-    const q = (document.getElementById('search-listini')?.value || '').toLowerCase();
-    const scopeFilter = document.getElementById('filter-scope-listini')?.value || '';
-    const statoFilter = document.getElementById('filter-stato-listini')?.value || '';
-    let rows = [...window.state.listini];
-    if (scopeFilter) rows = rows.filter(l => l.scope === scopeFilter);
-    if (statoFilter) rows = rows.filter(l => getListinoStato(l) === statoFilter);
-    if (q) {
-      rows = rows.filter(l => {
-        const p = window.getProdotto(l.prodottoId);
-        const text = [p.codice || '', p.nome || '', p.categoria || '', listinoScopeLabel(l), listinoExcludedLabel(l), l.note || ''].join(' ').toLowerCase();
-        return text.includes(q);
-      });
-    }
-    const statoRank = { attivo: 0, futuro: 1, scaduto: 2 };
-    rows.sort((a, b) => {
-      const sa = statoRank[getListinoStato(a)] ?? 9;
-      const sb = statoRank[getListinoStato(b)] ?? 9;
-      if (sa !== sb) return sa - sb;
-      const pa = window.getProdotto(a.prodottoId).nome || '';
-      const pb = window.getProdotto(b.prodottoId).nome || '';
-      if (pa !== pb) return pa.localeCompare(pb);
-      if ((a.validoDal || '') !== (b.validoDal || '')) return (a.validoDal || '') < (b.validoDal || '') ? 1 : -1;
-      return b.id - a.id;
-    });
-
-    const tbody = document.getElementById('listini-page-table');
-    if (!tbody) return;
-    tbody.innerHTML = rows.length ? rows.map(l => {
-      const p = window.getProdotto(l.prodottoId);
-      const prodottoLabel = p.id ? `[${p.codice}] ${p.nome}` : `Prodotto #${l.prodottoId}`;
-      return `
-        <tr>
-          <td><b>${prodottoLabel}</b></td>
-          <td>${listinoScopeLabel(l)}${listinoExcludedLabel(l)}</td>
-          <td>${listinoRuleLabel(l)}</td>
-          <td style="font-family:'DM Mono',monospace;">${listinoPreviewPrezzo(l)}</td>
-          <td>${l.validoDal || '-'}</td>
-          <td>${l.validoAl || '-'}</td>
-          <td>${listinoStatoBadge(l)}</td>
-          <td>${l.note || ''}</td>
-          <td>
-            ${canManageListini() ? `<button class="btn btn-outline btn-sm" onclick="editListinoEntry(${l.id})">Modifica</button>` : ''}
-            ${canManageListini() ? `<button class="btn btn-danger btn-sm" onclick="deleteListinoEntry(${l.id})">Elimina</button>` : ''}
-          </td>
-        </tr>
-      `;
-    }).join('') : '<tr><td colspan="9" style="color:var(--text3);">Nessun listino configurato</td></tr>';
+    const rows = getFilteredListiniRows();
+    renderListiniKpi(rows);
+    renderListiniSummary(rows);
+    renderListiniGroups(rows);
   }
 
   window.canManageListini = canManageListini;
