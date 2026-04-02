@@ -1959,8 +1959,9 @@ function normalizeConversationParticipantIds(raw) {
 
 function normalizeCalendarEventType(raw) {
   const value = String(raw || 'evento').trim().toLowerCase();
-  if (['ferie', 'attivita', 'evento'].includes(value)) return value;
+  if (['ferie', 'attivita', 'evento', 'movimentazione_produttore'].includes(value)) return value;
   if (['permesso', 'rol', 'recupero'].includes(value)) return 'ferie';
+  if (['merce_produttore', 'arrivo_produttore', 'partenza_produttore'].includes(value)) return 'movimentazione_produttore';
   return 'evento';
 }
 
@@ -4546,7 +4547,9 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
           AND stato NOT IN ('annullato', 'consegnato')`;
     if (isTentataVenditaOrder) {
       existingOrderParams.push(autista_di_giro || null);
-      existingOrderWhere += ` AND autista_di_giro IS NOT DISTINCT FROM $3`;
+      existingOrderParams.push(String(giro_override || '').trim());
+      existingOrderWhere += ` AND autista_di_giro IS NOT DISTINCT FROM $3
+                             AND COALESCE(giro_override, '') = $4`;
     }
     const { rows: existingOrderRows } = await client.query(
       `SELECT id, note

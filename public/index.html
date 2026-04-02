@@ -5390,6 +5390,7 @@
             <option value="ferie">Ferie</option>
             <option value="attivita">Attivita</option>
             <option value="evento">Evento</option>
+            <option value="movimentazione_produttore">Merce produttore</option>
           </select>
         </div>
         <div class="field">
@@ -8816,24 +8817,24 @@ function getFerieRoleOptions() {
 
 function normalizeFerieType(tipo) {
   const value = String(tipo || 'evento').toLowerCase();
-  if (['ferie', 'attivita', 'evento'].includes(value)) return value;
+  if (['ferie', 'attivita', 'evento', 'movimentazione_produttore'].includes(value)) return value;
   if (['permesso', 'rol', 'recupero'].includes(value)) return 'ferie';
   return 'evento';
 }
 
 function getFerieTipoLabel(tipo) {
-  const labels = { ferie: 'Ferie', attivita: 'Attivita', evento: 'Evento', permesso: 'Ferie', rol: 'Ferie', recupero: 'Ferie' };
+  const labels = { ferie: 'Ferie', attivita: 'Attivita', evento: 'Evento', movimentazione_produttore: 'Merce produttore', permesso: 'Ferie', rol: 'Ferie', recupero: 'Ferie' };
   return labels[String(tipo || '').toLowerCase()] || 'Evento';
 }
 
 function getFerieTipoBadge(tipo) {
   const key = normalizeFerieType(tipo);
-  const styles = { ferie: 'badge-blue', attivita: 'badge-orange', evento: 'badge-green' };
+  const styles = { ferie: 'badge-blue', attivita: 'badge-orange', evento: 'badge-green', movimentazione_produttore: 'badge-blue' };
   return `<span class="badge ${styles[key] || 'badge-gray'}">${escapeHtml(getFerieTipoLabel(key))}</span>`;
 }
 
 function getFerieTypeColor(tipo) {
-  const palette = { ferie: '#2563eb', attivita: '#ea580c', evento: '#059669' };
+  const palette = { ferie: '#2563eb', attivita: '#ea580c', evento: '#059669', movimentazione_produttore: '#7c3aed' };
   return palette[normalizeFerieType(tipo)] || '#64748b';
 }
 
@@ -8987,7 +8988,7 @@ function buildFerieCalendarHtml(ferieRows) {
   }
 
   const legendHtml = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;">
-    ${['ferie','attivita','evento'].map(type => {
+    ${['ferie','attivita','evento','movimentazione_produttore'].map(type => {
       const c = getFerieTypeColor(type);
       return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;border:1px solid ${c}40;background:${c}12;font-size:11px;font-weight:600;color:var(--text1);"><span style="width:7px;height:7px;border-radius:50%;background:${c};flex-shrink:0;display:inline-block;"></span>${escapeHtml(getFerieTipoLabel(type))}</span>`;
     }).join('')}
@@ -9134,8 +9135,9 @@ function syncFerieTypeUI(forceTitle = false) {
   const titleInput = document.getElementById('ferie-titolo');
   const statoSelect = document.getElementById('ferie-stato');
   const isFerie = type === 'ferie';
+  const isProduttore = type === 'movimentazione_produttore';
   if (titleLabel) titleLabel.textContent = isFerie ? 'Titolo ferie *' : 'Titolo evento *';
-  if (userLabel) userLabel.textContent = isFerie ? 'Ferie di *' : 'Referente *';
+  if (userLabel) userLabel.textContent = isFerie ? 'Ferie di *' : (isProduttore ? 'Referente logistico *' : 'Referente *');
   if (statoSelect) {
     if (isFerie && !canApproveFerieItem()) {
       statoSelect.value = 'da_approvare';
@@ -9154,6 +9156,9 @@ function syncFerieTypeUI(forceTitle = false) {
   if (isFerie) {
     titleInput.placeholder = 'Es. Ferie di Mario Rossi';
     if (shouldReplace) titleInput.value = suggested;
+  } else if (isProduttore) {
+    titleInput.placeholder = 'Es. Merce in arrivo dal produttore / Merce in partenza per produttore';
+    if (forceTitle && current.startsWith('Ferie di ')) titleInput.value = '';
   } else {
     titleInput.placeholder = 'Es. ferie estive, riunione clienti, fiera di settore';
     if (forceTitle && current.startsWith('Ferie di ')) titleInput.value = '';
@@ -9341,6 +9346,7 @@ function renderFeriePage() {
                 <option value="ferie" ${typeFilter==='ferie'?'selected':''}>Ferie</option>
                 <option value="attivita" ${typeFilter==='attivita'?'selected':''}>Attivita</option>
                 <option value="evento" ${typeFilter==='evento'?'selected':''}>Evento</option>
+                <option value="movimentazione_produttore" ${typeFilter==='movimentazione_produttore'?'selected':''}>Merce produttore</option>
               </select>
             </div>
           </div>
@@ -9627,14 +9633,16 @@ function renderTentataPage() {
   if (list) {
     if (state.currentUser?.ruolo === 'autista') {
       const config = getTentataConfigForUser(state.currentUser.id);
-      const targetDate = getNextBusinessDate();
+      const deliveryContext = getNextTentataDeliveryContext(state.currentUser.id);
+      const targetDate = deliveryContext.date;
       const activeTemplate = getTentataActiveTemplate(state.currentUser.id, targetDate);
       list.innerHTML = `
         <div style="padding:8px 0 12px;">
-          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">Qui trovi il profilo TV assegnato al prossimo giorno lavorativo (${formatDate(targetDate)}). Se non c'è un'assegnazione manuale, uso il primo profilo compatibile con il giorno.</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">Qui trovi il profilo TV assegnato al prossimo giro utile (${formatDate(targetDate)}${deliveryContext.giro ? ` · ${escapeHtml(deliveryContext.giro)}` : ''}). Se non c'è un'assegnazione manuale, uso il primo profilo compatibile con il giorno.</div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
             <span class="badge badge-blue">${activeTemplate ? escapeHtml(activeTemplate.nome) : 'Nessun profilo'}</span>
             ${Object.keys(config.assegnazioni || {}).includes(targetDate) ? '<span class="badge badge-green">Assegnazione manuale</span>' : '<span class="badge badge-gray">Assegnazione automatica</span>'}
+            ${deliveryContext.giro ? `<span class="badge badge-orange">${escapeHtml(deliveryContext.giro)}</span>` : ''}
           </div>
           <button class="btn btn-green" onclick="openTentataVendita()">+ Nuova tentata vendita</button>
         </div>
@@ -9731,6 +9739,47 @@ function getNextBusinessDate(fromDate = today()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function getNextDeliveryDateForGiro(giroName, fromDate = today()) {
+  const giro = String(giroName || '').trim();
+  if (!giro) return getNextBusinessDate(fromDate);
+  const conf = (state.giriCalendario || []).find(g => String(g.giro || '').trim().toLowerCase() === giro.toLowerCase());
+  const giorni = Array.isArray(conf?.giorni) ? conf.giorni.map(Number).filter(Number.isInteger) : [];
+  if (!giorni.length) return getNextBusinessDate(fromDate);
+  const base = String(fromDate || today()).slice(0, 10);
+  const start = new Date(`${base}T00:00:00`);
+  if (Number.isNaN(start.getTime())) return getNextBusinessDate(fromDate);
+  for (let delta = 1; delta <= 14; delta++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + delta);
+    if (giorni.includes(d.getDay())) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+  }
+  return getNextBusinessDate(fromDate);
+}
+
+function getNextTentataDeliveryContext(userId, fromDate = today()) {
+  const targetUserId = Number(userId) || Number(state.currentUser?.id) || null;
+  const user = (state.utenti || []).find(u => Number(u.id) === Number(targetUserId));
+  const giri = Array.isArray(user?.giriConsegna) ? user.giriConsegna.map(g => String(g || '').trim()).filter(Boolean) : [];
+  const candidates = giri.map((giro, order) => ({
+    giro,
+    date: getNextDeliveryDateForGiro(giro, fromDate),
+    order,
+  })).filter(item => item.date);
+  if (!candidates.length) {
+    return { date: getNextBusinessDate(fromDate), giro: '', autistaId: targetUserId };
+  }
+  candidates.sort((a, b) => a.date.localeCompare(b.date) || a.order - b.order || a.giro.localeCompare(b.giro, 'it', { sensitivity: 'base' }));
+  const next = candidates[0];
+  const autista = typeof getAutistaDiGiro === 'function' ? getAutistaDiGiro(next.giro) : null;
+  return {
+    date: next.date,
+    giro: next.giro,
+    autistaId: autista?.id || targetUserId,
+  };
+}
+
 function makeTentataTemplate(nome = 'Nuovo profilo') {
   return { id: `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, nome, giorni: [], linee: [] };
 }
@@ -9753,7 +9802,7 @@ function getTentataTemplate(userId, templateId) {
 
 function getTentataActiveTemplate(userId, dateStr) {
   const config = getTentataConfigForUser(userId);
-  const dateKey = String(dateStr || getNextBusinessDate()).slice(0, 10);
+  const dateKey = String(dateStr || getNextTentataDeliveryContext(userId).date || getNextBusinessDate()).slice(0, 10);
   const explicitId = config.assegnazioni?.[dateKey];
   if (explicitId) {
     const explicit = config.templates.find(tpl => tpl.id === explicitId);
@@ -10033,7 +10082,8 @@ async function openTentataVendita(userId = null) {
     showToast('Cliente tecnico tentata vendita non disponibile', 'warning');
     return;
   }
-  const activeTemplate = getTentataActiveTemplate(userId, getNextBusinessDate());
+  const deliveryContext = getNextTentataDeliveryContext(userId);
+  const activeTemplate = getTentataActiveTemplate(userId, deliveryContext.date);
   const config = getTentataConfigForUser(userId);
   tentataTemplateId = activeTemplate?.id || config.templates?.[0]?.id || null;
   tentataLines = activeTemplate ? sortTentataLines(activeTemplate.linee.map(l => ({ ...l }))) : [];
@@ -10049,7 +10099,7 @@ async function openTentataVendita(userId = null) {
     const caricoLabel = userId === state.currentUser.id
       ? 'Carico predefinito per il tuo mezzo.'
       : `Carico predefinito per ${escapeHtml(targetNome)}.`;
-    infoEl.innerHTML = `<b>${caricoLabel}</b> Modifica le quantità prima di confermare. L'ordine sarà registrato per il ${formatDate(getNextBusinessDate())}.`;
+    infoEl.innerHTML = `<b>${caricoLabel}</b> Modifica le quantità prima di confermare. L'ordine sarà registrato per il ${formatDate(deliveryContext.date)}${deliveryContext.giro ? ` sul giro <b>${escapeHtml(deliveryContext.giro)}</b>` : ''}.`;
   }
   const sel = document.getElementById('tentata-template-select');
   if (sel) {
@@ -10255,14 +10305,16 @@ async function saveTentataVendita() {
   }
   if (!clienteId) { showToast('Cliente tecnico tentata vendita non disponibile', 'warning'); return; }
   if (!validLines.length) { showToast('Aggiungi almeno un prodotto', 'warning'); return; }
-  const dataTentata = getNextBusinessDate();
+  const deliveryContext = getNextTentataDeliveryContext(tentataUserId || state.currentUser.id);
+  const dataTentata = deliveryContext.date || getNextBusinessDate();
 
   const body = {
     cliente_id: clienteId,
     agente_id: state.currentUser.id,
-    autista_di_giro: tentataUserId || state.currentUser.id,
+    autista_di_giro: deliveryContext.autistaId || tentataUserId || state.currentUser.id,
     data: dataTentata,
     stato: 'attesa',
+    giro_override: String(deliveryContext.giro || '').trim(),
     note: note ? `[TENTATA VENDITA] ${note}` : '[TENTATA VENDITA]',
     linee: sortTentataLines(validLines).map(l => ({
       prodotto_id: l.prodId,
@@ -10280,7 +10332,7 @@ async function saveTentataVendita() {
     if (existingIdx !== -1) state.ordini[existingIdx] = normalized;
     else state.ordini.unshift(normalized);
     closeModal('modal-tentata');
-    showToast(result.merged ? `Tentata vendita sommata all'ordine #${normalized.id}` : `Tentata vendita registrata per il ${formatDate(dataTentata)}!`, 'success');
+    showToast(result.merged ? `Tentata vendita sommata all'ordine #${normalized.id}` : `Tentata vendita registrata per il ${formatDate(dataTentata)}${deliveryContext.giro ? ` · ${deliveryContext.giro}` : ''}!`, 'success');
     renderAutistaView();
   } catch(e) { showToast(e.message, 'warning'); }
 }
@@ -10996,7 +11048,7 @@ function updatePDFPreview() {
   }
 
   const MAX_COLUMNS = 3;
-  const FIXED_COLUMN_COUNT = Math.min(MAX_COLUMNS, Math.max(1, giri.length));
+  const BATCH_COLUMN_COUNT = Math.min(MAX_COLUMNS, Math.max(1, giri.length));
   const mmToPx = mm => (mm * 96) / 25.4;
   const PAGE_HEIGHT = Math.floor(mmToPx(297 - 16)); // A4 portrait al netto dei margini @page di 8mm sopra/sotto
   const PAGE_SAFETY_MARGIN = 12;
@@ -11031,7 +11083,7 @@ function updatePDFPreview() {
     return root;
   }
 
-  function renderReportMeasureShell({ bodyHtml = '', columnCount = FIXED_COLUMN_COUNT, fullWidth = false, pageNumber = 999 } = {}) {
+  function renderReportMeasureShell({ bodyHtml = '', columnCount = BATCH_COLUMN_COUNT, fullWidth = false, pageNumber = 999 } = {}) {
     const safeColumnCount = Math.max(1, Number(columnCount || 1));
     const columnsHtml = Array.from({ length: safeColumnCount }, (_, idx) =>
       `<div class="print-column"${idx === 0 ? ' data-measure-slot="1"' : ''}>${idx === 0 ? bodyHtml : ''}</div>`
@@ -11049,7 +11101,7 @@ function updatePDFPreview() {
   }
 
   // Misura un blocco usando la stessa larghezza e gli stessi stili della stampa.
-  function measureReportBlock(html, { columnCount = FIXED_COLUMN_COUNT, fullWidth = false } = {}) {
+  function measureReportBlock(html, { columnCount = BATCH_COLUMN_COUNT, fullWidth = false } = {}) {
     const root = getReportMeasureRoot();
     root.innerHTML = `<style>
       * { box-sizing: border-box; }
@@ -11287,8 +11339,8 @@ function updatePDFPreview() {
     const availableBodyHeight = pageChrome.bodyHeight;
     const giroStates = giri.map(g => createGiroState(g, giriMap[g] || [], autistaGiro(g)));
     const pages = [];
-    for (let batchStart = 0; batchStart < giroStates.length; batchStart += FIXED_COLUMN_COUNT) {
-      const batchStates = giroStates.slice(batchStart, batchStart + FIXED_COLUMN_COUNT);
+    for (let batchStart = 0; batchStart < giroStates.length; batchStart += BATCH_COLUMN_COUNT) {
+      const batchStates = giroStates.slice(batchStart, batchStart + BATCH_COLUMN_COUNT);
       while (batchStates.some(isGiroStateActive)) {
         const columns = [];
         const activeBatchStates = batchStates.filter(isGiroStateActive);
@@ -11360,7 +11412,7 @@ function updatePDFPreview() {
     </section>`;
   }).join('');
 
-  preview.innerHTML = `<div class="print-document" data-fixed-columns="${FIXED_COLUMN_COUNT}" data-pagination-mode="measured">${pagesHtml}</div>`;
+  preview.innerHTML = `<div class="print-document" data-fixed-columns="${BATCH_COLUMN_COUNT}" data-pagination-mode="measured">${pagesHtml}</div>`;
 }
 
 function stampaPDFGiornaliero() {
