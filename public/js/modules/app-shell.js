@@ -121,19 +121,9 @@
     ],
     direzione: [
       { page: 'dashboard', icon: NAV_ICONS.dashboard, label: 'Dashboard' },
-      { page: 'clienti', icon: NAV_ICONS.clienti, label: 'Clienti' },
-      { page: 'crm', icon: NAV_ICONS.crm, label: 'CRM' },
-      { page: 'prodotti', icon: NAV_ICONS.prodotti, label: 'Prodotti' },
-      { page: 'ferie', icon: NAV_ICONS.ferie, label: 'Calendario' },
-      { page: 'giacenze', icon: NAV_ICONS.giacenze, label: 'Giacenze' },
-      { page: 'documenti', icon: NAV_ICONS.documenti, label: 'Documenti' },
-      { page: 'listini', icon: NAV_ICONS.listini, label: 'Listini' },
-      { page: 'rese', icon: NAV_ICONS.rese, label: 'Gestione Rese' },
-      { page: 'report', icon: NAV_ICONS.report, label: 'Report' },
-      { page: 'sperimentale', icon: NAV_ICONS.sperimentale, label: 'CLAL' },
       { page: 'ordini', icon: NAV_ICONS.ordini, label: 'Ordini' },
-      { page: 'messaggi', icon: NAV_ICONS.messaggi, label: 'Messaggi' },
-      { page: 'profilo', icon: NAV_ICONS.profilo, label: 'Il mio profilo' },
+      { page: 'giacenze', icon: NAV_ICONS.giacenze, label: 'Giacenze' },
+      { page: 'clienti', icon: NAV_ICONS.clienti, label: 'Clienti' },
     ],
   };
 
