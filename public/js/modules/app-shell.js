@@ -480,6 +480,7 @@
 
     syncCollapsibleNav();
     refreshNavBadges();
+    if (typeof window.scheduleResponsiveTablesRefresh === 'function') window.scheduleResponsiveTablesRefresh();
   }
 
   function openDrawer() {
@@ -539,6 +540,7 @@
     if (page === 'impostazioni') window.renderImpostazioni();
     if (page === 'sperimentale') window.renderSperimentale();
     if (page === 'profilo') window.renderProfilo();
+    if (typeof window.scheduleResponsiveTablesRefresh === 'function') window.scheduleResponsiveTablesRefresh();
   }
 
   window.doLogin = doLogin;

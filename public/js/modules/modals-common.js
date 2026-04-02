@@ -42,6 +42,46 @@ function showToast(msg, type = '') {
   setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(20px)'; toast.style.transition = '0.3s'; setTimeout(() => toast.remove(), 300); }, 2500);
 }
 
+let _responsiveTablesFrame = null;
+
+function refreshResponsiveTables(root = document) {
+  const scope = root && typeof root.querySelectorAll === 'function' ? root : document;
+  scope.querySelectorAll('.table-scroll-wrap table').forEach(table => {
+    const headers = Array.from(table.querySelectorAll('thead th')).map((th, index) => {
+      const explicit = th.getAttribute('data-label');
+      if (explicit !== null) return explicit.trim();
+      const text = (th.textContent || '').replace(/\s+/g, ' ').trim();
+      return text || (index === 0 ? '' : `Colonna ${index + 1}`);
+    });
+
+    const wrap = table.closest('.table-scroll-wrap');
+    if (wrap) wrap.classList.toggle('mobile-stack-ready', headers.some(Boolean));
+
+    table.querySelectorAll('tbody tr').forEach(row => {
+      Array.from(row.children).forEach((cell, index) => {
+        if (!(cell instanceof HTMLElement)) return;
+        const label = cell.getAttribute('data-label') || headers[index] || '';
+        const isCheckboxCell = index === 0 && !!cell.querySelector('input[type="checkbox"]');
+        cell.setAttribute('data-label', label);
+        cell.classList.toggle('responsive-cell-checkbox', isCheckboxCell);
+        cell.classList.toggle('responsive-cell-primary', (!isCheckboxCell && index === 0) || index === 1);
+        cell.classList.toggle(
+          'responsive-cell-actions',
+          index === row.children.length - 1 || !!cell.querySelector('.table-actions') || !!cell.querySelector('.btn')
+        );
+      });
+    });
+  });
+}
+
+function scheduleResponsiveTablesRefresh(root = document) {
+  if (_responsiveTablesFrame) cancelAnimationFrame(_responsiveTablesFrame);
+  _responsiveTablesFrame = requestAnimationFrame(() => {
+    _responsiveTablesFrame = null;
+    refreshResponsiveTables(root);
+  });
+}
+
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
@@ -50,6 +90,15 @@ function showToast(msg, type = '') {
 document.addEventListener('DOMContentLoaded', () => {
   const dateInput = document.getElementById('ord-data');
   if (dateInput) dateInput.value = typeof getNextBusinessDate === 'function' ? getNextBusinessDate() : today();
+  scheduleResponsiveTablesRefresh();
+
+  if (window.MutationObserver && document.body) {
+    const observer = new MutationObserver(mutations => {
+      const needsRefresh = mutations.some(mutation => mutation.type === 'childList' && (mutation.addedNodes.length || mutation.removedNodes.length));
+      if (needsRefresh) scheduleResponsiveTablesRefresh();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
 });
 
 window.addEventListener('resize', () => {
@@ -59,6 +108,9 @@ window.addEventListener('resize', () => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeDrawer();
 });
+
+window.refreshResponsiveTables = refreshResponsiveTables;
+window.scheduleResponsiveTablesRefresh = scheduleResponsiveTablesRefresh;
 
 // ═══════════════════════════════════════════════
 // IMPORT EXCEL CLIENTI (SheetJS)
