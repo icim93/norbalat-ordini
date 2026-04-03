@@ -3607,6 +3607,7 @@
                     <option value="calabria">Calabria</option>
                     <option value="foggia">Foggia</option>
                     <option value="diretto">Diretto</option>
+                    <option value="nessun giro">Nessun giro</option>
                   </select>
                 </div>
                 <div class="toolbar-field">
@@ -4187,6 +4188,7 @@
           <div style="margin-top:6px;">
             <select id="ord-giro-override" onchange="updateConsegnatarioDisplay(parseInt(document.getElementById('ord-cliente').value)||null);renderOrderLines();" style="font-size:12px;padding:6px 8px;">
               <option value="">Usa giro cliente</option>
+              <option value="nessun giro">Nessun giro</option>
             </select>
           </div>
           <div style="display:flex;gap:16px;margin-top:6px;">
@@ -4278,6 +4280,7 @@
           <div style="margin-top:6px;">
             <select id="cat-giro-override" style="font-size:12px;padding:6px 8px;">
               <option value="">Usa giro cliente</option>
+              <option value="nessun giro">Nessun giro</option>
             </select>
           </div>
         </div>
@@ -10583,7 +10586,7 @@ function openNewOrderCatalogo() {
   const selGiro = document.getElementById('cat-giro-override');
   if (selGiro) {
     const giri = [...new Set(state.giriCalendario.map(g => (g.giro || '').trim()).filter(Boolean))].sort();
-    selGiro.innerHTML = '<option value="">Usa giro cliente</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
+    selGiro.innerHTML = '<option value="">Usa giro cliente</option><option value="nessun giro">Nessun giro</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
     selGiro.value = '';
   }
   document.getElementById('cat-note').value = '';
@@ -10910,6 +10913,7 @@ function updatePDFPreview() {
   const tipo = document.querySelector('input[name="pdf-tipo"]:checked')?.value || 'magazzino';
 
   let ordini = state.ordini.filter(o => o.data === data && o.stato !== 'annullato');
+  if (tipo === 'magazzino') ordini = ordini.filter(o => getOrdineGiroEffettivo(o).toLowerCase() !== 'nessun giro');
   if (giriSel) ordini = ordini.filter(o => giriSel.includes(getOrdineGiroEffettivo(o)));
 
   const preview = document.getElementById('pdf-preview');

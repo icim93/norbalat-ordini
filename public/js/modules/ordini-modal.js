@@ -1193,7 +1193,7 @@ function populateOrderSelects(clienteId, agenteId) {
   const giroSel = document.getElementById('ord-giro-override');
   if (giroSel) {
     const giri = [...new Set(state.giriCalendario.map(g => (g.giro || '').trim()).filter(Boolean))].sort();
-    giroSel.innerHTML = '<option value="">Usa giro cliente</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
+    giroSel.innerHTML = '<option value="">Usa giro cliente</option><option value="nessun giro">Nessun giro</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
   }
 
   // Autocomplete cliente
@@ -1264,7 +1264,7 @@ function populateOrderSelects(clienteId, agenteId, autistaId = null) {
   const giroSel = document.getElementById('ord-giro-override');
   if (giroSel) {
     const giri = [...new Set(state.giriCalendario.map(g => (g.giro || '').trim()).filter(Boolean))].sort();
-    giroSel.innerHTML = '<option value="">Usa giro cliente</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
+    giroSel.innerHTML = '<option value="">Usa giro cliente</option><option value="nessun giro">Nessun giro</option>' + giri.map(g => `<option value="${g}">${g}</option>`).join('');
   }
 
   const inp = document.getElementById('ac-cliente-input');
