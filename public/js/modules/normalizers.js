@@ -23,6 +23,7 @@
       giro: c.giro || '',
       agenteId: c.agente_id || null,
       autistaDiGiro: c.autista_di_giro || null,
+      autistaLibero: c.autista_libero || c.autistaLibero || '',
       note: c.note || '',
       piva: c.piva || '',
       codiceFiscale: c.codice_fiscale || c.codiceFiscale || '',

@@ -848,6 +848,7 @@ async function createSchema() {
       alias            TEXT DEFAULT '',
       contatto_nome    TEXT DEFAULT '',
       telefono         TEXT DEFAULT '',
+      autista_libero   TEXT DEFAULT '',
       localita         TEXT DEFAULT '',
       giro             TEXT DEFAULT '',
       agente_id        INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
@@ -1283,6 +1284,7 @@ async function createSchema() {
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS priorita TEXT DEFAULT 'media';
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS offerta TEXT DEFAULT '';
     ALTER TABLE clienti ADD COLUMN IF NOT EXISTS onboarding_contatto_tipo TEXT DEFAULT '';
+    ALTER TABLE clienti ADD COLUMN IF NOT EXISTS autista_libero TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_nome TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_mime TEXT DEFAULT '';
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS scheda_tecnica_data BYTEA;
@@ -2379,6 +2381,7 @@ const zClienteConversionPayload = z.object({
   giro: z.string().trim().max(120).optional().default(''),
   agente_id: z.coerce.number().int().positive().nullable().optional().default(null),
   autista_di_giro: z.coerce.number().int().positive().nullable().optional().default(null),
+  autista_libero: z.string().trim().max(160).optional().default(''),
   note: z.string().trim().max(2000).optional().default(''),
   piva: z.string().trim().min(1).max(32),
   codice_fiscale: z.string().trim().max(32).optional().default(''),
@@ -3121,17 +3124,17 @@ app.post('/api/clienti/lookup-piva', authMiddleware, requirePermission('clienti:
 
   app.post('/api/clienti', authMiddleware, requirePermission('clienti:create'), async (req, res) => {
     try {
-    const { nome, alias='', localita='', giro='', agente_id=null, autista_di_giro=null,
+    const { nome, alias='', localita='', giro='', agente_id=null, autista_di_giro=null, autista_libero='',
             note='', piva='', codice_fiscale='', codice_univoco='', pec='',
             cond_pagamento='', e_fornitore=false, classificazione='',
             contatto_nome='', telefono='' } = req.body;
       if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
       if (!String(piva || '').trim()) return res.status(400).json({ error: 'Partita IVA obbligatoria' });
       const r = await q(
-      `INSERT INTO clienti (nome,crm_tipo,alias,localita,giro,agente_id,autista_di_giro,note,piva,codice_fiscale,codice_univoco,pec,cond_pagamento,e_fornitore,classificazione,contatto_nome,telefono,onboarding_stato,onboarding_checklist,fido,sbloccato)
-         VALUES ($1,'cliente',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'in_attesa',$17::jsonb,0,FALSE)
-         RETURNING id,nome,crm_tipo,alias,localita,giro,piva,codice_fiscale,codice_univoco,pec,classificazione,cond_pagamento,e_fornitore,contatto_nome,telefono,onboarding_contatto_tipo,onboarding_stato,fido,sbloccato,created_at,crm_convertito_at`,
-      [nome, alias, localita, giro, agente_id||null, autista_di_giro||null, note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, contatto_nome, telefono, JSON.stringify({})]
+      `INSERT INTO clienti (nome,crm_tipo,alias,localita,giro,agente_id,autista_di_giro,autista_libero,note,piva,codice_fiscale,codice_univoco,pec,cond_pagamento,e_fornitore,classificazione,contatto_nome,telefono,onboarding_stato,onboarding_checklist,fido,sbloccato)
+         VALUES ($1,'cliente',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'in_attesa',$18::jsonb,0,FALSE)
+         RETURNING id,nome,crm_tipo,alias,localita,giro,autista_di_giro,autista_libero,piva,codice_fiscale,codice_univoco,pec,classificazione,cond_pagamento,e_fornitore,contatto_nome,telefono,onboarding_contatto_tipo,onboarding_stato,fido,sbloccato,created_at,crm_convertito_at`,
+      [nome, alias, localita, giro, agente_id||null, autista_di_giro||null, String(autista_libero || '').trim(), note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, contatto_nome, telefono, JSON.stringify({})]
       );
     const u = req.user;
     const creator = `${u.nome} ${u.cognome||''}`.trim();
@@ -3144,15 +3147,15 @@ app.post('/api/clienti/lookup-piva', authMiddleware, requirePermission('clienti:
 app.put('/api/clienti/:id', authMiddleware, requirePermission('clienti:update'), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { nome, alias='', localita='', giro='', agente_id=null, autista_di_giro=null,
+      const { nome, alias='', localita='', giro='', agente_id=null, autista_di_giro=null, autista_libero='',
               note='', piva='', codice_fiscale='', codice_univoco='', pec='',
               cond_pagamento='', e_fornitore=false, classificazione='',
               contatto_nome='', telefono='' } = req.body;
       if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
       await q(
       `UPDATE clienti SET nome=$1,alias=$2,localita=$3,giro=$4,agente_id=$5,autista_di_giro=$6,
-         note=$7,piva=$8,codice_fiscale=$9,codice_univoco=$10,pec=$11,cond_pagamento=$12,e_fornitore=$13,classificazione=$14,contatto_nome=$15,telefono=$16 WHERE id=$17`,
-      [nome, alias, localita, giro, agente_id||null, autista_di_giro||null, note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, contatto_nome, telefono, id]
+         autista_libero=$7,note=$8,piva=$9,codice_fiscale=$10,codice_univoco=$11,pec=$12,cond_pagamento=$13,e_fornitore=$14,classificazione=$15,contatto_nome=$16,telefono=$17 WHERE id=$18`,
+      [nome, alias, localita, giro, agente_id||null, autista_di_giro||null, String(autista_libero || '').trim(), note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, contatto_nome, telefono, id]
       );
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -3170,7 +3173,7 @@ app.post('/api/clienti/:id/converti-da-crm', authMiddleware, requirePermission('
       return res.status(400).json({ error: 'Il record selezionato non è un prospect CRM' });
     }
     const {
-      nome, alias, localita, giro, agente_id, autista_di_giro, note, piva,
+      nome, alias, localita, giro, agente_id, autista_di_giro, autista_libero, note, piva,
       codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore,
       classificazione, contatto_nome, telefono,
     } = parsed.data;
@@ -3183,24 +3186,25 @@ app.post('/api/clienti/:id/converti-da-crm', authMiddleware, requirePermission('
               giro=$4,
               agente_id=$5,
               autista_di_giro=$6,
-              note=$7,
-              piva=$8,
-              codice_fiscale=$9,
-              codice_univoco=$10,
-              pec=$11,
-              cond_pagamento=$12,
-              e_fornitore=$13,
-              classificazione=$14,
-              contatto_nome=$15,
-              telefono=$16,
+              autista_libero=$7,
+              note=$8,
+              piva=$9,
+              codice_fiscale=$10,
+              codice_univoco=$11,
+              pec=$12,
+              cond_pagamento=$13,
+              e_fornitore=$14,
+              classificazione=$15,
+              contatto_nome=$16,
+              telefono=$17,
               onboarding_contatto_tipo=COALESCE(NULLIF(onboarding_contatto_tipo, ''), onboarding_contatto_tipo),
               onboarding_stato='in_attesa',
               onboarding_checklist=COALESCE(onboarding_checklist, '{}'::jsonb),
               crm_convertito_at=COALESCE(crm_convertito_at, NOW())
-        WHERE id=$17
+        WHERE id=$18
         RETURNING *`,
       [
-        nome, alias, localita, giro, agente_id || null, autista_di_giro || null, note, piva,
+        nome, alias, localita, giro, agente_id || null, autista_di_giro || null, String(autista_libero || '').trim(), note, piva,
         codice_fiscale, codice_univoco, pec, cond_pagamento, !!e_fornitore,
         classificazione, contatto_nome, telefono, id,
       ]

@@ -1148,6 +1148,10 @@ function getAutistaDiGiro(giro) {
   return state.utenti.find(u => u.ruolo === 'autista' && (u.giriConsegna||[]).includes(giro)) || null;
 }
 
+function getClienteConsegnatarioFallback(cliente) {
+  return String(cliente?.autistaLibero || '').trim();
+}
+
 function populateAutistaDiGiroSelect(selectedId, suggestedId) {
   const sel = document.getElementById('ord-autista-di-giro');
   if (!sel) return;
@@ -1174,8 +1178,9 @@ function updateConsegnatarioDisplay(clienteId, keepSelection = true) {
     box.textContent = (aut.nome + ' ' + (aut.cognome||'')).trim();
     box.style.color = 'var(--text1)';
   } else {
-    box.textContent = c ? '— nessun autista per questo giro' : '—';
-    box.style.color = 'var(--text3)';
+    const fallback = getClienteConsegnatarioFallback(c);
+    box.textContent = fallback || (c ? '— nessun autista per questo giro' : '—');
+    box.style.color = fallback ? 'var(--text1)' : 'var(--text3)';
   }
   renderOrdineDeliveryDaysHint();
 }
@@ -1248,8 +1253,9 @@ function updateConsegnatarioDisplay(clienteId, keepSelection = true) {
     box.textContent = (aut.nome + ' ' + (aut.cognome || '')).trim();
     box.style.color = 'var(--text1)';
   } else {
-    box.textContent = c ? '— nessun autista suggerito per questo giro' : '—';
-    box.style.color = 'var(--text3)';
+    const fallback = getClienteConsegnatarioFallback(c);
+    box.textContent = fallback || (c ? '— nessun autista suggerito per questo giro' : '—');
+    box.style.color = fallback ? 'var(--text1)' : 'var(--text3)';
   }
   renderOrdineDeliveryDaysHint();
 }

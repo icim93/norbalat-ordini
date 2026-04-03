@@ -188,6 +188,7 @@ function openNewCliente() {
   document.getElementById('cl-fido').value = '';
   document.getElementById('cl-efornitore').checked = false;
   populateAgenteSelect('cl-agente', null);
+  document.getElementById('cl-autista-libero').value = '';
   openModal('modal-cliente');
 }
 
@@ -219,6 +220,7 @@ function openEditCliente(id) {
   document.getElementById('cl-fido').value = c.fido || 0;
   document.getElementById('cl-efornitore').checked = c.eFornitore || false;
   populateAgenteSelect('cl-agente', c.agenteId);
+  document.getElementById('cl-autista-libero').value = c.autistaLibero || '';
   openModal('modal-cliente');
 }
 
@@ -288,6 +290,7 @@ async function saveCliente() {
     localita: document.getElementById('cl-localita').value.trim(),
     giro: document.getElementById('cl-giro').value,
     agente_id: parseInt(document.getElementById('cl-agente').value) || null,
+    autista_libero: document.getElementById('cl-autista-libero').value.trim(),
     note: document.getElementById('cl-note').value.trim(),
     piva,
     contatto_nome: document.getElementById('cl-contatto-nome').value.trim(),

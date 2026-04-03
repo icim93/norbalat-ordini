@@ -4403,6 +4403,10 @@
           </select>
         </div>
         <div class="field form-full">
+          <label>Autista libero / consegnatario</label>
+          <input type="text" id="cl-autista-libero" placeholder="es. Gaston magazzino, Franco, corriere esterno">
+        </div>
+        <div class="field form-full">
           <label>📌 Note fisse cliente</label>
           <textarea id="cl-note" placeholder="Es: Consegnare solo il martedì mattina, campanello interno 3…" style="min-height:70px;"></textarea>
         </div>
@@ -11179,6 +11183,57 @@ function updatePDFPreview() {
     };
   }
 
+  function getWideOrderLineHtml({ nome, nota, qty, um }) {
+    return `<div style="display:grid;grid-template-columns:18px minmax(0,1.9fr) minmax(72px,0.62fr) minmax(78px,0.68fr) minmax(62px,0.5fr);gap:5px;align-items:center;padding:2px 0;font-size:10px;border-bottom:1px dotted #eee;">
+      <span style="width:12px;height:12px;border:1.2px solid #666;border-radius:2px;display:inline-block;"></span>
+      <span style="min-width:0;word-break:break-word;overflow-wrap:anywhere;">${nome}${nota}</span>
+      <span style="white-space:nowrap;font-weight:700;">${qty} ${um}</span>
+      <span style="display:block;min-height:14px;border-bottom:1px solid #999;padding-bottom:1px;">&nbsp;</span>
+      <span style="display:block;min-height:14px;border-bottom:1px solid #999;padding-bottom:1px;">&nbsp;</span>
+    </div>`;
+  }
+
+  function getCompactOrderLineHtml({ nome, nota, qty, um }) {
+    return `<div style="padding:4px 0 5px;border-bottom:1px dotted #ddd;">
+      <div style="display:flex;align-items:flex-start;gap:6px;">
+        <span style="width:11px;height:11px;border:1.2px solid #666;border-radius:2px;display:inline-block;flex:0 0 auto;margin-top:2px;"></span>
+        <div style="min-width:0;flex:1;font-size:10px;font-weight:600;line-height:1.25;word-break:break-word;overflow-wrap:anywhere;">${nome}${nota}</div>
+      </div>
+      <div style="margin-top:4px;margin-left:17px;display:grid;grid-template-columns:minmax(0,1fr);gap:3px;font-size:9px;color:#444;">
+        <div><span style="font-weight:700;text-transform:uppercase;color:#666;">Ordine:</span> <span style="font-weight:700;">${qty} ${um}</span></div>
+        <div style="display:grid;grid-template-columns:minmax(42px,auto) minmax(0,1fr);gap:5px;align-items:end;">
+          <span style="font-weight:700;text-transform:uppercase;color:#666;">Lotto</span>
+          <span style="display:block;min-height:13px;border-bottom:1px solid #999;">&nbsp;</span>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(32px,auto) minmax(0,1fr);gap:5px;align-items:end;">
+          <span style="font-weight:700;text-transform:uppercase;color:#666;">Q.tà</span>
+          <span style="display:block;min-height:13px;border-bottom:1px solid #999;">&nbsp;</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function getOrderChunkTemplate(columnCount) {
+    if (columnCount === 3) {
+      return {
+        mode: 'compact',
+        headerHtml: '',
+        lineHtml: getCompactOrderLineHtml,
+      };
+    }
+    return {
+      mode: 'wide',
+      headerHtml: `<div style="display:grid;grid-template-columns:18px minmax(0,1.9fr) minmax(72px,0.62fr) minmax(78px,0.68fr) minmax(62px,0.5fr);gap:5px;font-size:8px;font-weight:700;color:#555;text-transform:uppercase;padding:1px 0 3px;border-bottom:1px solid #ccc;margin-bottom:2px;">
+        <span></span>
+        <span>Prodotto</span>
+        <span>Ordine</span>
+        <span>Lotto</span>
+        <span>Q.tà</span>
+      </div>`,
+      lineHtml: getWideOrderLineHtml,
+    };
+  }
+
   function buildOrderSegments(order) {
     const cl = getCliente(order.clienteId);
     const flags = [order.stef ? '🚛 STEF' : '', order.altroVettore ? '🚚 ALTRO VETTORE' : '', order.dataNonCerta ? '⚠️' : ''].filter(Boolean).join(' ');
@@ -11188,14 +11243,7 @@ function updatePDFPreview() {
       const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
       const qty = l.qty || 1;
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
-      const html = `<div style="display:grid;grid-template-columns:18px minmax(0,1.9fr) minmax(72px,0.62fr) minmax(78px,0.68fr) minmax(62px,0.5fr);gap:5px;align-items:center;padding:2px 0;font-size:10px;border-bottom:1px dotted #eee;">
-        <span style="width:12px;height:12px;border:1.2px solid #666;border-radius:2px;display:inline-block;"></span>
-        <span style="min-width:0;word-break:break-word;overflow-wrap:anywhere;">${nome}${nota}</span>
-        <span style="white-space:nowrap;font-weight:700;">${qty} ${um}</span>
-        <span style="display:block;min-height:14px;border-bottom:1px solid #999;padding-bottom:1px;">&nbsp;</span>
-        <span style="display:block;min-height:14px;border-bottom:1px solid #999;padding-bottom:1px;">&nbsp;</span>
-      </div>`;
-      return { html };
+      return { nome, nota, qty, um };
     });
     return {
       clientName: cl.nome,
@@ -11205,18 +11253,13 @@ function updatePDFPreview() {
     };
   }
 
-  function buildOrderChunkHtml(segment, lineSlice, continued = false) {
+  function buildOrderChunkHtml(segment, lineSlice, columnCount, continued = false) {
+    const template = getOrderChunkTemplate(columnCount);
     return `<div class="print-order-block" style="margin-bottom:10px;padding:0 0 6px;">
       <div style="font-weight:700;font-size:13px;text-decoration:underline;word-break:break-word;overflow-wrap:anywhere;">${escapeHtml(segment.clientName)}${segment.flags ? ` <span style="font-weight:400;font-size:11px;">${segment.flags}</span>` : ''}${continued ? ' <span style="font-weight:400;font-size:10px;color:#777;">(CONTINUA)</span>' : ''}</div>
       ${segment.note ? `<div style="font-size:11px;color:#666;margin-bottom:2px;">📝 ${escapeHtml(segment.note)}</div>` : ''}
-      <div style="display:grid;grid-template-columns:18px minmax(0,1.9fr) minmax(72px,0.62fr) minmax(78px,0.68fr) minmax(62px,0.5fr);gap:5px;font-size:8px;font-weight:700;color:#555;text-transform:uppercase;padding:1px 0 3px;border-bottom:1px solid #ccc;margin-bottom:2px;">
-        <span></span>
-        <span>Prodotto</span>
-        <span>Ordine</span>
-        <span>Lotto</span>
-        <span>Q.tà</span>
-      </div>
-      ${lineSlice.map(line => line.html).join('')}
+      ${template.headerHtml}
+      ${lineSlice.map(line => template.lineHtml(line)).join('')}
     </div>`;
   }
 
@@ -11300,6 +11343,9 @@ function updatePDFPreview() {
   }
 
   function renderGiroPageChunk(stateItem, availableHeight, columnCount) {
+    if (!isGiroStateActive(stateItem)) {
+      return { html: '', usedHeight: 0 };
+    }
     const headerHtml = buildGiroHeaderHtml(stateItem);
     const headerHeight = measureReportBlock(headerHtml, { columnCount });
     let usedHeight = headerHeight;
@@ -11315,7 +11361,7 @@ function updatePDFPreview() {
         continue;
       }
       const remainingHeight = availableHeight - usedHeight;
-      const buildChunk = count => buildOrderChunkHtml(segment, remainingLines.slice(0, count), stateItem.lineIndex > 0);
+      const buildChunk = count => buildOrderChunkHtml(segment, remainingLines.slice(0, count), columnCount, stateItem.lineIndex > 0);
       let fit = findFittingSliceLength(remainingLines.length, buildChunk, remainingHeight, { columnCount });
       if (!fit.count) {
         if (placedAnyChunk) break;
@@ -11338,6 +11384,10 @@ function updatePDFPreview() {
     return { html, usedHeight };
   }
 
+  function createEmptyBatchColumns(batchStates) {
+    return batchStates.map(stateItem => ({ giro: stateItem.giro, html: '', usedHeight: 0 }));
+  }
+
   function paginateReportBlocks() {
     const pageChrome = measureReportPageChrome();
     const availableBodyHeight = pageChrome.bodyHeight;
@@ -11345,16 +11395,16 @@ function updatePDFPreview() {
     const pages = [];
     for (let batchStart = 0; batchStart < giroStates.length; batchStart += BATCH_COLUMN_COUNT) {
       const batchStates = giroStates.slice(batchStart, batchStart + BATCH_COLUMN_COUNT);
+      const batchColumnCount = Math.max(1, batchStates.length);
       while (batchStates.some(isGiroStateActive)) {
-        const columns = [];
-        const activeBatchStates = batchStates.filter(isGiroStateActive);
-        const columnCount = Math.max(1, activeBatchStates.length);
-        for (const stateItem of activeBatchStates) {
-          const chunk = renderGiroPageChunk(stateItem, availableBodyHeight, columnCount);
-          columns.push({ giro: stateItem.giro, html: chunk.html, usedHeight: chunk.usedHeight });
+        const columns = createEmptyBatchColumns(batchStates);
+        for (let idx = 0; idx < batchStates.length; idx++) {
+          const stateItem = batchStates[idx];
+          const chunk = renderGiroPageChunk(stateItem, availableBodyHeight, batchColumnCount);
+          columns[idx] = { giro: stateItem.giro, html: chunk.html, usedHeight: chunk.usedHeight };
         }
         pages.push({
-          columnCount,
+          columnCount: batchColumnCount,
           columns,
           maxUsedHeight: Math.max(...columns.map(col => Number(col.usedHeight || 0)), 0),
           tailBlocks: [],
