@@ -124,7 +124,21 @@
       { page: 'ordini', icon: NAV_ICONS.ordini, label: 'Ordini' },
       { page: 'giacenze', icon: NAV_ICONS.giacenze, label: 'Giacenze' },
       { page: 'clienti', icon: NAV_ICONS.clienti, label: 'Clienti' },
+      { page: 'crm', icon: NAV_ICONS.crm, label: 'CRM' },
+      { page: 'prodotti', icon: NAV_ICONS.prodotti, label: 'Prodotti' },
+      { page: 'ferie', icon: NAV_ICONS.ferie, label: 'Calendario' },
+      { page: 'messaggi', icon: NAV_ICONS.messaggi, label: 'Messaggi' },
+      { page: 'report', icon: NAV_ICONS.report, label: 'Report' },
+      { page: 'listini', icon: NAV_ICONS.listini, label: 'Listini' },
+      { page: 'rese', icon: NAV_ICONS.rese, label: 'Gestione Rese' },
+      { page: 'sperimentale', icon: NAV_ICONS.sperimentale, label: 'CLAL' },
+      { page: 'documenti', icon: NAV_ICONS.documenti, label: 'Documenti' },
+      { page: 'profilo', icon: NAV_ICONS.profilo, label: 'Il mio profilo' },
     ],
+  };
+
+  const mobileNavConfigs = {
+    direzione: ['dashboard', 'ordini', 'giacenze', 'clienti'],
   };
 
   function getFlatNavItems(config) {
@@ -146,6 +160,15 @@
   function ensurePageSectionOpen(config, page) {
     const section = getSectionForPage(config, page);
     if (section) navOpenSections.add(getSectionKey(section));
+  }
+
+  function getMobileNavItems(role, items) {
+    const preferredPages = mobileNavConfigs[role];
+    if (!preferredPages?.length) return items.slice(0, 4);
+    const mobileItems = preferredPages
+      .map(page => items.find(item => item.page === page))
+      .filter(Boolean);
+    return mobileItems.length ? mobileItems : items.slice(0, 4);
   }
 
   function getNavBadgeValue(page) {
@@ -461,7 +484,8 @@
 
     const mobileNav = document.getElementById('mobile-nav-items');
     if (mobileNav) {
-      mobileNav.innerHTML = items.slice(0, 4).map(i => `
+      const mobileItems = getMobileNavItems(role, items);
+      mobileNav.innerHTML = mobileItems.map(i => `
       <button class="mobile-nav-item" id="mnav-${i.page}" onclick="goTo('${i.page}')">
         <span class="mn-icon">${i.icon}</span>${i.label}
       </button>

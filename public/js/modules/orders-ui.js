@@ -216,6 +216,384 @@ function renderDashboard() {
   if (typeof renderGiacenzeAlerts === 'function') renderGiacenzeAlerts();
 }
 
+const DASHBOARD_PREFS_KEY = 'norbalat_dashboard_prefs_v1';
+
+function dashboardPrefsStorageKey() {
+  const role = state.currentUser?.ruolo || 'guest';
+  const userId = state.currentUser?.id || 'anon';
+  return `${DASHBOARD_PREFS_KEY}:${role}:${userId}`;
+}
+
+function sanitizeDashboardPrefs(raw, panelDefs) {
+  const ids = panelDefs.map(panel => panel.id);
+  const visible = {};
+  ids.forEach(id => {
+    visible[id] = raw?.visible?.[id] !== false;
+  });
+  const order = Array.isArray(raw?.order) ? raw.order.filter(id => ids.includes(id)) : [];
+  ids.forEach(id => {
+    if (!order.includes(id)) order.push(id);
+  });
+  return {
+    visible,
+    order,
+    sections: {
+      recent: raw?.sections?.recent !== false,
+      alerts: raw?.sections?.alerts !== false,
+    },
+  };
+}
+
+function loadDashboardPrefs(panelDefs) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(dashboardPrefsStorageKey()) || 'null');
+    return sanitizeDashboardPrefs(raw, panelDefs);
+  } catch (_) {
+    return sanitizeDashboardPrefs(null, panelDefs);
+  }
+}
+
+function saveDashboardPrefs(prefs, panelDefs) {
+  const safe = sanitizeDashboardPrefs(prefs, panelDefs);
+  localStorage.setItem(dashboardPrefsStorageKey(), JSON.stringify(safe));
+  return safe;
+}
+
+function getDashboardData() {
+  const ruolo = state.currentUser?.ruolo || 'admin';
+  const t = today();
+  const userId = state.currentUser?.id;
+  const ordiniOggi = state.ordini.filter(o => o.data === t);
+  const assegnatiAutista = ordiniOggi.filter(o => o.autistaDiGiro === userId && o.stato !== 'annullato');
+  const attesa = state.ordini.filter(o => o.stato === 'attesa').length;
+  const consegnati = state.ordini.filter(o => o.stato === 'consegnato').length;
+  const preparare = state.ordini.filter(o => o.stato === 'preparazione').length;
+  const preparati = state.ordini.filter(o => o.stato === 'preparato').length;
+  const alertSottoSoglia = state.giacenzeAlerts?.sotto_soglia?.length || 0;
+  const alertScadenze = state.giacenzeAlerts?.in_scadenza?.length || 0;
+  const caricoTentata = state.carichiTentataVendita.find(c => c.userId === userId);
+  const clienteFollowup = Object.values(state.crmSummary || {}).filter(c => c?.followup_date && String(c.followup_date).slice(0, 10) <= t).length;
+  const unreadConversations = (state.messagesRecent || []).filter(item => !!item.unread).slice(0, 4);
+  const todaysCalendarEvents = (state.ferie || [])
+    .filter(item => {
+      const start = String(item.data_inizio || '').slice(0, 10);
+      const end = String(item.data_fine || '').slice(0, 10);
+      return start && end && start <= t && end >= t;
+    })
+    .slice(0, 5);
+  return {
+    ruolo,
+    ordiniOggi,
+    assegnatiAutista,
+    attesa,
+    consegnati,
+    preparare,
+    preparati,
+    alertSottoSoglia,
+    alertScadenze,
+    caricoTentata,
+    clienteFollowup,
+    unreadConversations,
+    todaysCalendarEvents,
+  };
+}
+
+function getDashboardPanelDefs(data) {
+  const calendarTypeLabel = tipo => {
+    const key = String(tipo || '').toLowerCase();
+    if (key === 'ferie') return 'Ferie';
+    if (key === 'attivita') return 'Attivita';
+    if (key === 'evento') return 'Evento';
+    return 'Evento';
+  };
+  const defs = [
+    {
+      id: 'promemoria',
+      label: 'Promemoria di oggi',
+      roles: ['admin', 'amministrazione', 'magazzino', 'autista', 'direzione'],
+      render: () => `
+        <div class="card" style="grid-column:1 / -1;">
+          <div class="card-header"><div class="card-title">Promemoria di oggi</div></div>
+          <div style="padding:0 16px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
+            <div style="border:1px solid var(--border);border-radius:12px;padding:14px;background:linear-gradient(180deg,#f7fbff 0%,#eef7ff 100%);">
+              <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px;">
+                <strong>Messaggi ricevuti</strong>
+                <span class="badge ${data.unreadConversations.length ? 'badge-orange' : 'badge-gray'}">${Number(state.messagesUnreadCount || 0)} non letti</span>
+              </div>
+              ${data.unreadConversations.length ? data.unreadConversations.map(item => `
+                <button class="btn btn-outline btn-sm" style="width:100%;justify-content:flex-start;text-align:left;margin-bottom:8px;" onclick="goTo('messaggi');setTimeout(() => openMessaggioDettaglio(${Number(item.id)}), 60)">
+                  <span style="display:block;min-width:0;">
+                    <strong>${escapeHtml(item.created_by_name || item.destinatario_nome || 'Utente')}</strong><br>
+                    <span style="font-size:11px;color:var(--text3);">${escapeHtml(String(item.oggetto || '(senza oggetto)').slice(0, 48))}</span>
+                  </span>
+                </button>`).join('') : `<div style="font-size:13px;color:var(--text2);">Nessun nuovo messaggio da gestire.</div>`}
+            </div>
+            <div style="border:1px solid var(--border);border-radius:12px;padding:14px;background:linear-gradient(180deg,#fffdf7 0%,#fff7e8 100%);">
+              <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:10px;">
+                <strong>Eventi in programma</strong>
+                <span class="badge ${data.todaysCalendarEvents.length ? 'badge-blue' : 'badge-gray'}">${data.todaysCalendarEvents.length} oggi</span>
+              </div>
+              ${data.todaysCalendarEvents.length ? data.todaysCalendarEvents.map(item => `
+                <button class="btn btn-outline btn-sm" style="width:100%;justify-content:flex-start;text-align:left;margin-bottom:8px;" onclick="goTo('ferie')">
+                  <span style="display:block;min-width:0;">
+                    <strong>${escapeHtml(item.titolo || calendarTypeLabel(item.tipo))}</strong><br>
+                    <span style="font-size:11px;color:var(--text3);">${escapeHtml(`${item.nome || ''} ${item.cognome || ''}`.trim() || 'Referente')} · ${escapeHtml(calendarTypeLabel(item.tipo))}</span>
+                  </span>
+                </button>`).join('') : `<div style="font-size:13px;color:var(--text2);">Nessun evento previsto per oggi.</div>`}
+            </div>
+          </div>
+        </div>`,
+    },
+    {
+      id: 'magazzino',
+      label: 'Magazzino',
+      roles: ['admin', 'magazzino', 'direzione'],
+      render: () => `
+        <div class="card">
+          <div class="card-header"><div class="card-title">Magazzino</div></div>
+          <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
+            <div style="margin-bottom:8px;">${data.alertSottoSoglia} prodotti sotto soglia e ${data.alertScadenze} lotti in scadenza.</div>
+            <button class="btn btn-outline btn-sm" onclick="goTo('giacenze')">Apri giacenze</button>
+          </div>
+        </div>`,
+    },
+    {
+      id: 'crm',
+      label: 'Clienti e CRM',
+      roles: ['admin', 'amministrazione', 'direzione'],
+      render: () => `
+        <div class="card">
+          <div class="card-header"><div class="card-title">Clienti e CRM</div></div>
+          <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
+            <div style="margin-bottom:8px;">Follow-up CRM da gestire: <b>${data.clienteFollowup}</b></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-outline btn-sm" onclick="goTo('clienti')">Apri clienti</button>
+              <button class="btn btn-outline btn-sm" onclick="goTo('crm')">Apri CRM</button>
+            </div>
+          </div>
+        </div>`,
+    },
+    {
+      id: 'report',
+      label: 'Report e listini',
+      roles: ['admin', 'amministrazione', 'direzione'],
+      render: () => `
+        <div class="card">
+          <div class="card-header"><div class="card-title">Report e listini</div></div>
+          <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
+            <div style="margin-bottom:8px;">Accesso rapido a reportistica, listini e documenti.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-outline btn-sm" onclick="goTo('report')">Apri report</button>
+              <button class="btn btn-outline btn-sm" onclick="goTo('listini')">Apri listini</button>
+              <button class="btn btn-outline btn-sm" onclick="goTo('documenti')">Apri documenti</button>
+            </div>
+          </div>
+        </div>`,
+    },
+    {
+      id: 'autista-giro',
+      label: 'Giro di oggi',
+      roles: ['autista'],
+      render: () => `
+        <div class="card">
+          <div class="card-header"><div class="card-title">Giro di oggi</div></div>
+          <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
+            <div style="margin-bottom:8px;">Ordini assegnati: <b>${data.assegnatiAutista.length}</b></div>
+            <button class="btn btn-outline btn-sm" onclick="goTo('autista')">Apri vista autista</button>
+          </div>
+        </div>`,
+    },
+    {
+      id: 'autista-tentata',
+      label: 'Tentata vendita',
+      roles: ['autista'],
+      render: () => `
+        <div class="card">
+          <div class="card-header"><div class="card-title">Tentata vendita</div></div>
+          <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
+            <div style="margin-bottom:8px;">Prodotti nel carico predefinito: <b>${(data.caricoTentata?.linee || []).length}</b></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-green btn-sm" onclick="openNewOrder()">+ Nuovo ordine</button>
+              <button class="btn btn-outline btn-sm" onclick="goTo('tentata')">Apri tentata vendita</button>
+            </div>
+          </div>
+        </div>`,
+    },
+  ];
+  return defs.filter(def => def.roles.includes(data.ruolo));
+}
+
+function renderDashboardCustomizer(panelDefs, prefs) {
+  const isOpen = !!state.dashboardCustomizeOpen;
+  return `
+    <div class="card" style="grid-column:1 / -1;border-style:dashed;">
+      <div class="card-header">
+        <div class="card-title">Personalizza dashboard</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="toggleDashboardCustomizer()">${isOpen ? 'Chiudi' : 'Configura'}</button>
+          <button class="btn btn-outline btn-sm" onclick="resetDashboardPrefs()">Ripristina</button>
+        </div>
+      </div>
+      ${isOpen ? `
+        <div style="padding:0 16px 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;font-size:13px;color:var(--text2);">
+          <div>
+            <div style="font-weight:700;margin-bottom:8px;color:var(--text);">Riquadri</div>
+            ${prefs.order.map(id => {
+              const panel = panelDefs.find(item => item.id === id);
+              if (!panel) return '';
+              return `
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
+                  <label style="display:flex;align-items:center;gap:8px;min-width:0;flex:1;cursor:pointer;">
+                    <input type="checkbox" ${prefs.visible[id] ? 'checked' : ''} onchange="toggleDashboardPanelPref('${id}')">
+                    <span>${escapeHtml(panel.label)}</span>
+                  </label>
+                  <div style="display:flex;gap:6px;">
+                    <button class="btn btn-outline btn-sm" onclick="moveDashboardPanelPref('${id}', -1)" title="Sposta su">Su</button>
+                    <button class="btn btn-outline btn-sm" onclick="moveDashboardPanelPref('${id}', 1)" title="Sposta giu">Giu</button>
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>
+          <div>
+            <div style="font-weight:700;margin-bottom:8px;color:var(--text);">Sezioni fisse</div>
+            <label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+              <input type="checkbox" ${prefs.sections.recent ? 'checked' : ''} onchange="toggleDashboardSectionPref('recent')">
+              <span>Mostra tabella ordini nella dashboard</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;">
+              <input type="checkbox" ${prefs.sections.alerts ? 'checked' : ''} onchange="toggleDashboardSectionPref('alerts')">
+              <span>Mostra allerta giacenze in basso</span>
+            </label>
+            <div style="margin-top:10px;">Le preferenze sono salvate per utente su questo browser.</div>
+          </div>
+        </div>` : ''}
+    </div>`;
+}
+
+function renderDashboard() {
+  const data = getDashboardData();
+  const ruolo = data.ruolo;
+  const statLabels = {
+    admin: ['Ordini oggi', 'In attesa', 'Consegnati', 'Da preparare'],
+    amministrazione: ['Ordini oggi', 'Clienti da seguire', 'Consegnati', 'Da verificare'],
+    magazzino: ['Ordini oggi', 'Da preparare', 'Preparati', 'In scadenza'],
+    autista: ['Consegne oggi', 'Consegnati', 'Preparati', 'Da consegnare'],
+    direzione: ['Ordini oggi', 'In attesa', 'Sotto soglia', 'In scadenza'],
+  }[ruolo] || ['Ordini oggi', 'In attesa', 'Consegnati', 'Da preparare'];
+  const statValues = {
+    admin: [data.ordiniOggi.length, data.attesa, data.consegnati, data.preparare],
+    amministrazione: [data.ordiniOggi.length, data.clienteFollowup, data.consegnati, data.attesa],
+    magazzino: [data.ordiniOggi.length, data.preparare, data.preparati, data.alertScadenze],
+    autista: [data.assegnatiAutista.length, data.assegnatiAutista.filter(o => o.stato === 'consegnato').length, data.assegnatiAutista.filter(o => o.stato === 'preparato').length, data.assegnatiAutista.filter(o => ['attesa', 'preparazione', 'preparato'].includes(o.stato)).length],
+    direzione: [data.ordiniOggi.length, data.attesa, data.alertSottoSoglia, data.alertScadenze],
+  }[ruolo] || [data.ordiniOggi.length, data.attesa, data.consegnati, data.preparare];
+  const statValueEls = [
+    document.getElementById('stat-oggi'),
+    document.getElementById('stat-attesa'),
+    document.getElementById('stat-consegnati'),
+    document.getElementById('stat-preparare'),
+  ];
+  ['1', '2', '3', '4'].forEach((idx, i) => {
+    const labelEl = document.getElementById(`stat-label-${idx}`);
+    if (labelEl) labelEl.textContent = statLabels[i];
+    if (statValueEls[i]) statValueEls[i].textContent = statValues[i];
+  });
+  document.getElementById('dash-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  const panelDefs = getDashboardPanelDefs(data);
+  const prefs = loadDashboardPrefs(panelDefs);
+  const focus = document.getElementById('dashboard-focus-panels');
+  if (focus) {
+    const panels = [renderDashboardCustomizer(panelDefs, prefs)];
+    prefs.order.forEach(id => {
+      const panel = panelDefs.find(def => def.id === id);
+      if (!panel || prefs.visible[id] === false) return;
+      panels.push(panel.render());
+    });
+    focus.innerHTML = panels.join('');
+  }
+  const recentTitle = document.getElementById('dashboard-recent-title');
+  const recentAction = document.getElementById('dashboard-recent-action');
+  const recentCard = recentTitle?.closest('.card');
+  const alertsCard = document.getElementById('dashboard-giacenze-alerts-card');
+  if (recentCard) recentCard.style.display = prefs.sections.recent ? '' : 'none';
+  if (alertsCard) alertsCard.style.display = prefs.sections.alerts ? '' : 'none';
+  const tbody = document.getElementById('dash-orders-table');
+  let recent = [...state.ordini].sort((a, b) => b.id - a.id).slice(0, 8);
+  if (ruolo === 'autista') recent = data.assegnatiAutista.slice(0, 8);
+  if (ruolo === 'magazzino') recent = data.ordiniOggi.filter(o => !['consegnato', 'annullato', 'sospeso'].includes(o.stato)).slice(0, 8);
+  if (recentTitle) recentTitle.textContent = ruolo === 'autista' ? 'Le mie consegne di oggi' : (ruolo === 'magazzino' ? 'Ordini operativi di oggi' : 'Ultimi ordini');
+  if (recentAction) {
+    if (ruolo === 'autista') {
+      recentAction.textContent = '+ Nuovo Ordine';
+      recentAction.onclick = () => openNewOrder();
+    } else if (ruolo === 'magazzino') {
+      recentAction.textContent = 'Apri preparazione';
+      recentAction.onclick = () => goTo('magazzino');
+    } else {
+      recentAction.textContent = '+ Nuovo Ordine';
+      recentAction.onclick = () => openNewOrder();
+    }
+  }
+  tbody.innerHTML = recent.map(o => `
+    <tr>
+      <td><span style="font-family:'DM Mono',monospace;font-weight:600;">#${o.id}</span></td>
+      <td><b>${escapeHtml(getCliente(o.clienteId).nome)}</b></td>
+      <td style="color:var(--text2);">${formatDate(o.data)}</td>
+      <td>
+        <div style="font-size:13px;">${(() => { const u = state.utenti.find(x => x.id === o.insertedBy); return u ? escapeHtml((u.nome + ' ' + (u.cognome||'')).trim()) : '-'; })()}</div>
+        ${o.agenteId ? `<div style="font-size:11px;color:var(--text2);">Agente: ${escapeHtml(getAgente(o.agenteId).nome)}</div>` : ''}
+      </td>
+      <td>${statoBadge(o.stato)}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">Dett</button>
+        ${['admin', 'magazzino'].includes(ruolo) ? `<button class="btn btn-outline btn-sm" title="Vai alla preparazione" aria-label="Vai alla preparazione" onclick="openPreparazioneOrdine(${o.id})">Prep</button>` : ''}
+        ${['admin', 'amministrazione'].includes(ruolo) ? `<button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">Mod</button>` : ''}
+      </td>
+    </tr>
+  `).join('') || `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">-</div><p>Nessun dato da mostrare</p></div></td></tr>`;
+  if (typeof renderGiacenzeAlerts === 'function') renderGiacenzeAlerts();
+}
+
+function toggleDashboardCustomizer() {
+  state.dashboardCustomizeOpen = !state.dashboardCustomizeOpen;
+  renderDashboard();
+}
+
+function toggleDashboardPanelPref(panelId) {
+  const panelDefs = getDashboardPanelDefs(getDashboardData());
+  const prefs = loadDashboardPrefs(panelDefs);
+  prefs.visible[panelId] = prefs.visible[panelId] === false;
+  saveDashboardPrefs(prefs, panelDefs);
+  renderDashboard();
+}
+
+function moveDashboardPanelPref(panelId, direction) {
+  const panelDefs = getDashboardPanelDefs(getDashboardData());
+  const prefs = loadDashboardPrefs(panelDefs);
+  const index = prefs.order.indexOf(panelId);
+  if (index < 0) return;
+  const nextIndex = index + Number(direction || 0);
+  if (nextIndex < 0 || nextIndex >= prefs.order.length) return;
+  const [panel] = prefs.order.splice(index, 1);
+  prefs.order.splice(nextIndex, 0, panel);
+  saveDashboardPrefs(prefs, panelDefs);
+  renderDashboard();
+}
+
+function toggleDashboardSectionPref(sectionId) {
+  const panelDefs = getDashboardPanelDefs(getDashboardData());
+  const prefs = loadDashboardPrefs(panelDefs);
+  prefs.sections[sectionId] = prefs.sections[sectionId] === false;
+  saveDashboardPrefs(prefs, panelDefs);
+  renderDashboard();
+}
+
+function resetDashboardPrefs() {
+  localStorage.removeItem(dashboardPrefsStorageKey());
+  state.dashboardCustomizeOpen = false;
+  renderDashboard();
+}
+
 // ================================================
 // ORDINI TABLE
 // ================================================
