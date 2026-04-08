@@ -76,6 +76,9 @@ const CLAL_BURRO_ZANGOLATO_URL = 'https://www.clal.it/index.php?section=burro_mi
 const EXPERIMENTAL_CLAL_SOURCE_KEY = 'burro_milano_zangolato';
 const EXPERIMENTAL_TIMEZONE = process.env.EXPERIMENTAL_TIMEZONE || 'Europe/Rome';
 const EXPERIMENTAL_AUTO_IMPORT_CHECK_MS = Math.max(5 * 60 * 1000, Number(process.env.EXPERIMENTAL_AUTO_IMPORT_CHECK_MS || 15 * 60 * 1000));
+const DB_CONNECT_TIMEOUT_MS = Math.max(1000, Number(process.env.DB_CONNECT_TIMEOUT_MS || 15000));
+const STARTUP_DB_MAX_RETRIES = Math.max(1, Number(process.env.STARTUP_DB_MAX_RETRIES || 6));
+const STARTUP_DB_RETRY_DELAY_MS = Math.max(1000, Number(process.env.STARTUP_DB_RETRY_DELAY_MS || 5000));
 
 const app  = express();
 const isRemoteDatabase = /^postgres(ql)?:\/\//i.test(DATABASE_URL) && !/localhost|127\.0\.0\.1/i.test(DATABASE_URL);
@@ -83,6 +86,7 @@ const shouldUseDatabaseSsl = ['require', 'true', '1', 'render'].includes(DATABAS
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: shouldUseDatabaseSsl ? { rejectUnauthorized: false } : undefined,
+  connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
 });
 const TENTATA_VENDITA_CLIENT_NAME = 'TENTATA VENDITA';
 const TENTATA_VENDITA_CLIENT_CLASS = 'cliente_tecnico_tentata';
@@ -93,6 +97,50 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Helper query
 const q = (text, params) => pool.query(text, params);
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getSafeDatabaseDiagnostics() {
+  try {
+    const parsed = new URL(DATABASE_URL);
+    return {
+      host: parsed.hostname || '',
+      port: parsed.port || '5432',
+      database: (parsed.pathname || '').replace(/^\//, ''),
+      user: decodeURIComponent(parsed.username || ''),
+      ssl: shouldUseDatabaseSsl ? 'enabled' : 'disabled',
+      timeoutMs: DB_CONNECT_TIMEOUT_MS,
+    };
+  } catch (_) {
+    return {
+      host: '',
+      port: '',
+      database: '',
+      user: '',
+      ssl: shouldUseDatabaseSsl ? 'enabled' : 'disabled',
+      timeoutMs: DB_CONNECT_TIMEOUT_MS,
+    };
+  }
+}
+
+function logDatabaseStartupError(error, attempt, maxAttempts) {
+  const info = getSafeDatabaseDiagnostics();
+  console.error(`DB startup error (${attempt}/${maxAttempts})`);
+  console.error(`  message: ${error?.message || 'Unknown error'}`);
+  if (error?.code) console.error(`  code: ${error.code}`);
+  if (error?.errno) console.error(`  errno: ${error.errno}`);
+  if (error?.syscall) console.error(`  syscall: ${error.syscall}`);
+  if (error?.address) console.error(`  address: ${error.address}`);
+  if (error?.port) console.error(`  port: ${error.port}`);
+  console.error(`  db host: ${info.host || 'n/a'}`);
+  console.error(`  db port: ${info.port || 'n/a'}`);
+  console.error(`  db name: ${info.database || 'n/a'}`);
+  console.error(`  db user: ${info.user || 'n/a'}`);
+  console.error(`  ssl: ${info.ssl}`);
+  console.error(`  timeoutMs: ${info.timeoutMs}`);
+}
 
 function normalizeOrdineUm(raw) {
   const src = String(raw || '').trim().toLowerCase();
@@ -8170,8 +8218,28 @@ async function start() {
     console.error('\n👉 Assicurati che PostgreSQL sia avviato e che il database esista.');
     console.error('   Crea il DB con: createdb norbalat');
     console.error('   Oppure imposta DATABASE_URL nel file .env\n');
-    process.exit(1);
+    throw e;
   }
 }
-start();
+
+async function startWithRetry() {
+  for (let attempt = 1; attempt <= STARTUP_DB_MAX_RETRIES; attempt += 1) {
+    try {
+      await start();
+      return;
+    } catch (e) {
+      logDatabaseStartupError(e, attempt, STARTUP_DB_MAX_RETRIES);
+      if (attempt < STARTUP_DB_MAX_RETRIES) {
+        console.error(`  retrying in ${STARTUP_DB_RETRY_DELAY_MS}ms...\n`);
+        await sleep(STARTUP_DB_RETRY_DELAY_MS);
+        continue;
+      }
+
+      console.error('\nDatabase startup failed after all retries.');
+      console.error('Check DATABASE_URL in .env and verify the remote PostgreSQL status.\n');
+      process.exit(1);
+    }
+  }
+}
+startWithRetry();
 
