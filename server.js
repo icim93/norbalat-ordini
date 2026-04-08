@@ -6174,14 +6174,31 @@ app.get('/api/impostazioni/tentata-vendita', authMiddleware, async (req, res) =>
   }
 });
 
-app.put('/api/impostazioni/tentata-vendita', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+app.put('/api/impostazioni/tentata-vendita', authMiddleware, requireRole('admin', 'magazzino', 'autista'), async (req, res) => {
   try {
-    const saved = await saveTentataVenditaSettings(req.body || {});
+    const role = String(req.user?.ruolo || '').trim().toLowerCase();
+    let saved;
+    if (role === 'autista') {
+      const current = await getTentataVenditaSettings();
+      const incomingEntries = Array.isArray(req.body?.carichi) ? req.body.carichi : [];
+      const ownEntry = incomingEntries.find(entry => Number(entry?.userId) === Number(req.user.id));
+      const merged = {
+        carichi: [
+          ...(current.carichi || []).filter(entry => Number(entry?.userId) !== Number(req.user.id)),
+          ...(ownEntry ? [{ ...ownEntry, userId: Number(req.user.id) }] : []),
+        ],
+      };
+      saved = await saveTentataVenditaSettings(merged);
+    } else {
+      saved = await saveTentataVenditaSettings(req.body || {});
+    }
     await logDB(
       req.user.id,
       `${req.user.nome} ${req.user.cognome || ''}`.trim(),
       'Configurazione tentata vendita',
-      `${saved.carichi.length} autisti configurati`
+      role === 'autista'
+        ? 'Aggiornato profilo tentata vendita personale'
+        : `${saved.carichi.length} autisti configurati`
     );
     res.json(saved);
   } catch (e) {

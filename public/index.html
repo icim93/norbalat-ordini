@@ -1636,6 +1636,63 @@
     border-style: dashed;
     background: color-mix(in srgb, var(--accent-light) 70%, #ffffff);
   }
+  .piano-order-tag.mobile-static {
+    cursor: default;
+  }
+  .piano-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .piano-picker-order-btn {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface1);
+    color: var(--text1);
+    text-align: left;
+    cursor: pointer;
+  }
+  .piano-picker-order-btn.is-assigned-here {
+    border-color: var(--success);
+    background: var(--success-light);
+  }
+  .piano-picker-order-btn.is-assigned-elsewhere {
+    border-color: #f5c26b;
+    background: #fff7e8;
+  }
+  .piano-picker-order-btn strong {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+  .piano-picker-order-btn .picker-meta {
+    font-size: 11px;
+    color: var(--text2);
+    line-height: 1.35;
+  }
+  .piano-picker-order-btn .picker-badge {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: var(--surface2);
+    color: var(--text2);
+  }
+  .piano-picker-order-btn.is-assigned-here .picker-badge {
+    background: var(--success);
+    color: #fff;
+  }
+  .piano-picker-order-btn.is-assigned-elsewhere .picker-badge {
+    background: #f59e0b;
+    color: #fff;
+  }
   .pedana-card.drop-ready {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(30,139,195,0.14);
@@ -1933,6 +1990,68 @@
     grid-template-columns: 320px 1fr;
     gap: 14px;
   }
+  .ferie-calendar-head {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ferie-calendar-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .ferie-calendar-title-range {
+    min-width: 240px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .ferie-calendar-mode {
+    display: flex;
+    gap: 3px;
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 3px;
+  }
+  .ferie-calendar-body {
+    padding: 0 16px 16px;
+  }
+  .ferie-calendar-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .ferie-calendar-week-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(136px, 1fr));
+    gap: 8px;
+    min-width: 980px;
+  }
+  .ferie-calendar-month-head {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(104px, 1fr));
+    margin-bottom: 4px;
+    min-width: 728px;
+  }
+  .ferie-calendar-month-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(104px, 1fr));
+    gap: 3px;
+    min-width: 728px;
+  }
+  .ferie-calendar-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 14px;
+  }
+  .ferie-page-grid {
+    display: grid;
+    grid-template-columns: minmax(0,1.7fr) minmax(260px,0.85fr);
+    gap: 16px;
+    align-items: start;
+  }
 
   @media (max-width: 768px) {
     html, body, #screen-app, .app-layout, .main, .page, .card, .modal, .modal-body {
@@ -2042,6 +2161,32 @@
     .search-input {
       width: 100%;
       min-width: 0;
+    }
+    .ferie-calendar-nav,
+    .ferie-calendar-mode {
+      width: 100%;
+    }
+    .ferie-calendar-nav {
+      justify-content: space-between;
+    }
+    .ferie-calendar-title-range {
+      min-width: 0;
+      flex: 1;
+      font-size: 12px;
+    }
+    .ferie-calendar-mode .btn {
+      flex: 1;
+      justify-content: center;
+    }
+    .ferie-calendar-body {
+      padding: 0 12px 12px;
+    }
+    .ferie-calendar-scroll {
+      margin: 0 -12px;
+      padding: 0 12px 6px;
+    }
+    .ferie-page-grid {
+      grid-template-columns: 1fr;
     }
     .toolbar-shell,
     .toolbar-filters,
@@ -2519,6 +2664,9 @@
       grid-template-columns: 1fr;
     }
     .pedana-input { min-height: 52px; }
+    .piano-picker-order-btn {
+      padding: 11px 12px;
+    }
     .table-scroll-wrap table { min-width: 520px; }
     .warehouse-card {
       padding: 14px;
@@ -5109,6 +5257,24 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-piano-pedana-picker">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="piano-pedana-picker-title">Ordini pedana</div>
+        <div id="piano-pedana-picker-subtitle" style="font-size:12px;color:var(--text2);margin-top:4px;">Tocca un ordine per aggiungerlo o rimuoverlo da questa pedana.</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-piano-pedana-picker')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="piano-pedana-picker-list" class="piano-picker-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-piano-pedana-picker')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: PDF Riepilogativo Giornaliero -->
 <div class="modal-overlay" id="modal-pdf-giornaliero">
   <div class="modal" style="max-width:760px;">
@@ -6658,6 +6824,7 @@ async function bulkConfermaConsegnaAutista() {
 
 let pianoSelectedCamionId = null;
 let pianoDraggingOrderId = null;
+let pianoMobilePedanaSelection = null;
 const PIANO_ORDER_MARKER_RE = /^\[\[ORD:(\d+)]]$/;
 
 function parsePedanaNota(nota) {
@@ -6717,6 +6884,20 @@ function getCamionOrderAssignmentStats(camion) {
   return counts;
 }
 
+function isPianoMobileViewport() {
+  return typeof window !== 'undefined' && window.innerWidth <= 768;
+}
+
+function getOrdiniGiroForCamion(camion) {
+  const autistaInUso = camion?.autistaInUso ? state.utenti.find(u => u.id === camion.autistaInUso) : null;
+  if (!autistaInUso) return [];
+  return state.ordini.filter(o =>
+    o.autistaDiGiro === autistaInUso.id &&
+    o.data === state.pianoData &&
+    o.stato !== 'annullato'
+  );
+}
+
 function rerenderPianoLocal() {
   const role = state.currentUser?.ruolo;
   const isEditor = role === 'autista' || role === 'admin';
@@ -6750,6 +6931,73 @@ function removeOrdineFromPedana(camionId, pedanaIdx, orderId) {
   pedana.assegnazioni = (pedana.assegnazioni || []).filter(id => id !== ordineId);
   pedana.nota = serializePedanaNota(pedana);
   rerenderPianoLocal();
+}
+
+function openPianoPedanaPicker(camionId, pedanaIdx) {
+  if (!isPianoMobileViewport()) return;
+  const role = state.currentUser?.ruolo;
+  if (role !== 'autista' && role !== 'admin') return;
+  pianoMobilePedanaSelection = { camionId: Number(camionId), pedanaIdx: Number(pedanaIdx) };
+  renderPianoPedanaPicker();
+  openModal('modal-piano-pedana-picker');
+}
+
+function toggleOrdineInPedanaPicker(orderId) {
+  const ctx = pianoMobilePedanaSelection;
+  if (!ctx) return;
+  const camion = state.camions.find(c => c.id === Number(ctx.camionId));
+  const pedana = camion?.pedane?.[Number(ctx.pedanaIdx)];
+  if (!pedana) return;
+  const ordineId = Number(orderId);
+  const assignedHere = Array.isArray(pedana.assegnazioni) && pedana.assegnazioni.includes(ordineId);
+  if (assignedHere) removeOrdineFromPedana(ctx.camionId, ctx.pedanaIdx, ordineId);
+  else {
+    assignOrdineToPedana(ctx.camionId, ctx.pedanaIdx, ordineId);
+    rerenderPianoLocal();
+  }
+  renderPianoPedanaPicker();
+}
+
+function renderPianoPedanaPicker() {
+  const ctx = pianoMobilePedanaSelection;
+  const list = document.getElementById('piano-pedana-picker-list');
+  const title = document.getElementById('piano-pedana-picker-title');
+  const subtitle = document.getElementById('piano-pedana-picker-subtitle');
+  if (!ctx || !list) return;
+  const camion = state.camions.find(c => c.id === Number(ctx.camionId));
+  const pedana = camion?.pedane?.[Number(ctx.pedanaIdx)];
+  if (!camion || !pedana) {
+    list.innerHTML = '<div style="font-size:13px;color:var(--text3);">Pedana non disponibile.</div>';
+    return;
+  }
+  const ordiniGiro = getOrdiniGiroForCamion(camion);
+  const assignmentStats = getCamionOrderAssignmentStats(camion);
+  const slotNumber = Number(ctx.pedanaIdx) + 1;
+  if (title) title.textContent = `Ordini pedana P${slotNumber}`;
+  if (subtitle) {
+    subtitle.textContent = ordiniGiro.length
+      ? 'Gli ordini già presenti restano selezionabili: cambiano colore ma puoi aggiungerli anche ad altre pedane.'
+      : 'Seleziona prima un autista al volante o verifica gli ordini della giornata.';
+  }
+  if (!ordiniGiro.length) {
+    list.innerHTML = '<div style="font-size:13px;color:var(--text3);">Nessun ordine disponibile per questo camion nella data selezionata.</div>';
+    return;
+  }
+  list.innerHTML = ordiniGiro.map(o => {
+    const cliente = getCliente(o.clienteId);
+    const count = assignmentStats[o.id] || 0;
+    const assignedHere = (pedana.assegnazioni || []).includes(Number(o.id));
+    const assignedElsewhere = !assignedHere && count > 0;
+    const qty = Array.isArray(o.linee) ? o.linee.reduce((sum, line) => sum + (Number(line.qty) || 0), 0) : 0;
+    const badge = assignedHere ? 'Su questa pedana' : (assignedElsewhere ? `${count} ped.` : 'Disponibile');
+    return `<button type="button" class="piano-picker-order-btn ${assignedHere ? 'is-assigned-here' : (assignedElsewhere ? 'is-assigned-elsewhere' : '')}" onclick="toggleOrdineInPedanaPicker(${o.id})">
+      <span>
+        <strong>#${o.id} ${escapePianoHtml(cliente?.nome || 'Cliente')}</strong>
+        <span class="picker-meta">${escapePianoHtml(getOrdineGiroEffettivo(o) || 'giro non definito')} · ${qty} colli</span>
+      </span>
+      <span class="picker-badge">${badge}</span>
+    </button>`;
+  }).join('');
 }
 
 function onPianoOrderDragStart(event, orderId) {
@@ -6896,6 +7144,7 @@ function renderPianoBody(isEditor, isConferma) {
   const gridTemplate = getPianoGridTemplate(layout);
   const assignmentStats = getCamionOrderAssignmentStats(camion);
   const ordiniById = new Map(state.ordini.map(o => [Number(o.id), o]));
+  const isMobilePiano = isEditor && isPianoMobileViewport();
 
   const pedaneHtml = layout.slots.map(slot => {
     const p = camion.pedane[slot.n - 1] || { nota: '', testoLibero: '', assegnazioni: [] };
@@ -6919,6 +7168,7 @@ function renderPianoBody(isEditor, isConferma) {
     if (isEditor) {
       return `<div class="pedana-card ${filled?'has-content':''}" data-lane="${slot.lane || ''}" data-orientation="${slot.orientation || 'std'}"
         ondragover="onPedanaDragOver(event)" ondragleave="onPedanaDragLeave(event)" ondrop="onPedanaDrop(event,${camion.id},${slot.n-1})"
+        ${isMobilePiano ? `onclick="openPianoPedanaPicker(${camion.id},${slot.n - 1})"` : ''}
         style="${spanStyle}min-height:${minH}px;display:flex;flex-direction:column;gap:6px;">
         <div class="pedana-label">
           <span>P${slot.n}</span>
@@ -6926,10 +7176,12 @@ function renderPianoBody(isEditor, isConferma) {
         </div>
         <div class="pedana-content" ondragover="onPedanaDragOver(event)" ondragleave="onPedanaDragLeave(event)" ondrop="onPedanaDrop(event,${camion.id},${slot.n-1})">
           <div class="pedana-hint">${slot.lane || 'corsia'}${slot.orientation ? ` · ${slot.orientation}` : ''}</div>
+          ${isMobilePiano ? `<button type="button" class="btn btn-outline btn-sm" style="align-self:flex-start;margin-bottom:2px;" onclick="event.stopPropagation();openPianoPedanaPicker(${camion.id},${slot.n - 1})">Ordini giorno</button>` : ''}
           ${chipsHtml}
           <textarea class="pedana-input" id="pedana-txt-${camion.id}-${slot.n}"
           placeholder="Contenuto pedana…" style="flex:1;min-height:56px;resize:none;"
           ondragover="onPedanaDragOver(event)" ondragleave="onPedanaDragLeave(event)" ondrop="onPedanaDrop(event,${camion.id},${slot.n-1})"
+          onclick="event.stopPropagation()"
           oninput="livePedanaUpdate(${camion.id},${slot.n-1},this.value);
             const card=this.closest('.pedana-card');
             const hasAssignments=card.querySelectorAll('.pedana-assignment-chip').length>0;
@@ -6969,8 +7221,8 @@ function renderPianoBody(isEditor, isConferma) {
   const orderPaletteHtml = isEditor && ordiniGiro.length
     ? `<div class="card piano-order-palette" style="margin-bottom:20px;">
         <div class="card-header">
-          <div class="card-title">Tag ordini da trascinare</div>
-          <div style="font-size:12px;color:var(--text3);">Trascina un ordine su una o piu pedane. Lo stesso ordine puo occupare piu pedane.</div>
+          <div class="card-title">${isMobilePiano ? 'Ordini giornata' : 'Tag ordini da trascinare'}</div>
+          <div style="font-size:12px;color:var(--text3);">${isMobilePiano ? 'Su mobile tocca una pedana per aprire la lista ordini. Gli ordini già usati restano disponibili e cambiano colore.' : 'Trascina un ordine su una o piu pedane. Lo stesso ordine puo occupare piu pedane.'}</div>
         </div>
         <div style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;">
           ${ordiniGiro.map(o => {
@@ -6978,8 +7230,8 @@ function renderPianoBody(isEditor, isConferma) {
             const count = assignmentStats[o.id] || 0;
             const giro = getOrdineGiroEffettivo(o);
             const quantita = Array.isArray(o.linee) ? o.linee.reduce((sum, line) => sum + (Number(line.qty) || 0), 0) : 0;
-            return `<div class="piano-order-tag ${count ? 'is-assigned' : ''}" draggable="true"
-              ondragstart="onPianoOrderDragStart(event,${o.id})" ondragend="onPianoOrderDragEnd(event)">
+            return `<div class="piano-order-tag ${count ? 'is-assigned' : ''} ${isMobilePiano ? 'mobile-static' : ''}" ${isMobilePiano ? '' : 'draggable="true"'}
+              ${isMobilePiano ? '' : `ondragstart="onPianoOrderDragStart(event,${o.id})" ondragend="onPianoOrderDragEnd(event)"`}>
               <div style="font-weight:800;font-size:13px;">#${o.id} ${escapePianoHtml(cliente?.nome || 'Cliente')}</div>
               <div style="font-size:11px;color:var(--text2);">${escapePianoHtml(giro || 'giro non definito')} · ${quantita} colli</div>
               <div style="font-size:11px;color:${count ? 'var(--accent)' : 'var(--text3)'};font-weight:700;">${count ? `${count} ped.` : 'non assegnato'}</div>
@@ -8995,14 +9247,14 @@ function buildFerieCalendarHtml(ferieRows) {
     </div>`;
   }
 
-  const legendHtml = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:14px;">
+  const legendHtml = `<div class="ferie-calendar-legend">
     ${['ferie','attivita','evento','movimentazione_produttore'].map(type => {
       const c = getFerieTypeColor(type);
       return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;border:1px solid ${c}40;background:${c}12;font-size:11px;font-weight:600;color:var(--text1);"><span style="width:7px;height:7px;border-radius:50%;background:${c};flex-shrink:0;display:inline-block;"></span>${escapeHtml(getFerieTipoLabel(type))}</span>`;
     }).join('')}
   </div>`;
 
-  const modeToggle = `<div style="display:flex;gap:3px;background:var(--surface2);border-radius:8px;padding:3px;">
+  const modeToggle = `<div class="ferie-calendar-mode">
     <button class="btn btn-sm" onclick="setFerieCalendarMode('settimana')" style="padding:4px 12px;border-radius:6px;border:none;${!isMese?'background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.08);font-weight:700;color:var(--accent);':'background:transparent;color:var(--text2);'}">Settimana</button>
     <button class="btn btn-sm" onclick="setFerieCalendarMode('mese')" style="padding:4px 12px;border-radius:6px;border:none;${isMese?'background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.08);font-weight:700;color:var(--accent);':'background:transparent;color:var(--text2);'}">Mese</button>
   </div>`;
@@ -9017,18 +9269,19 @@ function buildFerieCalendarHtml(ferieRows) {
       return { key, date: d, isToday: key === todayKey, isWeekend: idx >= 5, dayEvents: events.filter(ev => key >= getFerieDateOnly(ev.data_inizio) && key <= getFerieDateOnly(ev.data_fine)) };
     });
     const label = `${formatDate(weekDays[0].key)} – ${formatDate(weekDays[6].key)}`;
-    return `<div class="card" style="margin-bottom:16px;">
-      <div class="card-header" style="flex-wrap:wrap;gap:10px;">
-        <div style="display:flex;align-items:center;gap:6px;">
+    return `<div class="card ferie-calendar-card" style="margin-bottom:16px;">
+      <div class="card-header ferie-calendar-head">
+        <div class="ferie-calendar-nav">
           <button class="btn btn-outline btn-sm" onclick="shiftFerieCalendar(-1)" style="padding:4px 10px;font-size:15px;line-height:1;">‹</button>
-          <div style="font-size:13px;font-weight:700;min-width:240px;text-align:center;">${escapeHtml(label)}</div>
+          <div class="ferie-calendar-title-range">${escapeHtml(label)}</div>
           <button class="btn btn-outline btn-sm" onclick="shiftFerieCalendar(1)" style="padding:4px 10px;font-size:15px;line-height:1;">›</button>
           <button class="btn btn-outline btn-sm" onclick="setFerieCalendarAnchorToday()" style="font-size:11px;color:var(--accent);border-color:var(--accent);padding:4px 10px;">Oggi</button>
         </div>
         ${modeToggle}
       </div>
-      <div style="padding:0 16px 16px;">
-        <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;">
+      <div class="ferie-calendar-body">
+        <div class="ferie-calendar-scroll">
+          <div class="ferie-calendar-week-grid">
           ${weekDays.map(di => `
             <div style="border:${di.isToday ? '2px solid var(--accent)' : '1px solid var(--border)'};border-radius:12px;background:${di.isWeekend ? '#f8f9fb' : '#fff'};min-height:180px;padding:10px;">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -9041,6 +9294,7 @@ function buildFerieCalendarHtml(ferieRows) {
                 ${di.dayEvents.length ? di.dayEvents.map(ev => pill(ev, false)).join('') : `<div style="font-size:11px;color:var(--text3);font-style:italic;">Libero</div>`}
               </div>
             </div>`).join('')}
+          </div>
         </div>
         ${legendHtml}
       </div>
@@ -9058,21 +9312,22 @@ function buildFerieCalendarHtml(ferieRows) {
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     return { key, date: d, inMonth: d.getMonth() === month, isToday: key === todayKey, isWeekend: idx % 7 >= 5, dayEvents: events.filter(ev => key >= getFerieDateOnly(ev.data_inizio) && key <= getFerieDateOnly(ev.data_fine)) };
   });
-  return `<div class="card" style="margin-bottom:16px;">
-    <div class="card-header" style="flex-wrap:wrap;gap:10px;">
-      <div style="display:flex;align-items:center;gap:6px;">
+  return `<div class="card ferie-calendar-card" style="margin-bottom:16px;">
+    <div class="card-header ferie-calendar-head">
+      <div class="ferie-calendar-nav">
         <button class="btn btn-outline btn-sm" onclick="shiftFerieCalendar(-1)" style="padding:4px 10px;font-size:15px;line-height:1;">‹</button>
-        <div style="font-size:15px;font-weight:800;min-width:200px;text-align:center;">${monthLabel}</div>
+        <div class="ferie-calendar-title-range" style="font-size:15px;font-weight:800;">${monthLabel}</div>
         <button class="btn btn-outline btn-sm" onclick="shiftFerieCalendar(1)" style="padding:4px 10px;font-size:15px;line-height:1;">›</button>
         <button class="btn btn-outline btn-sm" onclick="setFerieCalendarAnchorToday()" style="font-size:11px;color:var(--accent);border-color:var(--accent);padding:4px 10px;">Oggi</button>
       </div>
       ${modeToggle}
     </div>
-    <div style="padding:0 16px 16px;">
-      <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));margin-bottom:4px;">
+    <div class="ferie-calendar-body">
+      <div class="ferie-calendar-scroll">
+        <div class="ferie-calendar-month-head">
         ${['Lun','Mar','Mer','Gio','Ven','Sab','Dom'].map((l,i) => `<div style="font-size:10px;font-weight:800;color:${i>=5?'var(--text3)':'var(--text2)'};text-transform:uppercase;text-align:center;padding:6px 2px;">${l}</div>`).join('')}
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;">
+        </div>
+        <div class="ferie-calendar-month-grid">
         ${days.map(di => `
           <div style="min-height:96px;border:${di.isToday ? '2px solid var(--accent)' : '1px solid '+(di.inMonth?'var(--border)':'#edf0f4')};border-radius:8px;padding:5px 4px;background:${!di.inMonth?'#f9fafc':di.isWeekend?'#f8f9fb':'#fff'};${!di.inMonth?'opacity:0.5;':''}">
             <div style="text-align:right;margin-bottom:3px;">
@@ -9085,6 +9340,7 @@ function buildFerieCalendarHtml(ferieRows) {
               ${di.dayEvents.length > 3 ? `<div style="font-size:9px;color:var(--text3);text-align:center;padding:1px 0;">+${di.dayEvents.length-3}</div>` : ''}
             </div>
           </div>`).join('')}
+        </div>
       </div>
       ${legendHtml}
     </div>
@@ -9373,7 +9629,7 @@ function renderFeriePage() {
       </div>
     </div>
     ${calendarHtml}
-    <div style="display:grid;grid-template-columns:minmax(0,1.7fr) minmax(260px,0.85fr);gap:16px;align-items:start;">
+    <div class="ferie-page-grid">
       <div class="card">
         <div class="card-header">
           <div class="card-title">Pianificazione</div>
@@ -9545,7 +9801,8 @@ async function submitPreparazioneNuovaLinea() {
 function renderTentataConfigList() {
   const tEl = document.getElementById('tentata-list');
   if (!tEl) return;
-  const autisti = state.utenti.filter(u => u.ruolo === 'autista');
+  const isAutista = state.currentUser?.ruolo === 'autista';
+  const autisti = state.utenti.filter(u => u.ruolo === 'autista' && (!isAutista || Number(u.id) === Number(state.currentUser.id)));
   const selectedDate = document.getElementById('tentata-config-date')?.value || getNextBusinessDate();
   const dayLabels = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
   const cards = autisti.map(a => {
@@ -9640,29 +9897,7 @@ function renderTentataPage() {
   const list = document.getElementById('tentata-list');
   if (list) {
     if (state.currentUser?.ruolo === 'autista') {
-      const config = getTentataConfigForUser(state.currentUser.id);
-      const deliveryContext = getNextTentataDeliveryContext(state.currentUser.id);
-      const targetDate = deliveryContext.date;
-      const activeTemplate = getTentataActiveTemplate(state.currentUser.id, targetDate);
-      list.innerHTML = `
-        <div style="padding:8px 0 12px;">
-          <div style="font-size:13px;color:var(--text2);margin-bottom:10px;">Qui trovi il profilo TV assegnato al prossimo giro utile (${formatDate(targetDate)}${deliveryContext.giro ? ` · ${escapeHtml(deliveryContext.giro)}` : ''}). Se non c'è un'assegnazione manuale, uso il primo profilo compatibile con il giorno.</div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
-            <span class="badge badge-blue">${activeTemplate ? escapeHtml(activeTemplate.nome) : 'Nessun profilo'}</span>
-            ${Object.keys(config.assegnazioni || {}).includes(targetDate) ? '<span class="badge badge-green">Assegnazione manuale</span>' : '<span class="badge badge-gray">Assegnazione automatica</span>'}
-            ${deliveryContext.giro ? `<span class="badge badge-orange">${escapeHtml(deliveryContext.giro)}</span>` : ''}
-          </div>
-          <button class="btn btn-green" onclick="openTentataVendita()">+ Nuova tentata vendita</button>
-        </div>
-        ${(activeTemplate?.linee || []).length ? activeTemplate.linee.map(l => {
-          const p = getProdotto(l.prodId);
-          if (!p) return '';
-          return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
-            <span style="flex:1;">[${escapeHtml(p.codice)}] ${escapeHtml(p.nome)}</span>
-            <span style="font-size:12px;color:var(--text2);">${Number(l.qty)} ${escapeHtml(l.unitaMisura || 'Pezzi')}</span>
-          </div>`;
-        }).join('') : '<div style="padding:8px 0;color:var(--text3);font-size:13px;">Nessun carico TV configurato per oggi.</div>'}
-      `;
+      renderTentataConfigList();
       if (rientroContainer) rientroContainer.innerHTML = '';
     } else {
       renderTentataConfigList();
@@ -10034,7 +10269,7 @@ function buildTentataConfigPayload() {
 }
 
 function queueTentataConfigAutosave() {
-  if (state.currentUser?.ruolo !== 'admin' && state.currentUser?.ruolo !== 'magazzino') return;
+  if (!['admin', 'magazzino', 'autista'].includes(state.currentUser?.ruolo)) return;
   if (state.tentataConfigAutosaveTimer) clearTimeout(state.tentataConfigAutosaveTimer);
   state.tentataConfigAutosaveTimer = setTimeout(() => {
     state.tentataConfigAutosaveTimer = null;
