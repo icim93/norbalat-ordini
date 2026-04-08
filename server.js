@@ -3613,18 +3613,10 @@ app.post('/api/prodotti/:id/scheda', authMiddleware, requirePermission('prodotti
     const ext = path.extname(safeName).toLowerCase();
     const inferredMime = ext === '.pdf'
       ? 'application/pdf'
-      : ext === '.doc'
-        ? 'application/msword'
-        : ext === '.docx'
-          ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-          : String(mime_type || '').trim();
-    const allowed = new Set([
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ]);
+      : String(mime_type || '').trim();
+    const allowed = new Set(['application/pdf']);
     if (!id || !safeName || !content_base64) return res.status(400).json({ error: 'File mancante' });
-    if (!allowed.has(inferredMime)) return res.status(400).json({ error: 'Formato file non supportato' });
+    if (!allowed.has(inferredMime)) return res.status(400).json({ error: 'Solo file PDF supportati' });
     const base64 = String(content_base64).includes(',') ? String(content_base64).split(',').pop() : String(content_base64);
     const buffer = Buffer.from(base64, 'base64');
     if (!buffer.length) return res.status(400).json({ error: 'Contenuto file non valido' });
@@ -3642,6 +3634,7 @@ app.post('/api/prodotti/:id/scheda', authMiddleware, requirePermission('prodotti
 app.get('/api/prodotti/:id/scheda', authMiddleware, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    const download = String(req.query.download || '').trim() === '1';
     const { rows } = await q(
       `SELECT scheda_tecnica_nome, scheda_tecnica_mime, scheda_tecnica_data
        FROM prodotti WHERE id=$1`,
@@ -3649,8 +3642,11 @@ app.get('/api/prodotti/:id/scheda', authMiddleware, async (req, res) => {
     );
     const row = rows[0];
     if (!row || !row.scheda_tecnica_data) return res.status(404).json({ error: 'Scheda tecnica non trovata' });
-    res.setHeader('Content-Type', row.scheda_tecnica_mime || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${String(row.scheda_tecnica_nome || 'scheda-tecnica').replace(/"/g, '')}"`);
+    const mimeType = row.scheda_tecnica_mime || 'application/octet-stream';
+    const fileName = String(row.scheda_tecnica_nome || 'scheda-tecnica.pdf').replace(/"/g, '');
+    const disposition = (!download && mimeType === 'application/pdf') ? 'inline' : 'attachment';
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${fileName}"`);
     res.send(row.scheda_tecnica_data);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

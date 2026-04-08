@@ -4576,9 +4576,10 @@
         <div class="field form-full">
           <label>Scheda tecnica</label>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <input type="file" id="pr-scheda-file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
-            <button type="button" class="btn btn-outline btn-sm" onclick="uploadProdottoSchedaFromModal()">Carica allegato</button>
-            <button type="button" class="btn btn-outline btn-sm" id="pr-scheda-download-btn" onclick="downloadProdottoScheda(state.editingId)" style="display:none;">Apri scheda</button>
+            <input type="file" id="pr-scheda-file" accept=".pdf,application/pdf">
+            <button type="button" class="btn btn-outline btn-sm" onclick="uploadProdottoSchedaFromModal()">Carica PDF</button>
+            <button type="button" class="btn btn-outline btn-sm" id="pr-scheda-download-btn" onclick="openProdottoScheda(state.editingId)" style="display:none;">Apri scheda</button>
+            <button type="button" class="btn btn-outline btn-sm" id="pr-scheda-save-btn" onclick="downloadProdottoScheda(state.editingId)" style="display:none;">Salva PDF</button>
             <button type="button" class="btn btn-danger btn-sm" id="pr-scheda-delete-btn" onclick="deleteProdottoScheda(state.editingId)" style="display:none;">Rimuovi</button>
           </div>
           <div id="pr-scheda-status" style="margin-top:6px;font-size:12px;color:var(--text2);">Nessun allegato caricato.</div>

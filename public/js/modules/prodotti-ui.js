@@ -1,6 +1,7 @@
 function renderProdottiSchedaStatus(prodotto) {
   const status = document.getElementById('pr-scheda-status');
   const dlBtn = document.getElementById('pr-scheda-download-btn');
+  const saveBtn = document.getElementById('pr-scheda-save-btn');
   const delBtn = document.getElementById('pr-scheda-delete-btn');
   const hasScheda = !!prodotto?.hasSchedaTecnica;
   if (status) {
@@ -9,6 +10,7 @@ function renderProdottiSchedaStatus(prodotto) {
       : 'Nessun allegato caricato.';
   }
   if (dlBtn) dlBtn.style.display = hasScheda ? '' : 'none';
+  if (saveBtn) saveBtn.style.display = hasScheda ? '' : 'none';
   if (delBtn) delBtn.style.display = (hasScheda && state.editingId) ? '' : 'none';
 }
 
@@ -123,7 +125,7 @@ function renderProdottiTable() {
       <td><span class="badge ${p.gestioneGiacenza ? 'badge-green' : 'badge-gray'}">${p.gestioneGiacenza ? 'Gestito' : 'Escluso'}</span></td>
       <td style="font-family:'DM Mono',monospace;">${p.puntoRiordino !== null ? escapeHtml(String(p.puntoRiordino)) : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
       <td><span class="badge ${p.assortimentoStato === 'attivo' ? 'badge-green' : (p.assortimentoStato === 'su_ordinazione' ? 'badge-blue' : 'badge-gray')}">${p.assortimentoStato === 'fuori_assortimento' ? 'Fuori assort.' : (p.assortimentoStato === 'su_ordinazione' ? 'Su ordinazione' : 'Attivo')}</span></td>
-      <td>${p.hasSchedaTecnica ? `<button class="btn btn-outline btn-sm" onclick="downloadProdottoScheda(${p.id})">Apri</button>` : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
+      <td>${p.hasSchedaTecnica ? `<button class="btn btn-outline btn-sm" onclick="openProdottoScheda(${p.id})">Apri PDF</button>` : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
       <td style="font-family:'DM Mono',monospace;">${eur(getListinoBaseProdotto(p.id))}</td>
       <td>
         ${canManageProdotti() ? `
@@ -389,7 +391,7 @@ async function uploadProdottoSchedaFromModal() {
   const input = document.getElementById('pr-scheda-file');
   const file = input?.files?.[0];
   if (!file) {
-    showToast('Seleziona un file PDF o DOC', 'warning');
+    showToast('Seleziona un file PDF', 'warning');
     return;
   }
   try {
@@ -404,7 +406,7 @@ async function uploadProdottoSchedaFromModal() {
 function promptProdottoSchedaUpload(prodottoId) {
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = '.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  input.accept = '.pdf,application/pdf';
   input.onchange = async () => {
     const file = input.files?.[0];
     if (!file) return;
@@ -418,28 +420,54 @@ function promptProdottoSchedaUpload(prodottoId) {
   input.click();
 }
 
+async function fetchProdottoSchedaBlob(prodottoId, download = false) {
+  if (!prodottoId) return;
+  const res = await fetch(`${window.BASE_URL}/api/prodotti/${prodottoId}/scheda${download ? '?download=1' : ''}`, {
+    headers: { Authorization: `Bearer ${state.token}` },
+  });
+  if (res.status === 401) {
+    doLogout();
+    return null;
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Download non riuscito');
+  }
+  const blob = await res.blob();
+  const disp = res.headers.get('content-disposition') || '';
+  const matched = disp.match(/filename=\"?([^\";]+)\"?/i);
+  return {
+    blob,
+    fileName: matched?.[1] || 'scheda-tecnica.pdf',
+  };
+}
+
+async function openProdottoScheda(prodottoId) {
+  if (!prodottoId) return;
+  try {
+    const result = await fetchProdottoSchedaBlob(prodottoId, false);
+    if (!result) return;
+    const url = URL.createObjectURL(result.blob);
+    const win = window.open(url, '_blank', 'noopener');
+    if (!win) {
+      URL.revokeObjectURL(url);
+      throw new Error('Il browser ha bloccato l\'apertura della scheda');
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60 * 1000);
+  } catch (e) {
+    showToast(e.message || 'Errore apertura scheda tecnica', 'warning');
+  }
+}
+
 async function downloadProdottoScheda(prodottoId) {
   if (!prodottoId) return;
   try {
-    const res = await fetch(`${window.BASE_URL}/api/prodotti/${prodottoId}/scheda`, {
-      headers: { Authorization: `Bearer ${state.token}` },
-    });
-    if (res.status === 401) {
-      doLogout();
-      return;
-    }
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Download non riuscito');
-    }
-    const blob = await res.blob();
-    const disp = res.headers.get('content-disposition') || '';
-    const matched = disp.match(/filename=\"?([^\";]+)\"?/i);
-    const fallbackName = matched?.[1] || 'scheda-tecnica';
-    const url = URL.createObjectURL(blob);
+    const result = await fetchProdottoSchedaBlob(prodottoId, true);
+    if (!result) return;
+    const url = URL.createObjectURL(result.blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = fallbackName;
+    a.download = result.fileName;
     document.body.appendChild(a);
     a.click();
     a.remove();
