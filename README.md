@@ -3,7 +3,7 @@
 Gestione ordini, clienti, prodotti, piano di carico e activity log per Norbalat.
 
 ## Stack
-- **Backend**: Node.js + Express + SQLite (better-sqlite3)
+- **Backend**: Node.js + Express + PostgreSQL
 - **Auth**: JWT (12h)
 - **Frontend**: HTML/CSS/JS monolitico servito da Express
 
@@ -55,6 +55,11 @@ Crea un file `.env` (o impostale nel sistema):
 ```
 PORT=3000
 JWT_SECRET=cambia-questo-segreto-in-produzione
+DATABASE_URL=postgresql://user:password@host:5432/database
+DATABASE_SSL_MODE=
+DB_CONNECT_TIMEOUT_MS=15000
+STARTUP_DB_MAX_RETRIES=6
+STARTUP_DB_RETRY_DELAY_MS=5000
 
 # Lookup automatico anagrafica da Partita IVA (opzionale)
 PIVA_LOOKUP_URL=
@@ -63,6 +68,12 @@ PIVA_LOOKUP_AUTH_HEADER=Authorization
 PIVA_LOOKUP_TOKEN_PREFIX=Bearer 
 PIVA_LOOKUP_EXTRA_HEADERS=
 ```
+
+Note bootstrap DB:
+- `DB_CONNECT_TIMEOUT_MS`: timeout singolo di connessione PostgreSQL.
+- `STARTUP_DB_MAX_RETRIES`: numero massimo di tentativi all'avvio prima del fail definitivo.
+- `STARTUP_DB_RETRY_DELAY_MS`: attesa tra un tentativo e il successivo.
+- `DATABASE_SSL_MODE`: lascia vuoto per l'autodetect oppure usa `require` su provider remoti come Render.
 
 ## API principali
 
@@ -85,8 +96,10 @@ PIVA_LOOKUP_EXTRA_HEADERS=
 
 ## Database
 
-SQLite in `./data/norbalat.db` — backup giornaliero consigliato:
+PostgreSQL. Prima dell'avvio assicurati che `DATABASE_URL` punti a un database raggiungibile.
+
+Se il database remoto ha un problema temporaneo, il server effettua retry automatici all'avvio e stampa diagnostica aggiuntiva nei log.
 
 ```bash
-cp data/norbalat.db data/norbalat-$(date +%Y%m%d).db
+pg_dump "$DATABASE_URL" > backup-$(date +%Y%m%d).sql
 ```
