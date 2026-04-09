@@ -442,6 +442,7 @@
     window.state.ferieSyncPoller = null;
     window.state.ordersSyncPoller = null;
     window.state.ordersLastSyncAt = '';
+    window.state.ordersLastSyncId = 0;
     window.state.ordersSyncPendingRender = false;
     document.getElementById('screen-app').style.display = 'none';
     document.getElementById('screen-login').style.display = 'flex';

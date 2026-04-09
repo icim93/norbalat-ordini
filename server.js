@@ -4502,7 +4502,9 @@ app.get('/api/ordini', authMiddleware, async (req, res) => {
 app.get('/api/ordini/sync', authMiddleware, async (req, res) => {
   try {
     const sinceRaw = String(req.query.since || '').trim();
+    const sinceIdRaw = req.query.since_id;
     const sinceDate = sinceRaw ? new Date(sinceRaw) : null;
+    const sinceId = Number.isFinite(Number(sinceIdRaw)) ? Number(sinceIdRaw) : 0;
     if (sinceRaw && Number.isNaN(sinceDate?.getTime())) {
       return res.status(400).json({ error: 'Parametro since non valido' });
     }
@@ -4522,11 +4524,18 @@ app.get('/api/ordini/sync', authMiddleware, async (req, res) => {
         LEFT JOIN utenti a ON o.autista_di_giro = a.id
         LEFT JOIN utenti ins ON o.inserted_by = ins.id
         LEFT JOIN ordine_linee ol ON ol.ordine_id = o.id
-       WHERE ($1::timestamptz IS NULL OR COALESCE(o.updated_at, o.inserted_at, NOW()) > $1::timestamptz)
+       WHERE (
+         $1::timestamptz IS NULL
+         OR COALESCE(o.updated_at, o.inserted_at, NOW()) > $1::timestamptz
+         OR (
+           COALESCE(o.updated_at, o.inserted_at, NOW()) = $1::timestamptz
+           AND o.id > $2::int
+         )
+       )
        GROUP BY o.id, c.nome, c.giro, u.nome, a.nome, ins.nome, ins.cognome
        ORDER BY COALESCE(o.updated_at, o.inserted_at) ASC, o.id ASC
       `,
-      [sinceDate ? sinceDate.toISOString() : null]
+      [sinceDate ? sinceDate.toISOString() : null, sinceId]
     );
 
     if (rows.length) {

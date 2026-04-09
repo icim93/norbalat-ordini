@@ -5706,6 +5706,7 @@ let state = {
   ferieSyncPoller: null,
   ordersSyncPoller: null,
   ordersLastSyncAt: '',
+  ordersLastSyncId: 0,
   ordersSyncPendingRender: false,
   magazzinoResidualLog: [],
   carichiTentataVendita: [],
@@ -6038,7 +6039,9 @@ async function loadAllData() {
     state.listini  = (listini  ||[]).map(normalizeListino);
     state.rese     = (rese     ||[]).map(normalizeResa);
     state.ordini   = (ordini   ||[]).map(normalizeOrdine);
-    state.ordersLastSyncAt = getLatestOrderSyncTimestamp(state.ordini);
+    const orderCursor = getOrderSyncCursor(state.ordini);
+    state.ordersLastSyncAt = orderCursor.timestamp;
+    state.ordersLastSyncId = orderCursor.id;
     state.camions  = (camions  ||[]).map(normalizeCamion);
     state.ferie    = Array.isArray(ferie) ? ferie : [];
     state.giriCalendario = (giri || []).map(g => ({ ...g, giorni: Array.isArray(g.giorni) ? g.giorni : [] }));
@@ -6099,11 +6102,19 @@ function getOrderSyncTimestampValue(order) {
   return String(order?.updatedAt || order?.insertedAt || '').trim();
 }
 
-function getLatestOrderSyncTimestamp(orders = []) {
+function getOrderSyncCursor(orders = []) {
   return (orders || []).reduce((latest, order) => {
-    const candidate = getOrderSyncTimestampValue(order);
-    return candidate && (!latest || candidate > latest) ? candidate : latest;
-  }, '');
+    const timestamp = getOrderSyncTimestampValue(order);
+    const id = Number(order?.id) || 0;
+    if (!timestamp) return latest;
+    if (!latest.timestamp || timestamp > latest.timestamp) return { timestamp, id };
+    if (timestamp === latest.timestamp && id > latest.id) return { timestamp, id };
+    return latest;
+  }, { timestamp: '', id: 0 });
+}
+
+function getLatestOrderSyncTimestamp(orders = []) {
+  return getOrderSyncCursor(orders).timestamp;
 }
 
 function mergeOrdersIntoState(rows = []) {
@@ -6116,7 +6127,9 @@ function mergeOrdersIntoState(rows = []) {
     changed = true;
   });
   if (changed) {
-    state.ordersLastSyncAt = getLatestOrderSyncTimestamp(state.ordini);
+    const cursor = getOrderSyncCursor(state.ordini);
+    state.ordersLastSyncAt = cursor.timestamp;
+    state.ordersLastSyncId = cursor.id;
   }
   return changed;
 }
@@ -6146,6 +6159,7 @@ async function syncOrdersIncrementally() {
   if (!state.token || !state.currentUser?.id) return false;
   const query = new URLSearchParams();
   if (state.ordersLastSyncAt) query.set('since', state.ordersLastSyncAt);
+  if (state.ordersLastSyncId) query.set('since_id', String(state.ordersLastSyncId));
   const payload = await api('GET', `/api/ordini/sync${query.toString() ? `?${query.toString()}` : ''}`);
   const changed = mergeOrdersIntoState(payload?.orders || []);
   if (changed && isRemoteOrderRefreshSafe()) {
@@ -6166,7 +6180,7 @@ function startOrdersSyncPolling() {
   if (!state.token || !state.currentUser?.id) return;
   state.ordersSyncPoller = setInterval(() => {
     syncOrdersIncrementally().catch(() => {});
-  }, 15000);
+  }, 5000);
 }
 
 function stopOrdersSyncPolling() {
