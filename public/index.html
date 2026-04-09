@@ -11199,10 +11199,17 @@ function updatePDFPreview() {
     return escapeHtml(String(prodotto.nome || 'Prodotto libero').trim() || 'Prodotto libero');
   }
 
+  function shouldIncludeMagazzinoReportLine(linea) {
+    const qty = Number(linea?.qty);
+    if (Number.isFinite(qty) && qty > 0) return true;
+    const prezzoUnitario = Number(linea?.prezzoUnitario);
+    return Number.isFinite(prezzoUnitario) && Math.abs(prezzoUnitario) > 0.000001;
+  }
+
   // ── REPORT MAGAZZINO: nome prodotto + qtà + unità ──
   function ordineHtmlMag(o) {
     const cl = getCliente(o.clienteId);
-    const linee = o.linee.map(l => {
+    const linee = (o.linee || []).filter(shouldIncludeMagazzinoReportLine).map(l => {
       const p = l.prodId ? getProdotto(l.prodId) : null;
       const nome = getReportLineNomeHtml(l, p);
       const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
@@ -11278,7 +11285,9 @@ function updatePDFPreview() {
   const titoloTipo = tipo === 'fatturazione' ? 'Report Fatturazione' : 'Report Magazzino';
 
   const totOrdini = ordini.length;
-  const totLinee = ordini.reduce((s,o) => s + o.linee.length, 0);
+  const totLinee = tipo === 'magazzino'
+    ? ordini.reduce((s, o) => s + (o.linee || []).filter(shouldIncludeMagazzinoReportLine).length, 0)
+    : ordini.reduce((s, o) => s + o.linee.length, 0);
   const printTimestamp = `Stampato il ${new Date().toLocaleDateString('it-IT')} alle ${new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;
 
   if (tipo !== 'magazzino') {
@@ -11487,7 +11496,7 @@ function updatePDFPreview() {
   function buildOrderSegments(order) {
     const cl = getCliente(order.clienteId);
     const flags = [order.stef ? '🚛 STEF' : '', order.altroVettore ? '🚚 ALTRO VETTORE' : '', order.dataNonCerta ? '⚠️' : ''].filter(Boolean).join(' ');
-    const lines = (order.linee || []).map(l => {
+    const lines = (order.linee || []).filter(shouldIncludeMagazzinoReportLine).map(l => {
       const p = l.prodId ? getProdotto(l.prodId) : null;
       const nome = getReportLineNomeHtml(l, p);
       const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
