@@ -125,7 +125,7 @@ function renderProdottiTable() {
       <td><span class="badge ${p.gestioneGiacenza ? 'badge-green' : 'badge-gray'}">${p.gestioneGiacenza ? 'Gestito' : 'Escluso'}</span></td>
       <td style="font-family:'DM Mono',monospace;">${p.puntoRiordino !== null ? escapeHtml(String(p.puntoRiordino)) : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
       <td><span class="badge ${p.assortimentoStato === 'attivo' ? 'badge-green' : (p.assortimentoStato === 'su_ordinazione' ? 'badge-blue' : 'badge-gray')}">${p.assortimentoStato === 'fuori_assortimento' ? 'Fuori assort.' : (p.assortimentoStato === 'su_ordinazione' ? 'Su ordinazione' : 'Attivo')}</span></td>
-      <td>${p.hasSchedaTecnica ? `<button class="btn btn-outline btn-sm" onclick="openProdottoScheda(${p.id})">Apri PDF</button>` : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
+      <td>${p.hasSchedaTecnica ? `<div style="display:flex;gap:4px;flex-wrap:wrap;"><button class="btn btn-outline btn-sm" onclick="openProdottoScheda(${p.id})">Apri PDF</button><button class="btn btn-outline btn-sm" onclick="shareProdottoScheda(${p.id})">Condividi</button></div>` : '<span style="color:var(--text3);font-size:12px;">-</span>'}</td>
       <td style="font-family:'DM Mono',monospace;">${eur(getListinoBaseProdotto(p.id))}</td>
       <td>
         ${canManageProdotti() ? `
@@ -496,6 +496,55 @@ async function deleteProdottoScheda(prodottoId) {
     showToast('Scheda tecnica rimossa', 'success');
   } catch (e) {
     showToast(e.message || 'Errore rimozione scheda tecnica', 'warning');
+  }
+}
+
+async function shareProdottoScheda(prodottoId) {
+  const prodotto = state.prodotti.find(p => p.id === prodottoId);
+  if (!prodotto) return;
+  const nomeProdotto = prodotto.nome || 'prodotto';
+  try {
+    const result = await fetchProdottoSchedaBlob(prodottoId, false);
+    if (!result) return;
+
+    if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
+      const file = new File([result.blob], result.fileName, { type: result.blob.type });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Scheda tecnica: ${nomeProdotto}` });
+        return;
+      }
+    }
+
+    // Fallback: scarica il PDF e mostra link WhatsApp/email
+    const blobUrl = URL.createObjectURL(result.blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = result.fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+
+    const waText = encodeURIComponent(`Scheda tecnica: ${nomeProdotto}`);
+    const mailSubject = encodeURIComponent(`Scheda tecnica: ${nomeProdotto}`);
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    overlay.innerHTML = `
+      <div style="background:var(--surface0);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:360px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.25);">
+        <div style="font-weight:700;font-size:15px;margin-bottom:6px;">Condividi scheda tecnica</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Il PDF è stato scaricato automaticamente. Aprilo e allegalo manualmente al messaggio.</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <a href="https://wa.me/?text=${waText}" target="_blank" rel="noopener" class="btn btn-green btn-sm" style="text-align:center;text-decoration:none;">Apri WhatsApp</a>
+          <a href="mailto:?subject=${mailSubject}&body=${waText}" class="btn btn-outline btn-sm" style="text-align:center;text-decoration:none;">Apri Email</a>
+          <button class="btn btn-outline btn-sm" id="share-modal-close">Chiudi</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#share-modal-close').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  } catch (e) {
+    if (e?.name !== 'AbortError') showToast(e.message || 'Errore condivisione', 'warning');
   }
 }
 
