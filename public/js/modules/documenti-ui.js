@@ -287,25 +287,41 @@
       window.showToast('Seleziona un file', 'warning');
       return;
     }
+    const uploadBtn = document.getElementById('doc-upload-btn');
+    if (uploadBtn) {
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = 'Caricamento in corso...';
+    }
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Lettura file non riuscita'));
+        reader.readAsDataURL(file);
+      });
 
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ''));
-      reader.onerror = () => reject(new Error('Lettura file non riuscita'));
-      reader.readAsDataURL(file);
-    });
+      await window.api('POST', '/api/documenti/files', {
+        folder_id: folder.id,
+        file_name: file.name,
+        mime_type: file.type || 'application/octet-stream',
+        content_base64: base64,
+      }, {
+        timeoutMs: 120000,
+      });
 
-    await window.api('POST', '/api/documenti/files', {
-      folder_id: folder.id,
-      file_name: file.name,
-      mime_type: file.type || 'application/octet-stream',
-      content_base64: base64,
-    });
-
-    if (input) input.value = '';
-    await loadDocFiles();
-    renderDocFilesTable();
-    window.showToast('File caricato', 'success');
+      if (input) input.value = '';
+      await loadDocFiles();
+      renderDocFolderHeader();
+      renderDocFilesTable();
+      window.showToast('File caricato', 'success');
+    } catch (e) {
+      window.showToast(e.message || 'Errore upload file', 'warning');
+    } finally {
+      if (uploadBtn) {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Carica file nella cartella selezionata';
+      }
+    }
   }
 
   async function downloadDocFile(id) {
