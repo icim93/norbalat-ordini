@@ -4624,7 +4624,7 @@ app.post('/api/documenti/files', authMiddleware, requirePermission('documenti:ma
     if (!folder) return res.status(404).json({ error: 'Cartella non trovata' });
     const fileData = decodeBase64Payload(contentBase64);
     if (!fileData.length) return res.status(400).json({ error: 'File vuoto o non valido' });
-    if (fileData.length > 10 * 1024 * 1024) return res.status(400).json({ error: 'File troppo grande (max 10MB)' });
+    if (fileData.length > 15 * 1024 * 1024) return res.status(400).json({ error: 'File troppo grande (max 15MB)' });
     const { rows } = await q(
       `INSERT INTO doc_files (folder_id,file_name,mime_type,size_bytes,file_data,created_by)
        VALUES ($1,$2,$3,$4,$5,$6)
