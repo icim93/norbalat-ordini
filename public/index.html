@@ -4797,17 +4797,6 @@
           <label>Note</label>
           <input type="text" id="ls-note" placeholder="opzionale">
         </div>
-        <div class="field form-full" style="margin-bottom:0;margin-top:8px;">
-          <label style="font-size:12px;color:var(--accent);font-weight:800;">2. Prodotti del listino</label>
-          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Aggiungi una riga per ogni prodotto con la sua regola prezzo.</div>
-        </div>
-        <div class="field form-full">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-            <label style="margin:0;">Righe prodotto</label>
-            <button type="button" class="btn btn-outline btn-sm" onclick="addListinoEditorRow()">+ Aggiungi prodotto</button>
-          </div>
-          <div id="ls-prodotti-rows" style="display:flex;flex-direction:column;gap:10px;"></div>
-        </div>
         <div class="field form-full">
           <div class="listino-composer-preview" id="ls-composer-preview"></div>
         </div>
@@ -5659,6 +5648,7 @@ let state = {
   clienti:   [],
   prodotti:  [],
   listini:   [],
+  listiniGruppi: [],
   rese:      [],
   ordini:    [],
   camions:   [],
@@ -5996,11 +5986,12 @@ async function loadAllData() {
     const canSeePiano = ['admin', 'autista', 'magazzino'].includes(state.currentUser?.ruolo);
     const canSeeRese = ['admin', 'direzione'].includes(state.currentUser?.ruolo);
     const canSeeFerie = !!state.currentUser;
-    const [utenti, clienti, prodotti, listini, rese, ordini, camions, giri, tentataConfig, ferie] = await Promise.all([
+    const [utenti, clienti, prodotti, listini, listiniGruppi, rese, ordini, camions, giri, tentataConfig, ferie] = await Promise.all([
       api('GET', '/api/utenti'),
       api('GET', '/api/clienti'),
       api('GET', '/api/prodotti'),
       api('GET', '/api/listini'),
+      api('GET', '/api/listini/gruppi').catch(() => []),
       canSeeRese ? api('GET', '/api/rese') : Promise.resolve([]),
       api('GET', '/api/ordini'),
       canSeePiano ? api('GET', `/api/camions?data=${state.pianoData}`) : Promise.resolve([]),
@@ -6013,6 +6004,7 @@ async function loadAllData() {
     state.clienti  = (clienti  ||[]).map(normalizeCliente);
     state.prodotti = (prodotti ||[]).map(normalizeProdotto);
     state.listini  = (listini  ||[]).map(normalizeListino);
+    state.listiniGruppi = (listiniGruppi || []).map(normalizeListinoGruppo);
     state.rese     = (rese     ||[]).map(normalizeResa);
     state.ordini   = (ordini   ||[]).map(normalizeOrdine);
     const orderCursor = getOrderSyncCursor(state.ordini);

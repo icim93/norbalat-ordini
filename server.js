@@ -1123,6 +1123,21 @@ async function createSchema() {
       updated_at  TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS listini_gruppi (
+      uid                TEXT PRIMARY KEY,
+      nome_listino       TEXT NOT NULL,
+      cliente_id         INTEGER REFERENCES clienti(id) ON DELETE CASCADE,
+      giro               TEXT DEFAULT '',
+      scope              TEXT NOT NULL DEFAULT 'all',
+      excluded_client_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+      valido_dal         DATE NOT NULL DEFAULT CURRENT_DATE,
+      valido_al          DATE,
+      note               TEXT DEFAULT '',
+      created_by         INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      created_at         TIMESTAMPTZ DEFAULT NOW(),
+      updated_at         TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS rese_fornitori (
       id             SERIAL PRIMARY KEY,
       fornitore_id   INTEGER NOT NULL REFERENCES clienti(id),
@@ -1366,6 +1381,24 @@ async function createSchema() {
     UPDATE listini SET final_price = COALESCE(final_price, prezzo) WHERE mode = 'final_price';
     UPDATE listini SET gruppo_uid = CONCAT('legacy-', id) WHERE gruppo_uid IS NULL OR gruppo_uid = '';
     UPDATE listini SET nome_listino = CONCAT('Listino ', id) WHERE nome_listino IS NULL OR BTRIM(nome_listino) = '';
+
+    INSERT INTO listini_gruppi (uid, nome_listino, cliente_id, giro, scope, excluded_client_ids, valido_dal, valido_al, note, created_by, created_at, updated_at)
+    SELECT DISTINCT ON (l.gruppo_uid)
+      l.gruppo_uid,
+      COALESCE(NULLIF(BTRIM(l.nome_listino), ''), CONCAT('Listino ', l.id)),
+      l.cliente_id,
+      COALESCE(l.giro, ''),
+      COALESCE(NULLIF(BTRIM(l.scope), ''), 'all'),
+      COALESCE(l.excluded_client_ids, '[]'::jsonb),
+      COALESCE(l.valido_dal, CURRENT_DATE),
+      l.valido_al,
+      COALESCE(l.note, ''),
+      l.created_by,
+      COALESCE(l.created_at, NOW()),
+      COALESCE(l.updated_at, NOW())
+    FROM listini l
+    WHERE l.gruppo_uid IS NOT NULL AND BTRIM(l.gruppo_uid) <> ''
+    ON CONFLICT (uid) DO NOTHING;
     UPDATE clienti SET created_at = NOW() WHERE created_at IS NULL;
 
     DO $$
@@ -2462,6 +2495,33 @@ function normalizeListinoHeaderValues({ scope = 'all', cliente_id = null, client
   };
 }
 
+async function syncListinoRowsFromGroup(client, gruppoUid, header) {
+  await client.query(
+    `UPDATE listini
+        SET nome_listino=$1,
+            cliente_id=$2,
+            giro=$3,
+            scope=$4,
+            excluded_client_ids=$5::jsonb,
+            valido_dal=$6,
+            valido_al=$7,
+            note=$8,
+            updated_at=NOW()
+      WHERE gruppo_uid=$9`,
+    [
+      header.nomeListino,
+      header.targets[0],
+      header.giroVal,
+      header.scope,
+      JSON.stringify(header.excluded),
+      header.validoDal,
+      header.validoAl,
+      header.noteVal,
+      gruppoUid,
+    ]
+  );
+}
+
 const zListinoPayload = z.object({
   gruppo_uid: z.string().max(120).optional(),
   nome_listino: z.string().max(160).optional().default(''),
@@ -2505,7 +2565,7 @@ const zListinoGroupPayload = z.object({
   valido_dal: z.string().min(1),
   valido_al: z.string().nullable().optional(),
   note: z.string().max(3000).optional().default(''),
-  items: z.array(zListinoGroupItem).min(1),
+  items: z.array(zListinoGroupItem).optional().default([]),
 });
 
 const zResaPayload = z.object({
@@ -3846,17 +3906,77 @@ app.get('/api/listini', authMiddleware, requirePermission('listini:view'), async
       where.push(`(l.valido_al IS NULL OR l.valido_al >= CURRENT_DATE)`);
     }
     const { rows } = await q(
-      `SELECT l.*, p.codice AS prodotto_codice, p.nome AS prodotto_nome,
+      `SELECT l.*, 
+              COALESCE(NULLIF(BTRIM(g.nome_listino), ''), NULLIF(BTRIM(l.nome_listino), ''), CONCAT('Listino ', l.id)) AS nome_listino,
+              COALESCE(g.cliente_id, l.cliente_id) AS cliente_id,
+              COALESCE(NULLIF(BTRIM(g.giro), ''), l.giro) AS giro,
+              COALESCE(NULLIF(BTRIM(g.scope), ''), l.scope) AS scope,
+              COALESCE(g.excluded_client_ids, l.excluded_client_ids) AS excluded_client_ids,
+              COALESCE(g.valido_dal, l.valido_dal) AS valido_dal,
+              COALESCE(g.valido_al, l.valido_al) AS valido_al,
+              COALESCE(g.note, l.note) AS note,
+              p.codice AS prodotto_codice, p.nome AS prodotto_nome,
               c.nome AS cliente_nome
        FROM listini l
        JOIN prodotti p ON p.id=l.prodotto_id
-       LEFT JOIN clienti c ON c.id=l.cliente_id
+       LEFT JOIN listini_gruppi g ON g.uid = l.gruppo_uid
+       LEFT JOIN clienti c ON c.id=COALESCE(g.cliente_id, l.cliente_id)
        WHERE ${where.join(' AND ')}
        ORDER BY COALESCE(NULLIF(BTRIM(l.nome_listino), ''), p.nome), l.gruppo_uid, p.nome, l.scope, l.giro, l.cliente_id NULLS FIRST, l.valido_dal DESC, l.id DESC`,
       params
     );
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/listini/gruppi', authMiddleware, requirePermission('listini:view'), async (req, res) => {
+  try {
+    const includeScaduti = String(req.query.include_scaduti || '0') === '1';
+    const params = [];
+    const where = ['1=1'];
+    if (!includeScaduti) where.push('(g.valido_al IS NULL OR g.valido_al >= CURRENT_DATE)');
+    const { rows } = await q(
+      `SELECT g.*,
+              c.nome AS cliente_nome,
+              COUNT(l.id)::int AS righe_count
+         FROM listini_gruppi g
+         LEFT JOIN clienti c ON c.id = g.cliente_id
+         LEFT JOIN listini l ON l.gruppo_uid = g.uid
+        WHERE ${where.join(' AND ')}
+        GROUP BY g.uid, c.nome
+        ORDER BY g.nome_listino ASC, g.created_at DESC`,
+      params
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/listini/gruppi', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
+  try {
+    const parsed = zListinoGroupPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const header = normalizeListinoHeaderValues(parsed.data);
+    const gruppoUid = String(parsed.data.gruppo_uid || '').trim() || makeListinoGroupUid();
+    const r = await q(
+      `INSERT INTO listini_gruppi
+        (uid,nome_listino,cliente_id,giro,scope,excluded_client_ids,valido_dal,valido_al,note,created_by,updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,NOW())
+       RETURNING *`,
+      [
+        gruppoUid,
+        header.nomeListino || `Listino ${gruppoUid}`,
+        header.targets[0],
+        header.giroVal,
+        header.scope,
+        JSON.stringify(header.excluded),
+        header.validoDal,
+        header.validoAl,
+        header.noteVal,
+        req.user.id || null,
+      ]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 
 app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
@@ -3967,50 +4087,42 @@ app.put('/api/listini/gruppi/:gruppoUid', authMiddleware, requirePermission('lis
       return validationError(res, parsed);
     }
     const header = normalizeListinoHeaderValues(parsed.data);
-    const items = parsed.data.items || [];
     await client.query('BEGIN');
-    const { rows: existing } = await client.query('SELECT id FROM listini WHERE gruppo_uid=$1 LIMIT 1', [gruppoUid]);
+    const { rows: existing } = await client.query('SELECT uid FROM listini_gruppi WHERE uid=$1 LIMIT 1', [gruppoUid]);
     if (!existing.length) {
       await client.query('ROLLBACK');
       client.release();
       return res.status(404).json({ error: 'Listino non trovato' });
     }
-    await client.query('DELETE FROM listini WHERE gruppo_uid=$1', [gruppoUid]);
-    const inserted = [];
-    for (const item of items) {
-      const rule = normalizeListinoRuleValues(item);
-      for (const cid of header.targets) {
-        const r = await client.query(
-          `INSERT INTO listini
-           (gruppo_uid,nome_listino,prodotto_id,cliente_id,giro,scope,mode,prezzo,base_price,markup_pct,discount_pct,final_price,excluded_client_ids,valido_dal,valido_al,note,created_by,updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,NOW())
-           RETURNING *`,
-          [
-            gruppoUid,
-            header.nomeListino,
-            item.prodotto_id,
-            cid,
-            header.giroVal,
-            header.scope,
-            rule.mode,
-            rule.finalP,
-            rule.base,
-            rule.markup,
-            rule.discount,
-            rule.finalP,
-            JSON.stringify(header.excluded),
-            header.validoDal,
-            header.validoAl,
-            header.noteVal,
-            req.user.id || null,
-          ]
-        );
-        inserted.push(r.rows[0]);
-      }
-    }
+    await client.query(
+      `UPDATE listini_gruppi
+          SET nome_listino=$1,
+              cliente_id=$2,
+              giro=$3,
+              scope=$4,
+              excluded_client_ids=$5::jsonb,
+              valido_dal=$6,
+              valido_al=$7,
+              note=$8,
+              updated_at=NOW()
+        WHERE uid=$9`,
+      [
+        header.nomeListino,
+        header.targets[0],
+        header.giroVal,
+        header.scope,
+        JSON.stringify(header.excluded),
+        header.validoDal,
+        header.validoAl,
+        header.noteVal,
+        gruppoUid,
+      ]
+    );
+    await syncListinoRowsFromGroup(client, gruppoUid, header);
     await client.query('COMMIT');
     client.release();
-    res.json({ updated: inserted.length, rows: inserted });
+    const { rows: out } = await q('SELECT * FROM listini_gruppi WHERE uid=$1 LIMIT 1', [gruppoUid]);
+    res.json(out[0] || null);
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     client.release();
@@ -4023,6 +4135,126 @@ app.delete('/api/listini/gruppi/:gruppoUid', authMiddleware, requirePermission('
     const gruppoUid = String(req.params.gruppoUid || '').trim();
     if (!gruppoUid) return res.status(400).json({ error: 'Gruppo listino non valido' });
     await q('DELETE FROM listini WHERE gruppo_uid=$1', [gruppoUid]);
+    await q('DELETE FROM listini_gruppi WHERE uid=$1', [gruppoUid]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/listini/gruppi/:gruppoUid/righe', authMiddleware, requirePermission('listini:view'), async (req, res) => {
+  try {
+    const gruppoUid = String(req.params.gruppoUid || '').trim();
+    if (!gruppoUid) return res.status(400).json({ error: 'Gruppo listino non valido' });
+    const { rows } = await q(
+      `SELECT l.*, p.codice AS prodotto_codice, p.nome AS prodotto_nome
+         FROM listini l
+         JOIN prodotti p ON p.id = l.prodotto_id
+        WHERE l.gruppo_uid = $1
+        ORDER BY p.nome ASC, l.id ASC`,
+      [gruppoUid]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/listini/gruppi/:gruppoUid/righe', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
+  try {
+    const gruppoUid = String(req.params.gruppoUid || '').trim();
+    if (!gruppoUid) return res.status(400).json({ error: 'Gruppo listino non valido' });
+    const parsed = zListinoGroupItem.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const { rows: groupRows } = await q('SELECT * FROM listini_gruppi WHERE uid=$1 LIMIT 1', [gruppoUid]);
+    if (!groupRows.length) return res.status(404).json({ error: 'Listino non trovato' });
+    const group = groupRows[0];
+    const rule = normalizeListinoRuleValues(parsed.data);
+    const r = await q(
+      `INSERT INTO listini
+        (gruppo_uid,nome_listino,prodotto_id,cliente_id,giro,scope,mode,prezzo,base_price,markup_pct,discount_pct,final_price,excluded_client_ids,valido_dal,valido_al,note,created_by,updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,NOW())
+       RETURNING *`,
+      [
+        gruppoUid,
+        group.nome_listino,
+        parsed.data.prodotto_id,
+        group.cliente_id,
+        group.giro || '',
+        group.scope || 'all',
+        rule.mode,
+        rule.finalP,
+        rule.base,
+        rule.markup,
+        rule.discount,
+        rule.finalP,
+        JSON.stringify(group.excluded_client_ids || []),
+        group.valido_dal,
+        group.valido_al,
+        group.note || '',
+        req.user.id || null,
+      ]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+app.put('/api/listini/righe/:id', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Riga listino non valida' });
+    const parsed = zListinoGroupItem.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const rule = normalizeListinoRuleValues(parsed.data);
+    const { rows: existing } = await q('SELECT gruppo_uid FROM listini WHERE id=$1 LIMIT 1', [id]);
+    if (!existing.length) return res.status(404).json({ error: 'Riga listino non trovata' });
+    const { rows: groupRows } = await q('SELECT * FROM listini_gruppi WHERE uid=$1 LIMIT 1', [existing[0].gruppo_uid]);
+    if (!groupRows.length) return res.status(404).json({ error: 'Listino non trovato' });
+    const group = groupRows[0];
+    const r = await q(
+      `UPDATE listini
+          SET prodotto_id=$1,
+              nome_listino=$2,
+              cliente_id=$3,
+              giro=$4,
+              scope=$5,
+              mode=$6,
+              prezzo=$7,
+              base_price=$8,
+              markup_pct=$9,
+              discount_pct=$10,
+              final_price=$11,
+              excluded_client_ids=$12::jsonb,
+              valido_dal=$13,
+              valido_al=$14,
+              note=$15,
+              updated_at=NOW()
+        WHERE id=$16
+        RETURNING *`,
+      [
+        parsed.data.prodotto_id,
+        group.nome_listino,
+        group.cliente_id,
+        group.giro || '',
+        group.scope || 'all',
+        rule.mode,
+        rule.finalP,
+        rule.base,
+        rule.markup,
+        rule.discount,
+        rule.finalP,
+        JSON.stringify(group.excluded_client_ids || []),
+        group.valido_dal,
+        group.valido_al,
+        group.note || '',
+        id,
+      ]
+    );
+    res.json(r.rows[0]);
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+app.delete('/api/listini/righe/:id', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Riga listino non valida' });
+    await q('DELETE FROM listini WHERE id=$1', [id]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

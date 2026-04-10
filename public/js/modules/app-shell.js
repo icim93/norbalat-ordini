@@ -406,6 +406,7 @@
     window.state.clienti = [];
     window.state.prodotti = [];
     window.state.listini = [];
+    window.state.listiniGruppi = [];
     window.state.rese = [];
     window.state.listinoProdottoId = null;
     window.state.ordini = [];

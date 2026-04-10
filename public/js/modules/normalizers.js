@@ -103,6 +103,25 @@
     };
   }
 
+  function normalizeListinoGruppo(g) {
+    return {
+      uid: g.uid || '',
+      nomeListino: g.nome_listino || '',
+      clienteId: g.cliente_id || null,
+      clienteNome: g.cliente_nome || '',
+      giro: g.giro || '',
+      scope: g.scope || 'all',
+      excludedClientIds: Array.isArray(g.excluded_client_ids) ? g.excluded_client_ids.map(x => Number(x)).filter(Number.isFinite) : [],
+      validoDal: (g.valido_dal || '').substring(0, 10),
+      validoAl: g.valido_al ? String(g.valido_al).substring(0, 10) : '',
+      note: g.note || '',
+      righeCount: Number(g.righe_count || 0),
+      createdBy: g.created_by || null,
+      createdAt: g.created_at || null,
+      updatedAt: g.updated_at || null,
+    };
+  }
+
   function normalizeResa(r) {
     return {
       id: r.id,
@@ -175,6 +194,7 @@
   window.normalizeCliente = normalizeCliente;
   window.normalizeProdotto = normalizeProdotto;
   window.normalizeListino = normalizeListino;
+  window.normalizeListinoGruppo = normalizeListinoGruppo;
   window.normalizeResa = normalizeResa;
   window.normalizeOrdine = normalizeOrdine;
   window.normalizeCamion = normalizeCamion;
