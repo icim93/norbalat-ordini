@@ -4751,8 +4751,12 @@
     <div class="modal-body">
       <div class="form-row">
         <div class="field form-full" style="margin-bottom:0;">
-          <label style="font-size:12px;color:var(--accent);font-weight:800;">1. Destinazione listino</label>
-          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Scegli prima se il listino vale per tutti, per un cliente specifico o con eccezioni.</div>
+          <label style="font-size:12px;color:var(--accent);font-weight:800;">1. Intestazione listino</label>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Crea prima il listino scegliendo nome e destinatari. Poi aggiungi i prodotti che ne fanno parte.</div>
+        </div>
+        <div class="field form-full">
+          <label>Nome listino *</label>
+          <input type="text" id="ls-nome" placeholder="Es. Primavera 2026 - Bari Nord">
         </div>
         <div class="field">
           <label>Ambito</label>
@@ -4774,57 +4778,14 @@
           </select>
         </div>
         <div class="field form-full" id="ls-clienti-multi-wrap" style="display:none;">
-          <label>Clienti (multi selezione)</label>
+          <label>Clienti</label>
           <select id="ls-clienti-multi" multiple style="min-height:110px;"></select>
         </div>
         <div class="field form-full">
           <label>Escludi clienti (opzionale)</label>
           <select id="ls-clienti-excluded" multiple style="min-height:110px;"></select>
         </div>
-        <div class="field form-full" style="margin-bottom:0;margin-top:8px;">
-          <label style="font-size:12px;color:var(--accent);font-weight:800;">2. Regola prezzo</label>
-          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Per i prodotti selezionati puoi applicare prezzo base + ricarico oppure un prezzo vendita diretto.</div>
-        </div>
-        <div class="field">
-          <label>Regola prezzo</label>
-          <select id="ls-mode" onchange="onListinoModeChange()">
-            <option value="base_markup">Prezzo base acquisto + ricarico %</option>
-            <option value="final_price">Prezzo vendita diretto</option>
-            <option value="discount_pct">Sconto % sul prezzo corrente (legacy)</option>
-          </select>
-        </div>
-        <div class="field" id="ls-base-wrap">
-          <label>Prezzo base</label>
-          <input type="number" id="ls-base" min="0" step="0.01" placeholder="es. 10.00">
-        </div>
-        <div class="field" id="ls-markup-wrap">
-          <label>Ricarico %</label>
-          <input type="number" id="ls-markup" step="0.01" placeholder="es. 15">
-        </div>
-        <div class="field" id="ls-discount-wrap" style="display:none;">
-          <label>Sconto %</label>
-          <input type="number" id="ls-discount" min="0" max="100" step="0.01" placeholder="es. 5">
-        </div>
-        <div class="field" id="ls-final-wrap" style="display:none;">
-          <label>Prezzo finale</label>
-          <input type="number" id="ls-final" min="0" step="0.01" placeholder="es. 9.90">
-        </div>
-        <div class="field form-full" style="margin-bottom:0;margin-top:8px;">
-          <label style="font-size:12px;color:var(--accent);font-weight:800;">3. Prodotti</label>
-          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Il listino viene sempre creato per prodotto. Puoi selezionare un prodotto principale e, se serve, replicare la stessa logica su altri prodotti.</div>
-        </div>
         <div class="field form-full">
-          <label>Prodotto principale *</label>
-          <select id="ls-prodotto"></select>
-        </div>
-        <div class="field form-full" id="ls-prodotti-multi-wrap">
-          <label>Replica la stessa logica su altri prodotti (opzionale)</label>
-          <select id="ls-prodotti-multi" multiple style="min-height:110px;"></select>
-        </div>
-        <div class="field form-full">
-          <div class="listino-composer-preview" id="ls-composer-preview"></div>
-        </div>
-        <div class="field">
           <label>Valido dal</label>
           <input type="date" id="ls-dal">
         </div>
@@ -4835,6 +4796,20 @@
         <div class="field form-full">
           <label>Note</label>
           <input type="text" id="ls-note" placeholder="opzionale">
+        </div>
+        <div class="field form-full" style="margin-bottom:0;margin-top:8px;">
+          <label style="font-size:12px;color:var(--accent);font-weight:800;">2. Prodotti del listino</label>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">Aggiungi una riga per ogni prodotto con la sua regola prezzo.</div>
+        </div>
+        <div class="field form-full">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+            <label style="margin:0;">Righe prodotto</label>
+            <button type="button" class="btn btn-outline btn-sm" onclick="addListinoEditorRow()">+ Aggiungi prodotto</button>
+          </div>
+          <div id="ls-prodotti-rows" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+        <div class="field form-full">
+          <div class="listino-composer-preview" id="ls-composer-preview"></div>
         </div>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:8px;">

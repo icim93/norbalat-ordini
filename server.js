@@ -1102,6 +1102,8 @@ async function createSchema() {
 
     CREATE TABLE IF NOT EXISTS listini (
       id          SERIAL PRIMARY KEY,
+      gruppo_uid  TEXT DEFAULT '',
+      nome_listino TEXT DEFAULT '',
       prodotto_id INTEGER NOT NULL REFERENCES prodotti(id) ON DELETE CASCADE,
       cliente_id  INTEGER REFERENCES clienti(id) ON DELETE CASCADE,
       giro        TEXT DEFAULT '',
@@ -1293,6 +1295,8 @@ async function createSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS uq_pedane_camion_data_numero ON pedane(camion_id,piano_data,numero);
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS giro            TEXT DEFAULT '';
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS scope           TEXT NOT NULL DEFAULT 'all';
+    ALTER TABLE listini     ADD COLUMN IF NOT EXISTS gruppo_uid      TEXT DEFAULT '';
+    ALTER TABLE listini     ADD COLUMN IF NOT EXISTS nome_listino    TEXT DEFAULT '';
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS mode            TEXT NOT NULL DEFAULT 'final_price';
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS base_price      NUMERIC;
     ALTER TABLE listini     ADD COLUMN IF NOT EXISTS markup_pct      NUMERIC DEFAULT 0;
@@ -1360,6 +1364,8 @@ async function createSchema() {
     UPDATE listini SET scope = CASE WHEN cliente_id IS NULL THEN 'all' ELSE 'cliente' END WHERE scope IS NULL OR scope = '';
     UPDATE listini SET mode = 'final_price' WHERE mode IS NULL OR mode = '';
     UPDATE listini SET final_price = COALESCE(final_price, prezzo) WHERE mode = 'final_price';
+    UPDATE listini SET gruppo_uid = CONCAT('legacy-', id) WHERE gruppo_uid IS NULL OR gruppo_uid = '';
+    UPDATE listini SET nome_listino = CONCAT('Listino ', id) WHERE nome_listino IS NULL OR BTRIM(nome_listino) = '';
     UPDATE clienti SET created_at = NOW() WHERE created_at IS NULL;
 
     DO $$
@@ -2379,7 +2385,86 @@ function validationError(res, parsed) {
   });
 }
 
+function makeListinoGroupUid() {
+  return `lst_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeListinoRuleValues({ mode = 'final_price', prezzo = null, base_price = null, markup_pct = 0, discount_pct = 0, final_price = null }) {
+  const allowedMode = ['base_markup', 'discount_pct', 'final_price'];
+  if (!allowedMode.includes(mode)) {
+    const err = new Error('Modalita prezzo non valida');
+    err.status = 400;
+    throw err;
+  }
+  const base = asNum(base_price);
+  const markup = asNum(markup_pct) ?? 0;
+  const discount = asNum(discount_pct) ?? 0;
+  const finalP = asNum(final_price ?? prezzo);
+  if (mode === 'base_markup' && (base === null || base < 0)) {
+    const err = new Error('Base prezzo non valida');
+    err.status = 400;
+    throw err;
+  }
+  if (mode === 'discount_pct' && (discount < 0 || discount > 100)) {
+    const err = new Error('Sconto % non valido');
+    err.status = 400;
+    throw err;
+  }
+  if (mode === 'final_price' && (finalP === null || finalP < 0)) {
+    const err = new Error('Prezzo finale non valido');
+    err.status = 400;
+    throw err;
+  }
+  return { mode, base, markup, discount, finalP };
+}
+
+function normalizeListinoHeaderValues({ scope = 'all', cliente_id = null, cliente_ids = null, giro = '', excluded_client_ids = [], valido_dal, valido_al = null, note = '', nome_listino = '' }) {
+  const allowedScope = ['all', 'giro', 'cliente', 'giro_cliente'];
+  if (!allowedScope.includes(scope)) {
+    const err = new Error('Scope non valido');
+    err.status = 400;
+    throw err;
+  }
+  const giroVal = String(giro || '').trim();
+  if ((scope === 'giro' || scope === 'giro_cliente') && !giroVal) {
+    const err = new Error('Giro obbligatorio per questo scope');
+    err.status = 400;
+    throw err;
+  }
+  const clienti = asIntArray(cliente_ids && cliente_ids.length ? cliente_ids : [cliente_id]);
+  if ((scope === 'cliente' || scope === 'giro_cliente') && !clienti.length) {
+    const err = new Error('Cliente obbligatorio per questo scope');
+    err.status = 400;
+    throw err;
+  }
+  if (!valido_dal) {
+    const err = new Error('Valido dal obbligatorio');
+    err.status = 400;
+    throw err;
+  }
+  if (valido_al && valido_al < valido_dal) {
+    const err = new Error('Intervallo date non valido');
+    err.status = 400;
+    throw err;
+  }
+  const nomeListino = String(nome_listino || '').trim();
+  const excluded = asIntArray(excluded_client_ids);
+  return {
+    scope,
+    giroVal,
+    clienti,
+    targets: (scope === 'cliente' || scope === 'giro_cliente') ? clienti : [null],
+    validoDal: valido_dal,
+    validoAl: valido_al || null,
+    noteVal: String(note || '').trim(),
+    nomeListino,
+    excluded,
+  };
+}
+
 const zListinoPayload = z.object({
+  gruppo_uid: z.string().max(120).optional(),
+  nome_listino: z.string().max(160).optional().default(''),
   prodotto_id: z.coerce.number().int().positive().optional(),
   prodotto_ids: z.array(z.coerce.number().int().positive()).optional(),
   cliente_id: z.coerce.number().int().positive().nullable().optional(),
@@ -2396,6 +2481,31 @@ const zListinoPayload = z.object({
   valido_dal: z.string().min(1),
   valido_al: z.string().nullable().optional(),
   note: z.string().max(3000).optional().default(''),
+});
+
+const zListinoGroupItem = z.object({
+  prodotto_id: z.coerce.number().int().positive(),
+  mode: z.enum(['base_markup', 'discount_pct', 'final_price']).optional().default('final_price'),
+  prezzo: z.coerce.number().nullable().optional(),
+  base_price: z.coerce.number().nullable().optional(),
+  markup_pct: z.coerce.number().optional().default(0),
+  discount_pct: z.coerce.number().optional().default(0),
+  final_price: z.coerce.number().nullable().optional(),
+  note: z.string().max(1000).optional().default(''),
+});
+
+const zListinoGroupPayload = z.object({
+  gruppo_uid: z.string().max(120).optional(),
+  nome_listino: z.string().min(1).max(160),
+  cliente_id: z.coerce.number().int().positive().nullable().optional(),
+  cliente_ids: z.array(z.coerce.number().int().positive()).optional(),
+  giro: z.string().max(120).optional().default(''),
+  scope: z.enum(['all', 'giro', 'cliente', 'giro_cliente']).optional().default('all'),
+  excluded_client_ids: z.array(z.coerce.number().int().positive()).optional().default([]),
+  valido_dal: z.string().min(1),
+  valido_al: z.string().nullable().optional(),
+  note: z.string().max(3000).optional().default(''),
+  items: z.array(zListinoGroupItem).min(1),
 });
 
 const zResaPayload = z.object({
@@ -3742,7 +3852,7 @@ app.get('/api/listini', authMiddleware, requirePermission('listini:view'), async
        JOIN prodotti p ON p.id=l.prodotto_id
        LEFT JOIN clienti c ON c.id=l.cliente_id
        WHERE ${where.join(' AND ')}
-       ORDER BY p.nome, l.scope, l.giro, l.cliente_id NULLS FIRST, l.valido_dal DESC, l.id DESC`,
+       ORDER BY COALESCE(NULLIF(BTRIM(l.nome_listino), ''), p.nome), l.gruppo_uid, p.nome, l.scope, l.giro, l.cliente_id NULLS FIRST, l.valido_dal DESC, l.id DESC`,
       params
     );
     res.json(rows);
@@ -3750,10 +3860,64 @@ app.get('/api/listini', authMiddleware, requirePermission('listini:view'), async
 });
 
 app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
+  if (Array.isArray(req.body?.items) && req.body.items.length) {
+    const client = await pool.connect();
+    try {
+      const parsed = zListinoGroupPayload.safeParse(req.body || {});
+      if (!parsed.success) {
+        client.release();
+        return validationError(res, parsed);
+      }
+      const header = normalizeListinoHeaderValues(parsed.data);
+      const gruppoUid = String(parsed.data.gruppo_uid || '').trim() || makeListinoGroupUid();
+      await client.query('BEGIN');
+      const inserted = [];
+      for (const item of parsed.data.items || []) {
+        const rule = normalizeListinoRuleValues(item);
+        for (const cid of header.targets) {
+          const r = await client.query(
+            `INSERT INTO listini
+             (gruppo_uid,nome_listino,prodotto_id,cliente_id,giro,scope,mode,prezzo,base_price,markup_pct,discount_pct,final_price,excluded_client_ids,valido_dal,valido_al,note,created_by,updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,NOW())
+             RETURNING *`,
+            [
+              gruppoUid,
+              header.nomeListino,
+              item.prodotto_id,
+              cid,
+              header.giroVal,
+              header.scope,
+              rule.mode,
+              rule.finalP,
+              rule.base,
+              rule.markup,
+              rule.discount,
+              rule.finalP,
+              JSON.stringify(header.excluded),
+              header.validoDal,
+              header.validoAl,
+              header.noteVal,
+              req.user.id || null,
+            ]
+          );
+          inserted.push(r.rows[0]);
+        }
+      }
+      await client.query('COMMIT');
+      client.release();
+      return res.json({ created: inserted.length, rows: inserted });
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      client.release();
+      return res.status(e.status || 500).json({ error: e.message });
+    }
+  }
   try {
     const parsed = zListinoPayload.safeParse(req.body || {});
     if (!parsed.success) return validationError(res, parsed);
     const {
+      gruppo_uid = '',
+      nome_listino = '',
       prodotto_id, prodotto_ids = null,
       cliente_id = null, cliente_ids = null,
       giro = '', scope = 'all', mode = 'final_price',
@@ -3765,43 +3929,20 @@ app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), as
     if (!prodotti.length || !valido_dal) {
       return res.status(400).json({ error: 'Campi obbligatori mancanti' });
     }
-    const allowedScope = ['all', 'giro', 'cliente', 'giro_cliente'];
-    const allowedMode = ['base_markup', 'discount_pct', 'final_price'];
-    if (!allowedScope.includes(scope)) return res.status(400).json({ error: 'Scope non valido' });
-    if (!allowedMode.includes(mode)) return res.status(400).json({ error: 'Modalita prezzo non valida' });
-    if ((scope === 'giro' || scope === 'giro_cliente') && !String(giro).trim()) {
-      return res.status(400).json({ error: 'Giro obbligatorio per questo scope' });
-    }
-    const clienti = asIntArray(cliente_ids && cliente_ids.length ? cliente_ids : [cliente_id]);
-    if ((scope === 'cliente' || scope === 'giro_cliente') && !clienti.length) {
-      return res.status(400).json({ error: 'Cliente obbligatorio per questo scope' });
-    }
-    const excluded = asIntArray(excluded_client_ids);
-    const base = asNum(base_price);
-    const markup = asNum(markup_pct) ?? 0;
-    const discount = asNum(discount_pct) ?? 0;
-    const finalP = asNum(final_price ?? prezzo);
-    if (mode === 'base_markup' && (base === null || base < 0)) {
-      return res.status(400).json({ error: 'Base prezzo non valida' });
-    }
-    if (mode === 'discount_pct' && (discount < 0 || discount > 100)) {
-      return res.status(400).json({ error: 'Sconto % non valido' });
-    }
-    if (mode === 'final_price' && (finalP === null || finalP < 0)) {
-      return res.status(400).json({ error: 'Prezzo finale non valido' });
-    }
-    if (valido_al && valido_al < valido_dal) return res.status(400).json({ error: 'Intervallo date non valido' });
-    const targets = (scope === 'cliente' || scope === 'giro_cliente') ? clienti : [null];
+    const header = normalizeListinoHeaderValues({ scope, cliente_id, cliente_ids, giro, excluded_client_ids, valido_dal, valido_al, note, nome_listino });
+    const rule = normalizeListinoRuleValues({ mode, prezzo, base_price, markup_pct, discount_pct, final_price });
+    const gruppoUid = String(gruppo_uid || '').trim() || makeListinoGroupUid();
+    const nomeListino = header.nomeListino || `Listino ${gruppoUid}`;
     const inserted = [];
     for (const pid of prodotti) {
-      for (const cid of targets) {
+      for (const cid of header.targets) {
         const r = await q(
           `INSERT INTO listini
-           (prodotto_id,cliente_id,giro,scope,mode,prezzo,base_price,markup_pct,discount_pct,final_price,excluded_client_ids,valido_dal,valido_al,note,created_by,updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,NOW()) RETURNING *`,
+           (gruppo_uid,nome_listino,prodotto_id,cliente_id,giro,scope,mode,prezzo,base_price,markup_pct,discount_pct,final_price,excluded_client_ids,valido_dal,valido_al,note,created_by,updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,NOW()) RETURNING *`,
           [
-            pid, cid, String(giro || ''),
-            scope, mode, finalP, base, markup, discount, finalP, JSON.stringify(excluded), valido_dal, valido_al || null, note, req.user.id || null,
+            gruppoUid, nomeListino, pid, cid, header.giroVal,
+            header.scope, rule.mode, rule.finalP, rule.base, rule.markup, rule.discount, rule.finalP, JSON.stringify(header.excluded), header.validoDal, header.validoAl, header.noteVal, req.user.id || null,
           ]
         );
         inserted.push(r.rows[0]);
@@ -3812,54 +3953,109 @@ app.post('/api/listini', authMiddleware, requirePermission('listini:manage'), as
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.put('/api/listini/gruppi/:gruppoUid', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const gruppoUid = String(req.params.gruppoUid || '').trim();
+    if (!gruppoUid) {
+      client.release();
+      return res.status(400).json({ error: 'Gruppo listino non valido' });
+    }
+    const parsed = zListinoGroupPayload.safeParse(req.body || {});
+    if (!parsed.success) {
+      client.release();
+      return validationError(res, parsed);
+    }
+    const header = normalizeListinoHeaderValues(parsed.data);
+    const items = parsed.data.items || [];
+    await client.query('BEGIN');
+    const { rows: existing } = await client.query('SELECT id FROM listini WHERE gruppo_uid=$1 LIMIT 1', [gruppoUid]);
+    if (!existing.length) {
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(404).json({ error: 'Listino non trovato' });
+    }
+    await client.query('DELETE FROM listini WHERE gruppo_uid=$1', [gruppoUid]);
+    const inserted = [];
+    for (const item of items) {
+      const rule = normalizeListinoRuleValues(item);
+      for (const cid of header.targets) {
+        const r = await client.query(
+          `INSERT INTO listini
+           (gruppo_uid,nome_listino,prodotto_id,cliente_id,giro,scope,mode,prezzo,base_price,markup_pct,discount_pct,final_price,excluded_client_ids,valido_dal,valido_al,note,created_by,updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,NOW())
+           RETURNING *`,
+          [
+            gruppoUid,
+            header.nomeListino,
+            item.prodotto_id,
+            cid,
+            header.giroVal,
+            header.scope,
+            rule.mode,
+            rule.finalP,
+            rule.base,
+            rule.markup,
+            rule.discount,
+            rule.finalP,
+            JSON.stringify(header.excluded),
+            header.validoDal,
+            header.validoAl,
+            header.noteVal,
+            req.user.id || null,
+          ]
+        );
+        inserted.push(r.rows[0]);
+      }
+    }
+    await client.query('COMMIT');
+    client.release();
+    res.json({ updated: inserted.length, rows: inserted });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    client.release();
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/listini/gruppi/:gruppoUid', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
+  try {
+    const gruppoUid = String(req.params.gruppoUid || '').trim();
+    if (!gruppoUid) return res.status(400).json({ error: 'Gruppo listino non valido' });
+    await q('DELETE FROM listini WHERE gruppo_uid=$1', [gruppoUid]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.put('/api/listini/:id', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const parsed = zListinoPayload.safeParse(req.body || {});
     if (!parsed.success) return validationError(res, parsed);
     const {
+      gruppo_uid = '',
+      nome_listino = '',
       cliente_id = null, giro = '', scope = 'all', mode = 'final_price',
       prezzo = null, base_price = null, markup_pct = 0, discount_pct = 0, final_price = null,
       excluded_client_ids = [],
       valido_dal, valido_al = null, note = '',
     } = parsed.data;
     if (!valido_dal) return res.status(400).json({ error: 'Campi mancanti' });
-    const allowedScope = ['all', 'giro', 'cliente', 'giro_cliente'];
-    const allowedMode = ['base_markup', 'discount_pct', 'final_price'];
-    if (!allowedScope.includes(scope)) return res.status(400).json({ error: 'Scope non valido' });
-    if (!allowedMode.includes(mode)) return res.status(400).json({ error: 'Modalita prezzo non valida' });
-    if ((scope === 'giro' || scope === 'giro_cliente') && !String(giro).trim()) {
-      return res.status(400).json({ error: 'Giro obbligatorio per questo scope' });
-    }
-    if ((scope === 'cliente' || scope === 'giro_cliente') && !cliente_id) {
-      return res.status(400).json({ error: 'Cliente obbligatorio per questo scope' });
-    }
-    const base = asNum(base_price);
-    const markup = asNum(markup_pct) ?? 0;
-    const discount = asNum(discount_pct) ?? 0;
-    const finalP = asNum(final_price ?? prezzo);
-    if (mode === 'base_markup' && (base === null || base < 0)) {
-      return res.status(400).json({ error: 'Base prezzo non valida' });
-    }
-    if (mode === 'discount_pct' && (discount < 0 || discount > 100)) {
-      return res.status(400).json({ error: 'Sconto % non valido' });
-    }
-    if (mode === 'final_price' && (finalP === null || finalP < 0)) {
-      return res.status(400).json({ error: 'Prezzo finale non valido' });
-    }
-    if (valido_al && valido_al < valido_dal) return res.status(400).json({ error: 'Intervallo date non valido' });
-    const excluded = asIntArray(excluded_client_ids);
+    const header = normalizeListinoHeaderValues({ scope, cliente_id, cliente_ids: null, giro, excluded_client_ids, valido_dal, valido_al, note, nome_listino });
+    const rule = normalizeListinoRuleValues({ mode, prezzo, base_price, markup_pct, discount_pct, final_price });
+    const gruppoUid = String(gruppo_uid || '').trim() || makeListinoGroupUid();
+    const nomeListino = header.nomeListino || `Listino ${gruppoUid}`;
     const r = await q(
       `UPDATE listini
-       SET cliente_id=$1, giro=$2, scope=$3, mode=$4,
-           prezzo=$5, base_price=$6, markup_pct=$7, discount_pct=$8, final_price=$9, excluded_client_ids=$10::jsonb,
-           valido_dal=$11, valido_al=$12, note=$13, updated_at=NOW()
-       WHERE id=$14
+       SET gruppo_uid=$1, nome_listino=$2, cliente_id=$3, giro=$4, scope=$5, mode=$6,
+           prezzo=$7, base_price=$8, markup_pct=$9, discount_pct=$10, final_price=$11, excluded_client_ids=$12::jsonb,
+           valido_dal=$13, valido_al=$14, note=$15, updated_at=NOW()
+       WHERE id=$16
        RETURNING *`,
       [
-        cliente_id ? parseInt(cliente_id) : null, String(giro || ''), scope, mode,
-        finalP, base, markup, discount, finalP, JSON.stringify(excluded),
-        valido_dal, valido_al || null, note, id,
+        gruppoUid, nomeListino, header.targets[0], header.giroVal, header.scope, rule.mode,
+        rule.finalP, rule.base, rule.markup, rule.discount, rule.finalP, JSON.stringify(header.excluded),
+        header.validoDal, header.validoAl, header.noteVal, id,
       ]
     );
     if (!r.rows.length) return res.status(404).json({ error: 'Listino non trovato' });

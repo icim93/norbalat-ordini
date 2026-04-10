@@ -82,6 +82,8 @@
   function normalizeListino(l) {
     return {
       id: l.id,
+      gruppoUid: l.gruppo_uid || `legacy-${l.id}`,
+      nomeListino: l.nome_listino || `Listino ${l.id}`,
       prodottoId: l.prodotto_id,
       clienteId: l.cliente_id || null,
       giro: l.giro || '',
