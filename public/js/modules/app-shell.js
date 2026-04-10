@@ -424,6 +424,7 @@
     window.state.docCurrentFiles = [];
     window.state.docCanManage = false;
     window.state.magazzinoHighlightOrderId = null;
+    window.state.giacenzeUndoStack = [];
     window.state.magazzinoUndoStack = [];
     window.state.magazzinoResidualLog = [];
     window.state.messagesInbox = [];

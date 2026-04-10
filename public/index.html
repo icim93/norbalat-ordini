@@ -5739,6 +5739,7 @@ let state = {
   giacenzeAlerts: { sotto_soglia: [], in_scadenza: [] },
   preparazioneActiveTab: 'preparazione',
   giacenzeActiveTab: 'giacenze',
+  giacenzeUndoStack: [],
   magazzinoHighlightOrderId: null,
   magazzinoUndoStack: [],
 };
@@ -11214,10 +11215,15 @@ function updatePDFPreview() {
       const nome = getReportLineNomeHtml(l, p);
       const um = umPlurale(l.unitaMisura || (l.isPedana ? 'Pedana' : 'Pezzi'), l.qty || 1);
       const qty = l.qty || 1;
+      const prezzoUnitario = Number(l.prezzoUnitario);
+      const hasPrezzo = Number.isFinite(prezzoUnitario) && Math.abs(prezzoUnitario) > 0.000001;
+      const prezzoInfo = hasPrezzo
+        ? `<div style="font-size:9px;color:#555;line-height:1.25;">Prezzo: ${eur(prezzoUnitario)}${Number.isFinite(qty) ? ` · Tot: ${eur(prezzoUnitario * qty)}` : ''}</div>`
+        : '';
       const nota = l.notaRiga ? ` <i style="color:#888;">(${l.notaRiga})</i>` : '';
       return `<div style="display:grid;grid-template-columns:18px minmax(0,1.9fr) minmax(72px,0.62fr) minmax(78px,0.68fr) minmax(62px,0.5fr);gap:5px;align-items:center;padding:2px 0;font-size:10px;border-bottom:1px dotted #eee;">
         <span style="width:12px;height:12px;border:1.2px solid #666;border-radius:2px;display:inline-block;"></span>
-        <span style="min-width:0;word-break:break-word;overflow-wrap:anywhere;">${nome}${nota}</span>
+        <span style="min-width:0;word-break:break-word;overflow-wrap:anywhere;">${nome}${nota}${prezzoInfo}</span>
         <span style="white-space:nowrap;font-weight:700;">${qty} ${um}</span>
         <span style="display:block;min-height:14px;border-bottom:1px solid #999;padding-bottom:1px;">&nbsp;</span>
         <span style="display:block;min-height:14px;border-bottom:1px solid #999;padding-bottom:1px;">&nbsp;</span>
@@ -12216,6 +12222,7 @@ function renderGiacenze() {
             <button class="btn btn-outline btn-sm" onclick="document.getElementById('import-giacenze-file')?.click()">📥 Importa Excel</button>
             <button class="btn btn-outline btn-sm" style="border-color:var(--orange);color:var(--orange);" onclick="document.getElementById('import-inventario-file')?.click()">🧮 Importa inventario</button>
             <button class="btn btn-outline btn-sm" onclick="openMovimentiModal(null)">📋 Storico movimenti</button>
+            <button id="giacenze-undo-btn" class="btn btn-outline btn-sm" onclick="undoGiacenzeLastAction()" disabled style="opacity:0.5;">UNDO</button>
             <button class="btn btn-outline btn-sm" onclick="printGiacenzeInventario()">🖨️ Stampa inventario</button>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
@@ -12249,6 +12256,7 @@ function renderGiacenze() {
 
   if (!cardsData.length) {
     container.innerHTML = topBar + `<div class="empty-state"><div class="empty-icon">📦</div><p>Nessuna giacenza trovata con i filtri attuali.</p></div>`;
+    updateGiacenzeUndoButton();
     if (searchWasFocused) {
       const searchInput = document.getElementById('giacenze-search-input');
       if (searchInput) {
@@ -12331,6 +12339,7 @@ function renderGiacenze() {
   }).join('');
 
   container.innerHTML = topBar + cards;
+  updateGiacenzeUndoButton();
   if (searchWasFocused) {
     const searchInput = document.getElementById('giacenze-search-input');
     if (searchInput) {
@@ -12348,6 +12357,39 @@ function resetGiacenzeFilters() {
   if (search) search.value = '';
   if (filter) filter.value = '';
   renderGiacenze();
+}
+
+function pushGiacenzeUndo(action) {
+  if (!action || !Array.isArray(action.movementIds) || !action.movementIds.length) return;
+  state.giacenzeUndoStack = Array.isArray(state.giacenzeUndoStack) ? state.giacenzeUndoStack : [];
+  state.giacenzeUndoStack.push(action);
+  if (state.giacenzeUndoStack.length > 30) state.giacenzeUndoStack.shift();
+  updateGiacenzeUndoButton();
+}
+
+function updateGiacenzeUndoButton() {
+  const btn = document.getElementById('giacenze-undo-btn');
+  if (!btn) return;
+  const hasUndo = Array.isArray(state.giacenzeUndoStack) && state.giacenzeUndoStack.length > 0;
+  btn.disabled = !hasUndo;
+  btn.style.opacity = hasUndo ? '1' : '0.5';
+}
+
+async function undoGiacenzeLastAction() {
+  if (!Array.isArray(state.giacenzeUndoStack) || !state.giacenzeUndoStack.length) return;
+  const action = state.giacenzeUndoStack.pop();
+  updateGiacenzeUndoButton();
+  try {
+    await api('POST', '/api/giacenze/movimenti/undo', { movement_ids: action.movementIds });
+    await reloadGiacenze();
+    renderGiacenze();
+    renderGiacenzeAlerts();
+    showToast(action.label ? `${action.label} annullato` : 'Ultima operazione giacenze annullata', 'success');
+  } catch (e) {
+    state.giacenzeUndoStack.push(action);
+    updateGiacenzeUndoButton();
+    showToast(e.message || 'UNDO non riuscito', 'warning');
+  }
 }
 
 async function markProdottoRiordinato(prodottoId) {
@@ -12572,9 +12614,14 @@ async function saveGiacenzaCarico() {
       note,
       rows: rows.map(({ _index, ...row }) => row),
     });
+    pushGiacenzeUndo({
+      label: tipo === 'carico' ? 'Carico giacenza' : 'Operazione giacenza',
+      movementIds: result?.movement_ids || [],
+    });
     closeModal('modal-giacenza-carico');
     await reloadGiacenze();
     renderGiacenze();
+    renderGiacenzeAlerts();
     showToast(`${result?.count || rows.length} righe di carico registrate ✅`, 'success');
   } catch (e) {
     showToast(e.message, 'warning');
@@ -12602,10 +12649,12 @@ async function saveGiacenzaRettifica() {
   const note = document.getElementById('giacenza-rettifica-note').value.trim();
   if (!Number.isFinite(nuova_quantita)) { showToast('Inserisci la nuova quantità', 'warning'); return; }
   try {
-    await api('POST', `/api/giacenze/${id}/rettifica`, { nuova_quantita, note });
+    const result = await api('POST', `/api/giacenze/${id}/rettifica`, { nuova_quantita, note });
+    pushGiacenzeUndo({ label: 'Rettifica giacenza', movementIds: result?.movement_id ? [result.movement_id] : [] });
     closeModal('modal-giacenza-rettifica');
     await reloadGiacenze();
     renderGiacenze();
+    renderGiacenzeAlerts();
     showToast('Rettifica salvata ✅', 'success');
   } catch (e) {
     showToast(e.message, 'warning');
@@ -12630,10 +12679,12 @@ async function saveGiacenzaModifica() {
   const quantita = parseFloat(document.getElementById('giacenza-modifica-qty').value);
   const note = document.getElementById('giacenza-modifica-note').value.trim();
   try {
-    await api('PATCH', `/api/giacenze/${id}`, { lotto, scadenza, quantita, note });
+    const result = await api('PATCH', `/api/giacenze/${id}`, { lotto, scadenza, quantita, note });
+    pushGiacenzeUndo({ label: 'Modifica giacenza', movementIds: result?.movement_id ? [result.movement_id] : [] });
     closeModal('modal-giacenza-modifica');
     await reloadGiacenze();
     renderGiacenze();
+    renderGiacenzeAlerts();
     showToast('Giacenza aggiornata ✅', 'success');
   } catch (e) {
     showToast(e.message, 'warning');
@@ -12712,7 +12763,8 @@ async function openScaricoManuale(giacenzaId) {
   if (!Number.isFinite(quantita) || quantita <= 0) { showToast('Quantità non valida', 'warning'); return; }
   const note = prompt('Causale / note scarico manuale:', '') || '';
   try {
-    await api('POST', `/api/giacenze/${giacenzaId}/scarico-manuale`, { quantita, note });
+    const result = await api('POST', `/api/giacenze/${giacenzaId}/scarico-manuale`, { quantita, note });
+    pushGiacenzeUndo({ label: 'Scarico manuale', movementIds: result?.movement_id ? [result.movement_id] : [] });
     await reloadGiacenze();
     renderGiacenze();
     renderGiacenzeAlerts();
@@ -12816,7 +12868,8 @@ async function saveScaricoRapido() {
   const invalid = rows.find(r => !r.prodotto_id || !r.lotto || !Number.isFinite(r.quantita) || r.quantita <= 0);
   if (invalid) { showToast('Compila prodotto, lotto e quantità per tutte le righe', 'warning'); return; }
   try {
-    await api('POST', '/api/giacenze/scarico-batch', { rows });
+    const result = await api('POST', '/api/giacenze/scarico-batch', { rows });
+    pushGiacenzeUndo({ label: 'Scarico rapido', movementIds: result?.movement_ids || [] });
     closeModal('modal-giacenza-scarico-rapido');
     await reloadGiacenze();
     renderGiacenze();

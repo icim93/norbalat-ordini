@@ -1524,11 +1524,16 @@ async function createSchema() {
       created_at      TIMESTAMPTZ DEFAULT NOW()
     );
 
+    ALTER TABLE movimenti_giacenza ADD COLUMN IF NOT EXISTS undo_of_id INTEGER REFERENCES movimenti_giacenza(id) ON DELETE SET NULL;
+    ALTER TABLE movimenti_giacenza ADD COLUMN IF NOT EXISTS undone_by_id INTEGER REFERENCES movimenti_giacenza(id) ON DELETE SET NULL;
+
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS soglia_minima NUMERIC;
 
     CREATE INDEX IF NOT EXISTS idx_giacenze_prodotto ON giacenze(prodotto_id);
     CREATE INDEX IF NOT EXISTS idx_movimenti_giacenza_prodotto ON movimenti_giacenza(prodotto_id);
     CREATE INDEX IF NOT EXISTS idx_movimenti_giacenza_created ON movimenti_giacenza(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_movimenti_giacenza_undo_of ON movimenti_giacenza(undo_of_id);
+    CREATE INDEX IF NOT EXISTS idx_movimenti_giacenza_undone_by ON movimenti_giacenza(undone_by_id);
   `);
 
   await q(`
@@ -7294,15 +7299,16 @@ app.post('/api/giacenze/carico', authMiddleware, requireRole('admin', 'magazzino
       );
       giacenzaId = ins.rows[0].id;
     }
-    await client.query(
+    const movIns = await client.query(
       `INSERT INTO movimenti_giacenza
         (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       RETURNING id`,
       [giacenzaId, prodotto_id, lottoVal, tipoVal, qty, oldQty, newQty, req.user.id || null, utenteName, note || '']
     );
     await client.query('COMMIT');
     client.release();
-    res.json({ ok: true, giacenza_id: giacenzaId });
+    res.json({ ok: true, giacenza_id: giacenzaId, movement_id: movIns.rows[0]?.id || null });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     client.release();
@@ -7350,6 +7356,7 @@ app.post('/api/giacenze/carico-batch', authMiddleware, requireRole('admin', 'mag
 
     await client.query('BEGIN');
     const giacenzaIds = [];
+    const movementIds = [];
     for (const row of normalizedRows) {
       const { rows: prodRows } = await client.query(
         'SELECT gestione_giacenza FROM prodotti WHERE id=$1 LIMIT 1',
@@ -7389,17 +7396,19 @@ app.post('/api/giacenze/carico-batch', authMiddleware, requireRole('admin', 'mag
         );
         giacenzaId = ins.rows[0].id;
       }
-      await client.query(
+      const movIns = await client.query(
         `INSERT INTO movimenti_giacenza
           (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         RETURNING id`,
         [giacenzaId, row.prodotto_id, row.lotto, tipoVal, row.quantita, oldQty, newQty, req.user.id || null, utenteName, row.note || '']
       );
       giacenzaIds.push(giacenzaId);
+      movementIds.push(movIns.rows[0]?.id || null);
     }
     await client.query('COMMIT');
     client.release();
-    res.json({ ok: true, count: giacenzaIds.length, giacenza_ids: giacenzaIds });
+    res.json({ ok: true, count: giacenzaIds.length, giacenza_ids: giacenzaIds, movement_ids: movementIds.filter(Boolean) });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     client.release();
@@ -7781,15 +7790,16 @@ app.post('/api/giacenze/:id/scarico-manuale', authMiddleware, requireRole('admin
 
     await client.query('BEGIN');
     await client.query('UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2', [qtyAfter, id]);
-    await client.query(
+    const movIns = await client.query(
       `INSERT INTO movimenti_giacenza
         (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
-       VALUES ($1,$2,$3,'scarico_manuale',$4,$5,$6,$7,$8,$9)`,
+       VALUES ($1,$2,$3,'scarico_manuale',$4,$5,$6,$7,$8,$9)
+       RETURNING id`,
       [id, giac.prodotto_id, giac.lotto, -quantita, qtyBefore, qtyAfter, req.user.id || null, utenteName, noteVal]
     );
     await client.query('COMMIT');
     client.release();
-    res.json({ ok: true });
+    res.json({ ok: true, movement_id: movIns.rows[0]?.id || null });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     client.release();
@@ -7808,6 +7818,7 @@ app.post('/api/giacenze/scarico-batch', authMiddleware, requireRole('admin', 'ma
     }
     const utenteName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
     await client.query('BEGIN');
+    const movementIds = [];
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i] || {};
       const prodottoId = Number(row.prodotto_id);
@@ -7827,16 +7838,18 @@ app.post('/api/giacenze/scarico-batch', authMiddleware, requireRole('admin', 'ma
       if (quantita > qtyBefore) throw new Error(`Riga ${i + 1}: quantità insufficiente in giacenza`);
       const qtyAfter = qtyBefore - quantita;
       await client.query('UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2', [qtyAfter, giac.id]);
-      await client.query(
+      const movIns = await client.query(
         `INSERT INTO movimenti_giacenza
           (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
-         VALUES ($1,$2,$3,'scarico_manuale',$4,$5,$6,$7,$8,$9)`,
+         VALUES ($1,$2,$3,'scarico_manuale',$4,$5,$6,$7,$8,$9)
+         RETURNING id`,
         [giac.id, giac.prodotto_id, giac.lotto, -quantita, qtyBefore, qtyAfter, req.user.id || null, utenteName, noteVal]
       );
+      movementIds.push(movIns.rows[0]?.id || null);
     }
     await client.query('COMMIT');
     client.release();
-    res.json({ ok: true, count: rows.length });
+    res.json({ ok: true, count: rows.length, movement_ids: movementIds.filter(Boolean) });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     client.release();
@@ -7854,6 +7867,7 @@ app.patch('/api/giacenze/:id', authMiddleware, requireRole('admin', 'magazzino')
     const { lotto, scadenza, quantita, note } = req.body || {};
     const utenteName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
 
+    await client.query('BEGIN');
     const sets = ['updated_at=NOW()'];
     const params = [];
     let p = 1;
@@ -7864,19 +7878,22 @@ app.patch('/api/giacenze/:id', authMiddleware, requireRole('admin', 'magazzino')
     params.push(id);
     await client.query(`UPDATE giacenze SET ${sets.join(', ')} WHERE id=$${p}`, params);
 
+    let movementId = null;
     if (quantita !== undefined && Number(quantita) !== Number(giac.quantita)) {
       const nuovaQty = Number(quantita);
       const diff = nuovaQty - Number(giac.quantita);
-      await client.query(
+      const movIns = await client.query(
         `INSERT INTO movimenti_giacenza
           (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
-         VALUES ($1,$2,$3,'rettifica',$4,$5,$6,$7,$8,'Modifica manuale giacenza')`,
+         VALUES ($1,$2,$3,'rettifica',$4,$5,$6,$7,$8,'Modifica manuale giacenza')
+         RETURNING id`,
         [id, giac.prodotto_id, giac.lotto, diff, Number(giac.quantita), nuovaQty, req.user.id || null, utenteName]
       );
+      movementId = movIns.rows[0]?.id || null;
     }
     await client.query('COMMIT');
     client.release();
-    res.json({ ok: true });
+    res.json({ ok: true, movement_id: movementId });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     client.release();
@@ -7911,19 +7928,134 @@ app.post('/api/giacenze/:id/rettifica', authMiddleware, requireRole('admin', 'ma
 
     await client.query('BEGIN');
     await client.query('UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2', [nuovaQty, id]);
-    await client.query(
+    const movIns = await client.query(
       `INSERT INTO movimenti_giacenza
         (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note)
-       VALUES ($1,$2,$3,'rettifica',$4,$5,$6,$7,$8,$9)`,
+       VALUES ($1,$2,$3,'rettifica',$4,$5,$6,$7,$8,$9)
+       RETURNING id`,
       [id, giac.prodotto_id, giac.lotto, diff, Number(giac.quantita), nuovaQty, req.user.id || null, utenteName, noteVal]
     );
     await client.query('COMMIT');
     client.release();
-    res.json({ ok: true });
+    res.json({ ok: true, movement_id: movIns.rows[0]?.id || null });
   } catch (e) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     client.release();
     res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/giacenze/movimenti/undo', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const movementIds = Array.isArray(req.body?.movement_ids)
+      ? req.body.movement_ids.map(v => parseInt(v, 10)).filter(v => Number.isFinite(v) && v > 0)
+      : [];
+    if (!movementIds.length) {
+      client.release();
+      return res.status(400).json({ error: 'movement_ids obbligatorio' });
+    }
+
+    const supportedTypes = new Set(['carico', 'reso', 'tentata_vendita', 'scarico_manuale', 'rettifica']);
+    const utenteName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || '';
+    const undoMovementIds = [];
+
+    await client.query('BEGIN');
+    for (const movementId of [...movementIds].reverse()) {
+      const { rows } = await client.query(
+        `SELECT m.*
+           FROM movimenti_giacenza m
+          WHERE m.id = $1
+          LIMIT 1`,
+        [movementId]
+      );
+      if (!rows.length) {
+        const err = new Error(`Movimento #${movementId} non trovato`);
+        err.status = 404;
+        throw err;
+      }
+      const mov = rows[0];
+      if (!supportedTypes.has(mov.tipo)) {
+        const err = new Error(`Il movimento #${movementId} non supporta UNDO`);
+        err.status = 400;
+        throw err;
+      }
+      if (mov.undo_of_id) {
+        const err = new Error(`Il movimento #${movementId} è già un annullamento`);
+        err.status = 400;
+        throw err;
+      }
+      if (mov.undone_by_id) {
+        const err = new Error(`Il movimento #${movementId} è già stato annullato`);
+        err.status = 409;
+        throw err;
+      }
+      if (!mov.giacenza_id) {
+        const err = new Error(`Il movimento #${movementId} non è collegato a una giacenza`);
+        err.status = 400;
+        throw err;
+      }
+
+      const { rows: giacRows } = await client.query(
+        'SELECT quantita FROM giacenze WHERE id=$1 LIMIT 1',
+        [mov.giacenza_id]
+      );
+      if (!giacRows.length) {
+        const err = new Error(`Giacenza del movimento #${movementId} non trovata`);
+        err.status = 404;
+        throw err;
+      }
+
+      const qtyBefore = Number(giacRows[0].quantita || 0);
+      const undoQty = -Number(mov.quantita || 0);
+      const qtyAfter = qtyBefore + undoQty;
+      if (!Number.isFinite(undoQty) || !Number.isFinite(qtyAfter)) {
+        const err = new Error(`UNDO non valido per il movimento #${movementId}`);
+        err.status = 400;
+        throw err;
+      }
+      if (qtyAfter < 0) {
+        const err = new Error(`UNDO non possibile per il movimento #${movementId}: giacenza insufficiente`);
+        err.status = 409;
+        throw err;
+      }
+
+      await client.query(
+        'UPDATE giacenze SET quantita=$1, updated_at=NOW() WHERE id=$2',
+        [qtyAfter, mov.giacenza_id]
+      );
+      const undoIns = await client.query(
+        `INSERT INTO movimenti_giacenza
+          (giacenza_id,prodotto_id,lotto,tipo,quantita,quantita_prima,quantita_dopo,utente_id,utente_nome,note,undo_of_id)
+         VALUES ($1,$2,$3,'rettifica',$4,$5,$6,$7,$8,$9,$10)
+         RETURNING id`,
+        [
+          mov.giacenza_id,
+          mov.prodotto_id,
+          mov.lotto || '',
+          undoQty,
+          qtyBefore,
+          qtyAfter,
+          req.user.id || null,
+          utenteName,
+          `UNDO movimento #${movementId}${mov.note ? ` · ${String(mov.note).trim()}` : ''}`,
+          movementId
+        ]
+      );
+      const undoId = undoIns.rows[0]?.id || null;
+      await client.query(
+        'UPDATE movimenti_giacenza SET undone_by_id=$1 WHERE id=$2',
+        [undoId, movementId]
+      );
+      if (undoId) undoMovementIds.push(undoId);
+    }
+    await client.query('COMMIT');
+    client.release();
+    res.json({ ok: true, undone: movementIds.length, undo_movement_ids: undoMovementIds });
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    client.release();
+    res.status(e.status || 500).json({ error: e.message });
   }
 });
 
