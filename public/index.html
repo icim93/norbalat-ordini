@@ -7522,7 +7522,12 @@ function renderMagazzino() {
     sub.textContent = `Ordini - ${label}`;
   }
 
-  let ordini = state.ordini.filter(o => o.data === filterData && o.stato !== 'annullato');
+  let ordini = state.ordini.filter(o =>
+    o.data === filterData &&
+    o.stato !== 'annullato' &&
+    !o.stef &&
+    !o.altroVettore
+  );
   if (!filterStato) ordini = ordini.filter(o => o.stato !== 'consegnato' && o.stato !== 'preparato');
   else ordini = ordini.filter(o => o.stato === filterStato);
   if (filterGiro) ordini = ordini.filter(o => getOrdineGiroEffettivo(o) === filterGiro);
