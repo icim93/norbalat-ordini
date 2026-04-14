@@ -11142,7 +11142,13 @@ function updatePDFPreview() {
   const tipo = document.querySelector('input[name="pdf-tipo"]:checked')?.value || 'magazzino';
 
   let ordini = state.ordini.filter(o => o.data === data && o.stato !== 'annullato');
-  if (tipo === 'magazzino') ordini = ordini.filter(o => getOrdineGiroEffettivo(o).toLowerCase() !== 'nessun giro');
+  if (tipo === 'magazzino') {
+    ordini = ordini.filter(o =>
+      getOrdineGiroEffettivo(o).toLowerCase() !== 'nessun giro' &&
+      !o.stef &&
+      !o.altroVettore
+    );
+  }
   if (giriSel) ordini = ordini.filter(o => giriSel.includes(getOrdineGiroEffettivo(o)));
 
   const preview = document.getElementById('pdf-preview');
