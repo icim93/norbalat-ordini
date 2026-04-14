@@ -2554,6 +2554,18 @@ const zListinoGroupItem = z.object({
   note: z.string().max(1000).optional().default(''),
 });
 
+const zListinoGroupBulkPayload = z.object({
+  categoria: z.string().trim().max(160).optional().default(''),
+  prodotto_ids: z.array(z.coerce.number().int().positive()).optional().default([]),
+  mode: z.enum(['base_markup', 'discount_pct', 'final_price']).optional().default('final_price'),
+  prezzo: z.coerce.number().nullable().optional(),
+  base_price: z.coerce.number().nullable().optional(),
+  markup_pct: z.coerce.number().optional().default(0),
+  discount_pct: z.coerce.number().optional().default(0),
+  final_price: z.coerce.number().nullable().optional(),
+  note: z.string().max(1000).optional().default(''),
+});
+
 const zListinoGroupPayload = z.object({
   gruppo_uid: z.string().max(120).optional(),
   nome_listino: z.string().min(1).max(160),
@@ -4192,6 +4204,80 @@ app.post('/api/listini/gruppi/:gruppoUid/righe', authMiddleware, requirePermissi
       ]
     );
     res.json(r.rows[0]);
+  } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+});
+
+app.post('/api/listini/gruppi/:gruppoUid/righe-massive', authMiddleware, requirePermission('listini:manage'), async (req, res) => {
+  try {
+    const gruppoUid = String(req.params.gruppoUid || '').trim();
+    if (!gruppoUid) return res.status(400).json({ error: 'Gruppo listino non valido' });
+    const parsed = zListinoGroupBulkPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const { rows: groupRows } = await q('SELECT * FROM listini_gruppi WHERE uid=$1 LIMIT 1', [gruppoUid]);
+    if (!groupRows.length) return res.status(404).json({ error: 'Listino non trovato' });
+    const group = groupRows[0];
+    const categoria = String(parsed.data.categoria || '').trim();
+    let prodottoIds = asIntArray(parsed.data.prodotto_ids);
+    if (categoria) {
+      const { rows: prodRows } = await q(
+        `SELECT id
+           FROM prodotti
+          WHERE UPPER(BTRIM(categoria)) = UPPER(BTRIM($1))
+          ORDER BY nome ASC, id ASC`,
+        [categoria]
+      );
+      prodottoIds = prodRows.map(r => Number(r.id)).filter(Number.isFinite);
+    }
+    prodottoIds = [...new Set(prodottoIds)];
+    if (!prodottoIds.length) {
+      return res.status(400).json({ error: categoria ? 'Nessun prodotto trovato per la categoria selezionata' : 'Nessun prodotto selezionato' });
+    }
+    const rule = normalizeListinoRuleValues(parsed.data);
+    const { rows: existingRows } = await q(
+      `SELECT prodotto_id
+         FROM listini
+        WHERE gruppo_uid = $1
+          AND prodotto_id = ANY($2::int[])`,
+      [gruppoUid, prodottoIds]
+    );
+    const existingIds = new Set(existingRows.map(r => Number(r.prodotto_id)).filter(Number.isFinite));
+    const missingIds = prodottoIds.filter(id => !existingIds.has(id));
+    const inserted = [];
+    for (const prodottoId of missingIds) {
+      const r = await q(
+        `INSERT INTO listini
+          (gruppo_uid,nome_listino,prodotto_id,cliente_id,giro,scope,mode,prezzo,base_price,markup_pct,discount_pct,final_price,excluded_client_ids,valido_dal,valido_al,note,created_by,updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17,NOW())
+         RETURNING *`,
+        [
+          gruppoUid,
+          group.nome_listino,
+          prodottoId,
+          group.cliente_id,
+          group.giro || '',
+          group.scope || 'all',
+          rule.mode,
+          rule.finalP,
+          rule.base,
+          rule.markup,
+          rule.discount,
+          rule.finalP,
+          JSON.stringify(group.excluded_client_ids || []),
+          group.valido_dal,
+          group.valido_al,
+          parsed.data.note || group.note || '',
+          req.user.id || null,
+        ]
+      );
+      inserted.push(r.rows[0]);
+    }
+    res.json({
+      created: inserted.length,
+      skipped: existingIds.size,
+      total_candidates: prodottoIds.length,
+      categoria,
+      rows: inserted,
+    });
   } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
 });
 

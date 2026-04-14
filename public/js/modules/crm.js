@@ -291,6 +291,8 @@
     document.getElementById('cl-fido').value = cliente.fido || 0;
     document.getElementById('cl-efornitore').checked = cliente.eFornitore || false;
     if (typeof window.populateAgenteSelect === 'function') window.populateAgenteSelect('cl-agente', cliente.agenteId);
+    const listinoBtn = document.getElementById('cl-open-listino-btn');
+    if (listinoBtn) listinoBtn.style.display = 'none';
     window.closeModal('modal-crm-cliente');
     window.openModal('modal-cliente');
   }

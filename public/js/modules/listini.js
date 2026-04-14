@@ -165,6 +165,14 @@
     }
   }
 
+  function getListinoCategorie() {
+    return [...new Set(
+      [...window.state.prodotti]
+        .map(p => String(p.categoria || '').trim())
+        .filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+  }
+
   function onListinoScopeChange() {
     const scope = document.getElementById('ls-scope')?.value || 'all';
     const clienteWrap = document.getElementById('ls-cliente-wrap');
@@ -201,19 +209,31 @@
     `;
   }
 
-  function openListiniModal() {
+  function openListiniModal(prefill = {}) {
     if (!canManageListini()) return;
     editingGroupUid = null;
     document.getElementById('modal-listino-title').textContent = 'Nuovo listino';
     fillListinoSelectors();
+    const clienteId = Number(prefill.clienteId) || '';
+    const scope = prefill.scope || (clienteId ? 'cliente' : 'all');
     document.getElementById('ls-nome').value = '';
-    document.getElementById('ls-scope').value = 'all';
-    document.getElementById('ls-cliente').value = '';
-    document.getElementById('ls-giro').value = '';
-    document.getElementById('ls-dal').value = window.today();
-    document.getElementById('ls-al').value = '';
-    document.getElementById('ls-note').value = '';
+    document.getElementById('ls-scope').value = scope;
+    document.getElementById('ls-cliente').value = clienteId;
+    document.getElementById('ls-giro').value = prefill.giro || '';
+    document.getElementById('ls-dal').value = prefill.validoDal || window.today();
+    document.getElementById('ls-al').value = prefill.validoAl || '';
+    document.getElementById('ls-note').value = prefill.note || '';
     document.querySelectorAll('#ls-clienti-multi option, #ls-clienti-excluded option').forEach(o => { o.selected = false; });
+    if (clienteId) {
+      document.querySelectorAll('#ls-clienti-multi option').forEach(o => {
+        o.selected = Number(o.value) === Number(clienteId);
+      });
+    }
+    document.querySelectorAll('#ls-clienti-excluded option').forEach(o => {
+      o.selected = Array.isArray(prefill.excludedClientIds) && prefill.excludedClientIds.includes(Number(o.value));
+    });
+    const clienteNome = clienteId ? (window.getCliente(clienteId)?.nome || '') : '';
+    document.getElementById('ls-nome').value = prefill.nomeListino || (clienteNome ? `Listino ${clienteNome}` : '');
     onListinoScopeChange();
     refreshListinoComposerPreview();
     window.openModal('modal-listini');
@@ -316,6 +336,28 @@
     ];
   }
 
+  function syncListinoRuleInputs(container, attrName) {
+    if (!container) return;
+    const mode = container.querySelector(`[${attrName}="mode"]`)?.value || 'final_price';
+    const toggle = (key, enabled) => {
+      const el = container.querySelector(`[${attrName}="${key}"]`);
+      if (!el) return;
+      el.disabled = !enabled;
+    };
+    toggle('base_price', mode === 'base_markup');
+    toggle('markup_pct', mode === 'base_markup');
+    toggle('discount_pct', mode === 'discount_pct');
+    toggle('final_price', mode === 'final_price');
+  }
+
+  function updateListinoRuleInputs(rowEl) {
+    syncListinoRuleInputs(rowEl, 'data-listino-row');
+  }
+
+  function updateListinoBulkInputs(boxEl) {
+    syncListinoRuleInputs(boxEl, 'data-listino-bulk');
+  }
+
   function buildRuleEditorRow(row = {}) {
     return `
       <tr>
@@ -324,12 +366,12 @@
             <option value="">Seleziona prodotto</option>
             ${[...window.state.prodotti]
               .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' }))
-              .map(p => `<option value="${p.id}" ${Number(row.prodottoId) === Number(p.id) ? 'selected' : ''}>[${window.escapeHtml(p.codice || '')}] ${window.escapeHtml(p.nome || '')}</option>`)
+              .map(p => `<option value="${p.id}" ${Number(row.prodottoId) === Number(p.id) ? 'selected' : ''}>[${window.escapeHtml(p.codice || '')}] ${window.escapeHtml(p.nome || '')} · ${window.escapeHtml(p.categoria || '-')}</option>`)
               .join('')}
           </select>
         </td>
         <td>
-          <select data-listino-row="mode">
+          <select data-listino-row="mode" onchange="updateListinoRuleInputs(this.closest('tr'))">
             <option value="final_price" ${(row.mode || 'final_price') === 'final_price' ? 'selected' : ''}>Prezzo diretto</option>
             <option value="base_markup" ${row.mode === 'base_markup' ? 'selected' : ''}>Base + ricarico</option>
             <option value="discount_pct" ${row.mode === 'discount_pct' ? 'selected' : ''}>Sconto %</option>
@@ -348,6 +390,55 @@
     `;
   }
 
+  function buildBulkCategoryComposer(groupUid) {
+    const categories = getListinoCategorie();
+    return `
+      <div style="margin-bottom:12px;padding:12px;border:1px solid var(--border);border-radius:12px;background:linear-gradient(180deg,#fff 0%,#f8fbfe 100%);" data-listino-bulk-box="1">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <strong>Aggiunta rapida per categoria</strong>
+          <span style="font-size:12px;color:var(--text3);">Aggiunge tutti i prodotti della categoria non ancora presenti nel listino.</span>
+        </div>
+        <div class="form-row" style="margin-bottom:0;">
+          <div class="field">
+            <label>Categoria</label>
+            <select data-listino-bulk="categoria">
+              <option value="">Seleziona categoria</option>
+              ${categories.map(cat => `<option value="${window.escapeHtml(cat)}">${window.escapeHtml(cat)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>Regola</label>
+            <select data-listino-bulk="mode" onchange="updateListinoBulkInputs(this.closest('[data-listino-bulk-box]'))">
+              <option value="final_price">Prezzo diretto</option>
+              <option value="base_markup">Base + ricarico</option>
+              <option value="discount_pct">Sconto %</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Base</label>
+            <input type="number" step="0.01" min="0" data-listino-bulk="base_price" disabled>
+          </div>
+          <div class="field">
+            <label>Ricarico %</label>
+            <input type="number" step="0.01" data-listino-bulk="markup_pct" disabled>
+          </div>
+          <div class="field">
+            <label>Sconto %</label>
+            <input type="number" step="0.01" min="0" max="100" data-listino-bulk="discount_pct" disabled>
+          </div>
+          <div class="field">
+            <label>Prezzo</label>
+            <input type="number" step="0.01" min="0" data-listino-bulk="final_price">
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button class="btn btn-green" onclick="addListinoCategoryBulk('${groupUid}', this.closest('[data-listino-bulk-box]'))">Aggiungi categoria</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderGroupRowsTable(groupUid) {
     if (openGroupUid !== groupUid) return '';
     const rows = window.state.listini.filter(r => r.gruppoUid === groupUid);
@@ -357,6 +448,7 @@
           <strong>Prodotti del listino</strong>
           ${canManageListini() ? `<button class="btn btn-outline btn-sm" onclick="addListinoRowInline('${groupUid}')">+ Aggiungi riga</button>` : ''}
         </div>
+        ${canManageListini() ? buildBulkCategoryComposer(groupUid) : ''}
         <div class="table-scroll-wrap">
           <table>
             <thead>
@@ -436,6 +528,8 @@
     const empty = tbody.querySelector('td[colspan="8"]');
     if (empty) empty.parentElement.remove();
     tbody.insertAdjacentHTML('beforeend', buildRuleEditorRow({ gruppoUid: groupUid, mode: 'final_price' }));
+    const lastRow = tbody.querySelector('tr:last-child');
+    if (lastRow) updateListinoRuleInputs(lastRow);
   }
 
   async function saveListinoRowInline(groupUid, rowId, tr) {
@@ -478,6 +572,36 @@
     }
   }
 
+  async function addListinoCategoryBulk(groupUid, box) {
+    if (!canManageListini()) return;
+    const val = key => box?.querySelector(`[data-listino-bulk="${key}"]`)?.value || '';
+    const categoria = String(val('categoria') || '').trim();
+    const mode = String(val('mode') || 'final_price');
+    const body = {
+      categoria,
+      mode,
+      base_price: val('base_price') === '' ? null : Number(String(val('base_price')).replace(',', '.')),
+      markup_pct: val('markup_pct') === '' ? 0 : Number(String(val('markup_pct')).replace(',', '.')),
+      discount_pct: val('discount_pct') === '' ? 0 : Number(String(val('discount_pct')).replace(',', '.')),
+      final_price: val('final_price') === '' ? null : Number(String(val('final_price')).replace(',', '.')),
+      prezzo: val('final_price') === '' ? null : Number(String(val('final_price')).replace(',', '.')),
+    };
+    if (!categoria) return window.showToast('Seleziona una categoria', 'warning');
+    try {
+      const result = await window.api('POST', `/api/listini/gruppi/${encodeURIComponent(groupUid)}/righe-massive`, body);
+      await refreshListiniData();
+      openGroupUid = groupUid;
+      await loadGroupRows(groupUid);
+      renderListiniPage();
+      const created = Number(result?.created || 0);
+      const skipped = Number(result?.skipped || 0);
+      if (!created && skipped) window.showToast(`Categoria già presente nel listino (${skipped} prodotti saltati)`, 'warning');
+      else window.showToast(`Categoria aggiunta: ${created} prodotti${skipped ? `, ${skipped} già presenti` : ''}`, 'success');
+    } catch (e) {
+      window.showToast(e.message, 'warning');
+    }
+  }
+
   function initListinoComposerBindings() {
     ['ls-nome', 'ls-cliente', 'ls-clienti-multi', 'ls-clienti-excluded', 'ls-giro', 'ls-dal', 'ls-al', 'ls-note']
       .forEach(id => {
@@ -504,6 +628,7 @@
   window.listinoPreviewPrezzo = listinoPreviewPrezzo;
   window.openNewListino = openNewListino;
   window.openListiniModal = openListiniModal;
+  window.onListinoScopeChange = onListinoScopeChange;
   window.editListinoEntry = editListinoEntry;
   window.saveListinoEntry = saveListinoEntry;
   window.deleteListinoEntry = deleteListinoEntry;
@@ -512,4 +637,7 @@
   window.addListinoRowInline = addListinoRowInline;
   window.saveListinoRowInline = saveListinoRowInline;
   window.deleteListinoRowInline = deleteListinoRowInline;
+  window.updateListinoRuleInputs = updateListinoRuleInputs;
+  window.updateListinoBulkInputs = updateListinoBulkInputs;
+  window.addListinoCategoryBulk = addListinoCategoryBulk;
 })();

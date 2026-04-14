@@ -189,6 +189,8 @@ function openNewCliente() {
   document.getElementById('cl-efornitore').checked = false;
   populateAgenteSelect('cl-agente', null);
   document.getElementById('cl-autista-libero').value = '';
+  const listinoBtn = document.getElementById('cl-open-listino-btn');
+  if (listinoBtn) listinoBtn.style.display = 'none';
   openModal('modal-cliente');
 }
 
@@ -221,7 +223,32 @@ function openEditCliente(id) {
   document.getElementById('cl-efornitore').checked = c.eFornitore || false;
   populateAgenteSelect('cl-agente', c.agenteId);
   document.getElementById('cl-autista-libero').value = c.autistaLibero || '';
+  const listinoBtn = document.getElementById('cl-open-listino-btn');
+  if (listinoBtn) listinoBtn.style.display = (typeof window.canManageListini === 'function' && window.canManageListini()) ? '' : 'none';
   openModal('modal-cliente');
+}
+
+function openClienteListino() {
+  const clienteId = Number(state.editingId || 0);
+  if (!clienteId) {
+    showToast('Salva prima il cliente per collegare un listino', 'warning');
+    return;
+  }
+  const cliente = state.clienti.find(x => x.id === clienteId);
+  if (!cliente) {
+    showToast('Cliente non trovato', 'warning');
+    return;
+  }
+  closeModal('modal-cliente');
+  if (typeof window.goTo === 'function') window.goTo('listini');
+  if (typeof window.openListiniModal === 'function') {
+    window.openListiniModal({
+      scope: 'cliente',
+      clienteId,
+      nomeListino: `Listino ${cliente.nome}`,
+      note: `Listino collegato al cliente ${cliente.nome}`,
+    });
+  }
 }
 
 function populateAgenteSelect(selectId, selectedId) {
@@ -338,6 +365,7 @@ async function saveCliente() {
 }
 
 window.openNewOnboarding = openNewOnboarding;
+window.openClienteListino = openClienteListino;
 
 function applyOnboardingResponse(id, r) {
   const idx = state.clienti.findIndex(x => x.id === id);
