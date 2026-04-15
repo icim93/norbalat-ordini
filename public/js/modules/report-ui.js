@@ -100,13 +100,19 @@ function hideMagazzinoPdfCard() {
   if (card) card.style.display = 'none';
 }
 
-function renderMagazzinoPdfPreviewInline() {
+async function renderMagazzinoPdfPreviewInline() {
   const previewBox = document.getElementById('report-magazzino-pdf-preview');
   if (!previewBox) return;
   const dataEl = document.getElementById('pdf-data');
   if (dataEl) dataEl.value = today();
   const mag = document.querySelector('input[name="pdf-tipo"][value="magazzino"]');
   if (mag) mag.checked = true;
+  try {
+    const freschi = await api('GET', '/api/ordini');
+    state.ordini = (freschi || []).map(normalizeOrdine);
+  } catch (_) {
+    // Fallback ai dati gia in memoria se il refresh non va a buon fine.
+  }
   if (typeof updatePDFPreview === 'function') updatePDFPreview();
   const src = document.getElementById('pdf-preview');
   previewBox.innerHTML = src?.innerHTML || '<span style="color:var(--text3);">Nessuna anteprima disponibile.</span>';
@@ -405,12 +411,45 @@ async function renderReport() {
   const cliEl = document.getElementById('report-clienti-table');
   if(cliEl) cliEl.innerHTML = cliData.map(cl=>`<tr><td><b style="font-size:13px;">${cl.nome}</b></td><td style="color:var(--text2);font-size:13px;">${cl.localita}</td><td>${cl.giro?`<span class="badge badge-blue">${cl.giro}</span>`:'-'}</td><td style="font-family:'DM Mono',monospace;font-weight:700;">${cl.n}</td><td><div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${Math.round(cl.n/total*100)}%;background:var(--accent);border-radius:3px;"></div></div><span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3);">${Math.round(cl.n/total*100)}%</span></div></td></tr>`).join('');
 
-  const prodFreq = {}; ordiniClientiReport.forEach(o=>o.linee.forEach(l=>{if(l.prodId)prodFreq[l.prodId]=(prodFreq[l.prodId]||0)+(l.qty||1);}));
-  const topProd = Object.entries(prodFreq).map(([id,qty])=>({p:getProdotto(parseInt(id)),qty})).filter(x=>x.p.id).sort((a,b)=>b.qty-a.qty).slice(0,10);
-  reportDataCache.prodotti = topProd.map(x => ({ codice: x.p.codice, prodotto: x.p.nome, categoria: x.p.categoria, quantita: x.qty }));
-  const maxProd = topProd[0]?.qty||1;
+  const prodFreq = new Map();
+  ordiniClientiReport.forEach(o => o.linee.forEach(l => {
+    const qty = Number(l.qty || 0);
+    if (!Number.isFinite(qty) || qty <= 0) return;
+    if (l.prodId) {
+      const key = `prod:${l.prodId}`;
+      const current = prodFreq.get(key) || {
+        codice: '',
+        prodotto: '',
+        categoria: '',
+        quantita: 0,
+      };
+      const p = getProdotto(l.prodId);
+      current.codice = p?.codice || current.codice || '';
+      current.prodotto = p?.nome || current.prodotto || `Prodotto #${l.prodId}`;
+      current.categoria = p?.categoria || current.categoria || '';
+      current.quantita += qty;
+      prodFreq.set(key, current);
+      return;
+    }
+    const freeName = String(l.prodottoNomeLibero || '').trim();
+    if (!freeName) return;
+    const key = `free:${freeName.toLowerCase()}`;
+    const current = prodFreq.get(key) || {
+      codice: 'LIB',
+      prodotto: freeName,
+      categoria: 'Manuale',
+      quantita: 0,
+    };
+    current.quantita += qty;
+    prodFreq.set(key, current);
+  }));
+  const topProd = Array.from(prodFreq.values())
+    .sort((a, b) => b.quantita - a.quantita)
+    .slice(0, 10);
+  reportDataCache.prodotti = topProd.map(x => ({ codice: x.codice, prodotto: x.prodotto, categoria: x.categoria, quantita: x.quantita }));
   const prodEl = document.getElementById('report-top-prodotti');
-  if(prodEl) prodEl.innerHTML = topProd.length ? topProd.map((x,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);"><div style="width:22px;height:22px;border-radius:50%;background:${i<3?'var(--gold-light)':'var(--surface2)'};color:${i<3?'var(--gold)':'var(--text3)'};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${i+1}</div><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${x.p.nome}</div><div style="font-size:11px;color:var(--text3);">${x.p.categoria}</div></div><div style="font-family:'DM Mono',monospace;font-weight:700;color:var(--accent);min-width:36px;text-align:right;">${x.qty}</div><div style="width:50px;height:5px;background:var(--border);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${Math.round(x.qty/maxProd*100)}%;background:var(--gold);border-radius:3px;"></div></div></div>`).join('') : '<div style="padding:16px;color:var(--text3);text-align:center;">Nessun dato</div>';
+  const maxProd = topProd[0]?.quantita || 1;
+  if(prodEl) prodEl.innerHTML = topProd.length ? topProd.map((x,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);"><div style="width:22px;height:22px;border-radius:50%;background:${i<3?'var(--gold-light)':'var(--surface2)'};color:${i<3?'var(--gold)':'var(--text3)'};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${i+1}</div><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${x.prodotto}</div><div style="font-size:11px;color:var(--text3);">${x.categoria || '-'}</div></div><div style="font-family:'DM Mono',monospace;font-weight:700;color:var(--accent);min-width:36px;text-align:right;">${x.quantita}</div><div style="width:50px;height:5px;background:var(--border);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${Math.round(x.quantita/maxProd*100)}%;background:var(--gold);border-radius:3px;"></div></div></div>`).join('') : '<div style="padding:16px;color:var(--text3);text-align:center;">Nessun dato</div>';
 
   const giriList = ['bari nord','bari/foggia','murgia','taranto','lecce','lecce est','valle itria','calabria','foggia','diretto','stef','variabile'];
   const giroFreq = {}; ordiniClientiReport.forEach(o=>{const g=getCliente(o.clienteId)?.giro||'altro';giroFreq[g]=(giroFreq[g]||0)+1;});
