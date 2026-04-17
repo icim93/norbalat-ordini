@@ -4586,8 +4586,6 @@ async function resolveOrderLinePrice({ prodottoId, clienteId, data, manualPrice 
   if (explicit !== null) return explicit;
   if (!prodottoId || !clienteId) return 0;
   const db = client ? { query: (sql, params) => client.query(sql, params) } : pool;
-  const fromListino = await resolvePrezzoUnitario({ prodottoId, clienteId, data, client });
-  if (fromListino !== null) return Number(fromListino);
   const lastSql = `
     SELECT ol.prezzo_unitario
     FROM ordine_linee ol
@@ -4600,6 +4598,8 @@ async function resolveOrderLinePrice({ prodottoId, clienteId, data, manualPrice 
   `;
   const last = await db.query(lastSql, [clienteId, prodottoId]);
   if (last.rows.length) return Number(last.rows[0].prezzo_unitario || 0);
+  const fromListino = await resolvePrezzoUnitario({ prodottoId, clienteId, data, client });
+  if (fromListino !== null) return Number(fromListino);
   return 0;
 }
 

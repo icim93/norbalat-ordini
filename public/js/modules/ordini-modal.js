@@ -569,10 +569,10 @@ function getLastPriceForClienteProd(clienteId, prodId) {
 
 function resolveDefaultLinePrice(line, clienteId, dataOrdine) {
   if (!line?.prodId) return 0;
-  const fromListino = getListinoPrezzo(line.prodId, clienteId, dataOrdine);
-  if (fromListino !== null && fromListino !== undefined) return Number(fromListino);
   const last = getLastPriceForClienteProd(clienteId, line.prodId);
   if (last !== null && last !== undefined) return Number(last);
+  const fromListino = getListinoPrezzo(line.prodId, clienteId, dataOrdine);
+  if (fromListino !== null && fromListino !== undefined) return Number(fromListino);
   return 0;
 }
 
