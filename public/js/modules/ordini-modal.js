@@ -6,6 +6,8 @@ function createEmptyOrderLine() {
     prodId: null,
     prodottoNomeLibero: '',
     qty: 1,
+    unitaMisura: 'Pezzi',
+    isPedana: false,
     prezzoUnitario: null,
     notaRiga: '',
     showNota: false,
@@ -41,6 +43,11 @@ function openNewOrder() {
 
 function openEditOrder(id) {
   const o = state.ordini.find(x => x.id === id);
+  if (!o) return;
+  if (state.currentUser?.ruolo === 'autista' && String(o.stato || '').toLowerCase() === 'preparato') {
+    showToast('Un ordine preparato non puo essere modificato da autisti', 'warning');
+    return;
+  }
   state.editingId = id;
   orderLines = o.linee.map(l => ({
     id: l.id,
@@ -50,7 +57,7 @@ function openEditOrder(id) {
     prezzoUnitario: (l.prezzoUnitario !== undefined && l.prezzoUnitario !== null) ? Number(l.prezzoUnitario) : null,
     isPedana: !!l.isPedana,
     notaRiga: l.notaRiga||'',
-    unitaMisura: l.unitaMisura||'pezzi',
+    unitaMisura: normalizeUiOrderUnit(l.unitaMisura || 'Pezzi'),
     colliEffettivi: l.colliEffettivi ?? null,
     pesoEffettivo: l.pesoEffettivo||null,
     preparato: !!l.preparato,
@@ -394,6 +401,23 @@ function umPlurale(um, qty) {
     'Pedana':  q === 1 ? 'Pedana'   : 'Pedane',
   };
   return map[um] || um;
+}
+
+function normalizeUiOrderUnit(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return 'Pezzi';
+  if (['pezzo', 'pezzi', 'pz'].includes(raw)) return 'Pezzi';
+  if (['cartone', 'cartoni', 'ct'].includes(raw)) return 'Cartoni';
+  if (['sacco', 'sacchi'].includes(raw)) return 'Sacchi';
+  if (['secchio', 'secchi'].includes(raw)) return 'Secchi';
+  if (['kg', 'chilogrammo', 'chilogrammi'].includes(raw)) return 'Kg';
+  if (['lt', 'ltr', 'litro', 'litri'].includes(raw)) return 'Litri';
+  if (['pedana', 'pedane'].includes(raw)) return 'Pedana';
+  return String(value || '').trim() || 'Pezzi';
+}
+
+function getFreeOrderUnits() {
+  return ['Pezzi', 'Kg', 'Litri', 'Cartoni', 'Pedana', 'Sacchi', 'Secchi'];
 }
 
 function isSacco25KgProduct(prodotto) {
@@ -751,8 +775,8 @@ function renderOrderLines() {
   let righeConPrezzo = 0;
   container.innerHTML = orderLines.map((l, i) => {
     const p = l.prodId ? getProdotto(l.prodId) : null;
-    const umOpts = p ? getProductOrderUnits(p) : ['Pezzi'];
-    const curUMRaw = l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi');
+    const umOpts = p ? getProductOrderUnits(p) : getFreeOrderUnits();
+    const curUMRaw = normalizeUiOrderUnit(l.unitaMisura || (p ? getDefaultUM(p) : 'Pezzi'));
     const curUM = umOpts.includes(curUMRaw) ? curUMRaw : (umOpts[0] || 'Pezzi');
     const isPedana = curUM === 'Pedana';
     const showPesoApprox = !!l.showPesoApprox;
@@ -949,8 +973,11 @@ function acProdFilter(i) {
   const dd = document.getElementById(`ac-prod-dd-${i}`);
   if (!inp || !dd) return;
   const q = inp.value.trim().toLowerCase();
+  const rawValue = inp.value;
   orderLines[i].prodId = null;
-  if (!q) orderLines[i].prodottoNomeLibero = '';
+  orderLines[i].prodottoNomeLibero = rawValue;
+  orderLines[i].unitaMisura = normalizeUiOrderUnit(orderLines[i].unitaMisura || 'Pezzi');
+  orderLines[i].isPedana = orderLines[i].unitaMisura === 'Pedana';
   inp.classList.remove('has-value');
   acProdRender(i, q);
   dd.classList.add('open');
@@ -1086,6 +1113,8 @@ function acProdSelectFree(i, rawValue) {
   if (!value) return;
   orderLines[i].prodId = null;
   orderLines[i].prodottoNomeLibero = value;
+  orderLines[i].unitaMisura = normalizeUiOrderUnit(orderLines[i].unitaMisura || 'Pezzi');
+  orderLines[i].isPedana = orderLines[i].unitaMisura === 'Pedana';
   orderLines[i].showNota = !!(orderLines[i].notaRiga && String(orderLines[i].notaRiga).trim());
   const inp = document.getElementById(`ac-prod-input-${i}`);
   if (inp) {
@@ -1410,6 +1439,7 @@ function openDettaglio(id) {
   const c = getCliente(o.clienteId);
   const a = getAgente(o.agenteId);
   const cons = o.autistaDiGiro ? getAgente(o.autistaDiGiro) : null;
+  const canEditOrder = !(state.currentUser?.ruolo === 'autista' && String(o.stato || '').toLowerCase() === 'preparato');
 
   document.getElementById('det-title').textContent = `Ordine #${o.id} — ${c.nome}`;
 
@@ -1446,6 +1476,27 @@ function openDettaglio(id) {
     </div>
     ${o.note ? `<div style="margin-top:14px;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px;color:var(--text2);"><b>Note:</b> ${o.note}</div>` : ''}
   `;
+  if (state.currentUser?.ruolo === 'admin') {
+    const freeLines = (o.linee || []).filter(l => !l.prodId && String(l.prodottoNomeLibero || '').trim());
+    if (freeLines.length) {
+      const convertHtml = freeLines.map(l => {
+        const nome = String(l.prodottoNomeLibero || '').trim();
+        const um = normalizeUiOrderUnit(l.unitaMisura || 'Pezzi');
+        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--border);">
+          <div style="min-width:0;">
+            <div style="font-weight:600;">${escapeHtml(nome)}</div>
+            <div style="font-size:12px;color:var(--text3);">${Number(l.qty || 0).toFixed(2).replace(/\.00$/, '')} ${escapeHtml(um)}</div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="openNewProdottoFromFreeOrderLine(${o.id},${l.id || 0},'${escapeHtml(nome).replace(/'/g, '&#39;')}','${escapeHtml(um).replace(/'/g, '&#39;')}')">Converti in prodotto DB</button>
+        </div>`;
+      }).join('');
+      document.getElementById('det-body').innerHTML += `
+        <div style="margin-top:14px;padding:12px;background:var(--surface2);border-radius:8px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px;">Prodotti liberi</div>
+          ${convertHtml}
+        </div>`;
+    }
+  }
 
   footer.innerHTML = `
     <button class="btn btn-outline" onclick="closeModal('modal-dettaglio')">Chiudi</button>
@@ -1453,6 +1504,9 @@ function openDettaglio(id) {
     <button class="btn btn-orange" onclick="closeModal('modal-dettaglio');openEditOrder(${o.id})">âœï¸ Modifica</button>
   `;
 
+  if (!canEditOrder) {
+    footer.querySelector('.btn-orange')?.remove();
+  }
   openModal('modal-dettaglio');
 }
 

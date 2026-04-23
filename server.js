@@ -2306,6 +2306,55 @@ async function createInternalConversation({
   return conversationId;
 }
 
+async function notifyAdminsForFreeOrderLines({
+  senderUser,
+  ordineId,
+  clienteId = null,
+  clienteNome = '',
+  freeLines = [],
+}) {
+  const normalizedLines = (freeLines || [])
+    .map(line => ({
+      nome: String(line?.prodottoNomeLibero || line?.prodotto_nome_libero || '').trim(),
+      qty: Number(line?.qty || 0),
+      um: String(line?.unitaMisura || line?.unita_misura || 'pezzi').trim() || 'pezzi',
+    }))
+    .filter(line => line.nome);
+  if (!normalizedLines.length) return;
+
+  const { rows: adminRows } = await q(
+    `SELECT id
+       FROM utenti
+      WHERE attivo = TRUE
+        AND ruolo = 'admin'`
+  );
+  const subject = `Prodotto libero da convertire - ordine #${ordineId}`;
+  const intro = clienteNome
+    ? `Ordine #${ordineId} - ${clienteNome}`
+    : `Ordine #${ordineId}`;
+  const text = [
+    `${intro}`,
+    '',
+    'Prodotti liberi inseriti:',
+    ...normalizedLines.map(line => `- ${line.nome} | ${line.qty} ${line.um}`),
+    '',
+    'Apri il dettaglio ordine per convertirli in prodotto DB.',
+  ].join('\n');
+
+  for (const admin of adminRows) {
+    if (!admin?.id) continue;
+    await createInternalConversation({
+      senderUser,
+      destinatarioUserId: admin.id,
+      oggetto: subject,
+      testo: text,
+      clienteId,
+      ordineId,
+      priorita: 'media',
+    }).catch(() => null);
+  }
+}
+
 async function migrateLegacyMessaggiToConversations() {
   const { rows } = await q(
     `SELECT *
@@ -5195,6 +5244,17 @@ app.post('/api/ordini', authMiddleware, requirePermission('ordini:create'), asyn
     await client.query('COMMIT');
     const u = req.user;
     await logDB(u.id, `${u.nome} ${u.cognome||''}`.trim(), 'Nuovo ordine', mergedIntoExisting ? `#${oid} (accodato)` : `#${oid}`);
+    const freeLinesToNotify = preparedLines.filter(line => String(line.prodottoNomeLibero || '').trim());
+    if (freeLinesToNotify.length) {
+      const clienteRow = await q('SELECT nome FROM clienti WHERE id=$1 LIMIT 1', [cliente_id]);
+      await notifyAdminsForFreeOrderLines({
+        senderUser: req.user,
+        ordineId: oid,
+        clienteId: cliente_id,
+        clienteNome: clienteRow.rows[0]?.nome || '',
+        freeLines: freeLinesToNotify,
+      });
+    }
     res.json({
       ...(await getOrdineCompleto(oid)),
       merged_into_existing: mergedIntoExisting,
@@ -5217,7 +5277,7 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
     if (!c.rows[0].sbloccato || c.rows[0].onboarding_stato !== 'approvato') return res.status(403).json({ error: 'Cliente non ancora approvato dall\'amministrazione' });
     await client.query('BEGIN');
     const { rows: orderRows } = await client.query(
-      `SELECT id, cliente_id, data
+      `SELECT id, cliente_id, data, stato
          FROM ordini
         WHERE id=$1
         FOR UPDATE`,
@@ -5226,6 +5286,14 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
     if (!orderRows.length) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Ordine non trovato' });
+    }
+    if (req.user?.ruolo === 'autista'
+        && (
+          String(orderRows[0].stato || '').toLowerCase() === 'preparato'
+          || String(stato || '').toLowerCase() === 'preparato'
+        )) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Un ordine preparato non puo essere modificato da autisti' });
     }
     const { rows: existingLines } = await client.query('SELECT * FROM ordine_linee WHERE ordine_id=$1 ORDER BY id', [id]);
     if (req.user?.ruolo !== 'admin' && isNextDayOrderCutoffLocked(data)) {
@@ -5351,6 +5419,17 @@ app.put('/api/ordini/:id', authMiddleware, requirePermission('ordini:update'), a
     await client.query('COMMIT');
     const u = req.user;
     await logDB(u.id, `${u.nome} ${u.cognome||''}`.trim(), 'Modifica ordine', `#${id}`);
+    const freeLinesToNotify = linee.filter(line => String(line?.prodotto_nome_libero || '').trim());
+    if (freeLinesToNotify.length) {
+      const clienteRow = await q('SELECT nome FROM clienti WHERE id=$1 LIMIT 1', [cliente_id]);
+      await notifyAdminsForFreeOrderLines({
+        senderUser: req.user,
+        ordineId: id,
+        clienteId: cliente_id,
+        clienteNome: clienteRow.rows[0]?.nome || '',
+        freeLines: freeLinesToNotify,
+      });
+    }
     res.json(await getOrdineCompleto(id));
   } catch(e) {
     await client.query('ROLLBACK');

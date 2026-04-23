@@ -163,6 +163,26 @@ function openNewProdotto() {
   openModal('modal-prodotto');
 }
 
+function openNewProdottoFromFreeOrderLine(orderId, lineId, nome, unitaMisura) {
+  openNewProdotto();
+  const decodeHtml = (value) => String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  const rawName = decodeHtml(nome).trim();
+  const rawUm = decodeHtml(unitaMisura).trim().toLowerCase();
+  const productUm = rawUm === 'kg'
+    ? 'kg'
+    : (rawUm === 'litri' || rawUm === 'lt' ? 'lt' : 'pz');
+  document.getElementById('pr-nome').value = rawName;
+  document.getElementById('pr-cat').value = 'ALTRO';
+  document.getElementById('pr-um').value = productUm;
+  document.getElementById('pr-note').value = `Creato da prodotto libero ordine #${orderId}${lineId ? ` riga #${lineId}` : ''}`;
+  renderProdottoConversionSummary();
+}
+
 function openEditProdotto(id) {
   const p = state.prodotti.find(x => x.id === id);
   if (!p) return;
