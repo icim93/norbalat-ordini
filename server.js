@@ -2313,45 +2313,48 @@ async function notifyAdminsForFreeOrderLines({
   clienteNome = '',
   freeLines = [],
 }) {
-  const normalizedLines = (freeLines || [])
-    .map(line => ({
-      nome: String(line?.prodottoNomeLibero || line?.prodotto_nome_libero || '').trim(),
-      qty: Number(line?.qty || 0),
-      um: String(line?.unitaMisura || line?.unita_misura || 'pezzi').trim() || 'pezzi',
-    }))
-    .filter(line => line.nome);
-  if (!normalizedLines.length) return;
+  try {
+    const normalizedLines = (freeLines || [])
+      .map(line => ({
+        nome: String(line?.prodottoNomeLibero || line?.prodotto_nome_libero || '').trim(),
+        qty: Number(line?.qty || 0),
+        um: String(line?.unitaMisura || line?.unita_misura || 'pezzi').trim() || 'pezzi',
+      }))
+      .filter(line => line.nome);
+    if (!normalizedLines.length) return;
 
-  const { rows: adminRows } = await q(
-    `SELECT id
-       FROM utenti
-      WHERE attivo = TRUE
-        AND ruolo = 'admin'`
-  );
-  const subject = `Prodotto libero da convertire - ordine #${ordineId}`;
-  const intro = clienteNome
-    ? `Ordine #${ordineId} - ${clienteNome}`
-    : `Ordine #${ordineId}`;
-  const text = [
-    `${intro}`,
-    '',
-    'Prodotti liberi inseriti:',
-    ...normalizedLines.map(line => `- ${line.nome} | ${line.qty} ${line.um}`),
-    '',
-    'Apri il dettaglio ordine per convertirli in prodotto DB.',
-  ].join('\n');
+    const { rows: adminRows } = await q(
+      `SELECT id
+         FROM utenti
+        WHERE ruolo = 'admin'`
+    );
+    const subject = `Prodotto libero da convertire - ordine #${ordineId}`;
+    const intro = clienteNome
+      ? `Ordine #${ordineId} - ${clienteNome}`
+      : `Ordine #${ordineId}`;
+    const text = [
+      `${intro}`,
+      '',
+      'Prodotti liberi inseriti:',
+      ...normalizedLines.map(line => `- ${line.nome} | ${line.qty} ${line.um}`),
+      '',
+      'Apri il dettaglio ordine per convertirli in prodotto DB.',
+    ].join('\n');
 
-  for (const admin of adminRows) {
-    if (!admin?.id) continue;
-    await createInternalConversation({
-      senderUser,
-      destinatarioUserId: admin.id,
-      oggetto: subject,
-      testo: text,
-      clienteId,
-      ordineId,
-      priorita: 'media',
-    }).catch(() => null);
+    for (const admin of adminRows) {
+      if (!admin?.id) continue;
+      await createInternalConversation({
+        senderUser,
+        destinatarioUserId: admin.id,
+        oggetto: subject,
+        testo: text,
+        clienteId,
+        ordineId,
+        priorita: 'media',
+      }).catch(() => null);
+    }
+  } catch (e) {
+    console.warn('[free-order-notify] failed:', e.message);
   }
 }
 
