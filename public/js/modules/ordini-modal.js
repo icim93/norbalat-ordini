@@ -1173,8 +1173,16 @@ function removeOrderLine(i) {
   renderOrderLines();
 }
 
+function isOrdineAutistaSelezionabile(user) {
+  if (!user) return false;
+  if (user.ruolo === 'autista') return true;
+  const nome = String(user.nome || '').trim().toLowerCase();
+  const cognome = String(user.cognome || '').trim().toLowerCase();
+  return nome === 'franco' && cognome === 'laricchiuta';
+}
+
 function getAutistaDiGiro(giro) {
-  return state.utenti.find(u => u.ruolo === 'autista' && (u.giriConsegna||[]).includes(giro)) || null;
+  return state.utenti.find(u => isOrdineAutistaSelezionabile(u) && (u.giriConsegna || []).includes(giro)) || null;
 }
 
 function getClienteConsegnatarioFallback(cliente) {
@@ -1184,7 +1192,7 @@ function getClienteConsegnatarioFallback(cliente) {
 function populateAutistaDiGiroSelect(selectedId, suggestedId) {
   const sel = document.getElementById('ord-autista-di-giro');
   if (!sel) return;
-  const autisti = state.utenti.filter(u => u.ruolo === 'autista');
+  const autisti = state.utenti.filter(isOrdineAutistaSelezionabile);
   sel.innerHTML = '<option value="">- Nessun autista -</option>' + autisti.map(a => {
     const fullName = (a.nome + ' ' + (a.cognome || '')).trim();
     const isSuggested = suggestedId && a.id === suggestedId;
