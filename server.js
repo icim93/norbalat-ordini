@@ -7223,6 +7223,62 @@ app.post('/api/messaggi/:id/read', authMiddleware, async (req, res) => {
   }
 });
 
+app.delete('/api/messaggi/:id/messages/:msgId', authMiddleware, async (req, res) => {
+  try {
+    const convId = parseInt(req.params.id, 10);
+    const msgId = parseInt(req.params.msgId, 10);
+    if (!convId || !msgId) return res.status(400).json({ error: 'Parametri non validi' });
+    const summary = await getMessaggioConversationSummaryById(convId, req.user);
+    if (!summary) return res.status(404).json({ error: 'Conversazione non trovata' });
+    const { rows: msgRows } = await q(
+      `SELECT id, mittente_id FROM messaggi_interni WHERE id = $1 AND conversation_id = $2 LIMIT 1`,
+      [msgId, convId]
+    );
+    if (!msgRows.length) return res.status(404).json({ error: 'Messaggio non trovato' });
+    const isAdmin = req.user.ruolo === 'admin';
+    const isSender = Number(msgRows[0].mittente_id) === Number(req.user.id);
+    if (!isAdmin && !isSender) return res.status(403).json({ error: 'Non autorizzato a eliminare questo messaggio' });
+    await q('DELETE FROM messaggi_interni WHERE id = $1', [msgId]);
+    await q(
+      `UPDATE messaggi_conversazioni
+          SET last_message_at = COALESCE(
+            (SELECT MAX(created_at) FROM messaggi_interni WHERE conversation_id = $1),
+            created_at
+          )
+        WHERE id = $1`,
+      [convId]
+    );
+    const updated = await getMessaggioConversationSummaryById(convId, req.user);
+    const messages = await q(
+      `SELECT id, conversation_id, mittente_id, mittente_nome, testo, created_at
+         FROM messaggi_interni WHERE conversation_id = $1 ORDER BY created_at ASC, id ASC`,
+      [convId]
+    );
+    res.json({ conversation: updated, messages: messages.rows.map(normalizeMessaggioRow) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/messaggi/:id', authMiddleware, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Conversazione non valida' });
+    const isAdmin = req.user.ruolo === 'admin';
+    const { rows } = await q(
+      `SELECT id, created_by FROM messaggi_conversazioni WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Conversazione non trovata' });
+    const isCreator = Number(rows[0].created_by) === Number(req.user.id);
+    if (!isAdmin && !isCreator) return res.status(403).json({ error: 'Non autorizzato a eliminare questa conversazione' });
+    await q('DELETE FROM messaggi_conversazioni WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.delete('/api/activity', authMiddleware, requireRole('admin'), async (req, res) => {
   try {
     await q('DELETE FROM activity_log');

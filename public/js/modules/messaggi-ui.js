@@ -600,6 +600,8 @@
     const counterpart = getConversationCounterpart(conv, isInbox);
     const counterpartInitials = String(counterpart || '?').trim().split(/\s+/).slice(0, 2).map(v => v.charAt(0)).join('').toUpperCase() || '?';
     const metaOpen = !!window.state.messagesMetaOpen;
+    const isAdmin = window.state.currentUser?.ruolo === 'admin';
+    const canDeleteConv = isAdmin || Number(conv.created_by || 0) === Number(window.state.currentUser?.id || 0);
 
     // Override placeholder styles so content fills the shell correctly
     detailEl.style.display = 'flex';
@@ -631,6 +633,7 @@
           <span class="badge ${statusBadges[conv.stato] || 'badge-gray'}" style="font-size:11px;">${window.escapeHtml(statusLabels[conv.stato] || conv.stato || 'Nuovo')}</span>
           ${isInbox ? '<button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="takeConversationInCharge()">Prendi in carico</button>' : ''}
           <button class="btn btn-outline btn-sm" style="font-size:11px;" onclick="toggleMessaggiMeta()">⚙</button>
+          ${canDeleteConv ? `<button class="btn btn-outline btn-sm" style="font-size:11px;color:#e53e3e;border-color:#e53e3e;" onclick="deleteConversazione(${Number(conv.id)})" title="Elimina conversazione">🗑</button>` : ''}
         </div>
       </div>
 
@@ -669,6 +672,8 @@
       <div class="msg-thread-messages" id="msg-thread-scroll">
         ${messages.length ? messages.map(msg => {
           const mine = Number(msg.mittente_id || 0) === Number(window.state.currentUser?.id || 0);
+          const isAdmin = window.state.currentUser?.ruolo === 'admin';
+          const canDelete = mine || isAdmin;
           const side = mine ? 'mine' : 'theirs';
           return `
             <div class="msg-bubble-wrap ${side}">
@@ -678,6 +683,7 @@
                 <div class="msg-bubble-footer">
                   <span class="msg-bubble-time">${window.escapeHtml(window.formatNotificationDateTime(msg.created_at) || '')}</span>
                   ${mine ? '<span style="color:#53bdeb;font-size:13px;">✓✓</span>' : ''}
+                  ${canDelete ? `<button class="msg-delete-btn" onclick="deleteMessaggioSingolo(${Number(conv.id)},${Number(msg.id)})" title="Elimina messaggio">×</button>` : ''}
                 </div>
               </div>
             </div>
@@ -963,6 +969,39 @@
     el.style.height = Math.min(el.scrollHeight, 140) + 'px';
   }
 
+  async function deleteMessaggioSingolo(convId, msgId) {
+    if (!confirm('Eliminare questo messaggio?')) return;
+    try {
+      const result = await window.api('DELETE', `/api/messaggi/${convId}/messages/${msgId}`);
+      window.state.messagesDetail = {
+        conversation: result.conversation || window.state.messagesDetail?.conversation,
+        messages: Array.isArray(result.messages) ? result.messages : [],
+      };
+      if (result.conversation) syncConversationInState(result.conversation);
+      renderMessaggiPage();
+    } catch (e) {
+      window.showToast(e.message || 'Errore eliminazione messaggio', 'warning');
+    }
+  }
+
+  async function deleteConversazione(convId) {
+    if (!confirm('Eliminare questa conversazione? L\'operazione è irreversibile.')) return;
+    try {
+      await window.api('DELETE', `/api/messaggi/${convId}`);
+      const removeFrom = list => (window.state[list] = (window.state[list] || []).filter(c => Number(c.id) !== Number(convId)));
+      removeFrom('messagesInbox');
+      removeFrom('messagesSent');
+      window.state.messagesSelectedId = null;
+      window.state.messagesDetail = null;
+      window.state.messagesMobileThreadOpen = false;
+      window.showToast('Conversazione eliminata', 'success');
+      await loadMessaggiSummary();
+      renderMessaggiPage();
+    } catch (e) {
+      window.showToast(e.message || 'Errore eliminazione conversazione', 'warning');
+    }
+  }
+
   window.loadMessaggiSummary = loadMessaggiSummary;
   window.startMessaggiPolling = startMessaggiPolling;
   window.stopMessaggiPolling = stopMessaggiPolling;
@@ -986,4 +1025,6 @@
   window.toggleMessaggiMeta = toggleMessaggiMeta;
   window.closeMessaggioMobileThread = closeMessaggioMobileThread;
   window.autoResizeReplyBar = autoResizeReplyBar;
+  window.deleteMessaggioSingolo = deleteMessaggioSingolo;
+  window.deleteConversazione = deleteConversazione;
 })();

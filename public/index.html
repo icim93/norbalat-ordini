@@ -3036,6 +3036,14 @@
   .msg-bubble-time {
     font-size:10.5px;color:var(--text3);white-space:nowrap;
   }
+  .msg-delete-btn {
+    background:none;border:none;cursor:pointer;padding:0 2px;
+    line-height:1;font-size:15px;color:transparent;border-radius:4px;
+    transition:color 0.15s;flex-shrink:0;
+  }
+  .msg-bubble-wrap:hover .msg-delete-btn,
+  .msg-delete-btn:focus { color:var(--text3); }
+  .msg-delete-btn:hover { color:#e53e3e !important; }
   /* Meta panel */
   .msg-meta-panel {
     background:var(--surface);
