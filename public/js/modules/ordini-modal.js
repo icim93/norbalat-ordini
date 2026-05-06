@@ -438,9 +438,9 @@ function isCartoniOnlyPackagingProduct(prodotto) {
 
 function isSecchioProduct(prodotto) {
   if (!prodotto) return false;
-  const nome = String(prodotto.nome || '').toUpperCase();
+  const codice = String(prodotto.codice || '').toUpperCase();
   const packaging = String(prodotto.packaging || '').toLowerCase().replace(/\s+/g, '');
-  return nome.includes('RICOTTA FORTE') || packaging.includes('1secchio=5kg');
+  return codice === 'RICFNEU' || /1(?:secchio|secchi)=?[\d.,]+kg/.test(packaging);
 }
 
 function supportsVariableWeightPieceOrders(prodotto) {
