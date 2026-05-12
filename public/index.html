@@ -3130,11 +3130,27 @@
         <label>Password</label>
         <input type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter') doLogin()">
       </div>
-      <label style="display:flex;align-items:center;gap:8px;margin:8px 0 20px;font-size:13px;color:var(--text2);cursor:pointer;">
+      <label style="display:flex;align-items:center;gap:8px;margin:8px 0 16px;font-size:13px;color:var(--text2);cursor:pointer;">
         <input type="checkbox" id="login-remember" style="width:16px;height:16px;">
         Resta connesso
       </label>
-      <button class="btn-primary" onclick="doLogin()">Accedi</button>
+      <button class="btn-primary" id="login-submit-btn" onclick="doLogin()">Accedi</button>
+      <button type="button" onclick="showForgotPassword()" style="margin-top:12px;background:none;border:none;color:var(--text2);font-size:13px;cursor:pointer;text-align:center;width:100%;padding:4px 0;">Password dimenticata?</button>
+    </div>
+
+    <!-- Sezione recupero password -->
+    <div id="forgot-section" style="display:none;padding:0 24px 24px;">
+      <div style="border-top:1px solid var(--border);padding-top:20px;">
+        <div style="font-size:14px;font-weight:600;color:var(--text1);margin-bottom:4px;">Recupero password</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:14px;">Inserisci la tua email e ti invieremo un link per reimpostare la password.</div>
+        <div class="field" style="margin-bottom:12px;">
+          <label>Email</label>
+          <input type="email" id="forgot-email" placeholder="mario.rossi@esempio.it" onkeydown="if(event.key==='Enter') doForgotPassword()">
+        </div>
+        <button class="btn-primary" id="forgot-submit-btn" onclick="doForgotPassword()" style="width:100%;">Invia link</button>
+        <div id="forgot-msg" style="display:none;margin-top:12px;padding:10px 14px;border-radius:6px;font-size:13px;"></div>
+        <button type="button" onclick="hideForgotPassword()" style="margin-top:10px;background:none;border:none;color:var(--text2);font-size:13px;cursor:pointer;text-align:center;width:100%;padding:4px 0;">← Torna al login</button>
+      </div>
     </div>
   </div>
 </div>
@@ -5080,6 +5096,10 @@
           <input type="text" id="ut-username" placeholder="mario.rossi" autocomplete="off">
         </div>
         <div class="field">
+          <label>Email (per recupero password)</label>
+          <input type="email" id="ut-email" placeholder="mario.rossi@esempio.it" autocomplete="off">
+        </div>
+        <div class="field">
           <label>Password *</label>
           <input type="password" id="ut-password" placeholder="••••••" autocomplete="new-password">
         </div>
@@ -6519,7 +6539,7 @@ function getSelectedGiri() {
 function openNewUtente() {
   state.editingId = null;
   document.getElementById('modal-utente-title').textContent = 'Nuovo Utente';
-  ['ut-nome','ut-cognome','ut-tipo','ut-username','ut-pass'].forEach(id => document.getElementById(id).value = '');
+  ['ut-nome','ut-cognome','ut-tipo','ut-username','ut-email','ut-password'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('ut-ruolo').value = 'admin';
   document.getElementById('ut-giri-section').style.display = 'none';
   openModal('modal-utente');
@@ -6533,6 +6553,7 @@ function openEditUtente(id) {
   document.getElementById('ut-cognome').value = u.cognome || '';
   document.getElementById('ut-tipo').value = u.tipoUtente || '';
   document.getElementById('ut-username').value = u.username;
+  document.getElementById('ut-email').value = u.email || '';
   document.getElementById('ut-password').value = '';
   const isagenteEl = document.getElementById('ut-isagente');
   if (isagenteEl) isagenteEl.checked = !!u.isAgente;
@@ -6547,16 +6568,17 @@ async function saveUtente() {
   const nome      = document.getElementById('ut-nome').value.trim();
   const cognome   = document.getElementById('ut-cognome').value.trim();
   const username  = document.getElementById('ut-username').value.trim();
+  const email     = document.getElementById('ut-email').value.trim();
   const password  = document.getElementById('ut-password').value;
   const ruolo     = document.getElementById('ut-ruolo').value;
   if (!nome||!username||!ruolo) { showToast('Compila i campi obbligatori', 'warning'); return; }
   if (!state.editingId && !password) { showToast('Password obbligatoria per nuovo utente', 'warning'); return; }
 
-  const giriConsegna = Array.from(document.querySelectorAll('.giro-check:checked')).map(cb => cb.value);
+  const giriConsegna = getSelectedGiri();
   const tipoUtente   = document.getElementById('ut-tipo').value.trim();
   const isAgente     = document.getElementById('ut-isagente').checked;
 
-  const body = { nome, cognome, username, ruolo, tipo_utente: tipoUtente,
+  const body = { nome, cognome, username, email, ruolo, tipo_utente: tipoUtente,
                  giri_consegna: giriConsegna, is_agente: isAgente };
   if (password) body.password = password;
 

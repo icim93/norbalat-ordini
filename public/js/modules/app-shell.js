@@ -562,8 +562,53 @@
     if (typeof window.scheduleResponsiveTablesRefresh === 'function') window.scheduleResponsiveTablesRefresh();
   }
 
+  function showForgotPassword() {
+    document.getElementById('forgot-section').style.display = 'block';
+    document.getElementById('forgot-email').value = '';
+    const msg = document.getElementById('forgot-msg');
+    msg.style.display = 'none';
+    msg.textContent = '';
+    document.getElementById('forgot-email').focus();
+  }
+
+  function hideForgotPassword() {
+    document.getElementById('forgot-section').style.display = 'none';
+  }
+
+  async function doForgotPassword() {
+    const email = (document.getElementById('forgot-email').value || '').trim();
+    if (!email) { window.showToast('Inserisci la tua email', 'warning'); return; }
+
+    const btn = document.getElementById('forgot-submit-btn');
+    const msg = document.getElementById('forgot-msg');
+    if (btn) { btn.textContent = 'Invio...'; btn.disabled = true; }
+    msg.style.display = 'none';
+
+    try {
+      await fetch(window.BASE_URL + '/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      msg.style.display = 'block';
+      msg.style.background = 'var(--success-bg, #d1fae5)';
+      msg.style.color = 'var(--success, #065f46)';
+      msg.textContent = 'Se l\'email è registrata, riceverai un link entro qualche minuto.';
+    } catch(e) {
+      msg.style.display = 'block';
+      msg.style.background = 'var(--warn-bg, #fef3c7)';
+      msg.style.color = 'var(--warn, #92400e)';
+      msg.textContent = 'Errore di connessione. Riprova più tardi.';
+    } finally {
+      if (btn) { btn.textContent = 'Invia link'; btn.disabled = false; }
+    }
+  }
+
   window.doLogin = doLogin;
   window.doLogout = doLogout;
+  window.showForgotPassword = showForgotPassword;
+  window.hideForgotPassword = hideForgotPassword;
+  window.doForgotPassword = doForgotPassword;
   window.setupNav = setupNav;
   window.openDrawer = openDrawer;
   window.closeDrawer = closeDrawer;

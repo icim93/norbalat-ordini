@@ -5,6 +5,7 @@
       nome: u.nome || '',
       cognome: u.cognome || '',
       username: u.username || '',
+      email: u.email || '',
       ruolo: u.ruolo || '',
       tipoUtente: u.tipo_utente || '',
       giriConsegna: Array.isArray(u.giri_consegna) ? u.giri_consegna : (u.giri_consegna ? JSON.parse(u.giri_consegna) : []),

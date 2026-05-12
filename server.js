@@ -21,6 +21,7 @@ const nodemailer = require('nodemailer');
 const { z } = require('zod');
 const path     = require('path');
 const fs = require('fs');
+const crypto   = require('crypto');
 
 function stripEnvQuotes(v = '') {
   const s = String(v).trim();
@@ -79,6 +80,7 @@ const EXPERIMENTAL_AUTO_IMPORT_CHECK_MS = Math.max(5 * 60 * 1000, Number(process
 const DB_CONNECT_TIMEOUT_MS = Math.max(1000, Number(process.env.DB_CONNECT_TIMEOUT_MS || 15000));
 const STARTUP_DB_MAX_RETRIES = Math.max(1, Number(process.env.STARTUP_DB_MAX_RETRIES || 6));
 const STARTUP_DB_RETRY_DELAY_MS = Math.max(1000, Number(process.env.STARTUP_DB_RETRY_DELAY_MS || 5000));
+const APP_URL = (process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`).replace(/\/$/, '');
 
 const app  = express();
 const isRemoteDatabase = /^postgres(ql)?:\/\//i.test(DATABASE_URL) && !/localhost|127\.0\.0\.1/i.test(DATABASE_URL);
@@ -887,6 +889,16 @@ async function createSchema() {
       tipo_utente    TEXT DEFAULT '',
       giri_consegna  JSONB DEFAULT '[]',
       is_agente      BOOLEAN DEFAULT FALSE
+    );
+    ALTER TABLE utenti ADD COLUMN IF NOT EXISTS email TEXT DEFAULT '';
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES utenti(id) ON DELETE CASCADE,
+      token      TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used       BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS clienti (
@@ -1866,6 +1878,7 @@ function parseUtente(u) {
   const gc = u.giri_consegna;
   return {
     ...u,
+    email: u.email || '',
     giri_consegna: Array.isArray(gc) ? gc : (gc ? JSON.parse(gc) : []),
   };
 }
@@ -3039,6 +3052,80 @@ app.post('/api/auth/login', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/auth/forgot-password — invia email con link di reset
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const emailIn = String(req.body?.email || '').trim().toLowerCase();
+    if (!emailIn) return res.status(400).json({ error: 'Email obbligatoria' });
+
+    const { rows } = await q('SELECT id, nome, email FROM utenti WHERE LOWER(email)=$1 LIMIT 1', [emailIn]);
+
+    if (rows.length && isSmtpConfigured()) {
+      const u = rows[0];
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+      await q('UPDATE password_reset_tokens SET used=TRUE WHERE user_id=$1 AND used=FALSE', [u.id]);
+      await q(
+        'INSERT INTO password_reset_tokens (user_id,token,expires_at) VALUES ($1,$2,$3)',
+        [u.id, token, expiresAt]
+      );
+      const resetUrl = `${APP_URL}/reset-password.html?token=${token}`;
+      await sendManagedEmail({
+        to: [u.email],
+        subject: 'Recupero password — Norbalat Ordini',
+        text: `Ciao ${u.nome},\n\nHai richiesto il recupero della password.\n\nClicca qui per impostare una nuova password:\n${resetUrl}\n\nIl link scade tra 1 ora.\n\nSe non hai richiesto questo, ignora questa email.\n\n— Norbalat Ordini`,
+        html: `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
+<h2 style="margin:0 0 16px;color:#1a1a1a;">Recupero password</h2>
+<p style="color:#444;line-height:1.6;">Ciao <strong>${u.nome}</strong>,<br>hai richiesto il recupero della password per il tuo account Norbalat Ordini.</p>
+<p style="margin:24px 0;">
+  <a href="${resetUrl}" style="background:#2e7d5e;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;font-weight:600;">Reimposta password</a>
+</p>
+<p style="color:#888;font-size:13px;">Il link scade tra <strong>1 ora</strong>.</p>
+<p style="color:#aaa;font-size:12px;margin-top:32px;border-top:1px solid #eee;padding-top:16px;">Se non hai richiesto il recupero, ignora questa email — il tuo account è al sicuro.</p>
+</div>`,
+      });
+    }
+
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/auth/reset-password/:token — verifica validità token
+app.get('/api/auth/reset-password/:token', async (req, res) => {
+  try {
+    const { rows } = await q(
+      `SELECT t.id, u.nome FROM password_reset_tokens t
+       JOIN utenti u ON u.id=t.user_id
+       WHERE t.token=$1 AND t.used=FALSE AND t.expires_at > NOW() LIMIT 1`,
+      [req.params.token]
+    );
+    if (!rows.length) return res.status(400).json({ error: 'Link non valido o scaduto' });
+    res.json({ ok: true, nome: rows[0].nome });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/auth/reset-password/:token — imposta nuova password
+app.post('/api/auth/reset-password/:token', async (req, res) => {
+  try {
+    const password = String(req.body?.password || '');
+    if (!password || password.length < 6)
+      return res.status(400).json({ error: 'Password troppo corta (minimo 6 caratteri)' });
+
+    const { rows } = await q(
+      `SELECT t.id, t.user_id FROM password_reset_tokens t
+       WHERE t.token=$1 AND t.used=FALSE AND t.expires_at > NOW() LIMIT 1`,
+      [req.params.token]
+    );
+    if (!rows.length) return res.status(400).json({ error: 'Link non valido o scaduto' });
+
+    const { id: tokenId, user_id } = rows[0];
+    const hash = await bcrypt.hash(password, SALT_ROUNDS);
+    await q('UPDATE utenti SET password=$1 WHERE id=$2', [hash, user_id]);
+    await q('UPDATE password_reset_tokens SET used=TRUE WHERE id=$1', [tokenId]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── UTENTI ──────────────────────────────────────────────────────
 app.get('/api/utenti', authMiddleware, async (req, res) => {
   try {
@@ -3050,7 +3137,7 @@ app.get('/api/utenti', authMiddleware, async (req, res) => {
 app.post('/api/utenti', authMiddleware, requireRole('admin'), async (req, res) => {
   try {
     const { nome, cognome='', username, password, ruolo,
-            tipo_utente='', giri_consegna=[], is_agente=false } = req.body;
+            tipo_utente='', giri_consegna=[], is_agente=false, email='' } = req.body;
     if (!nome||!username||!password||!ruolo)
       return res.status(400).json({ error: 'Campi mancanti' });
     const uname = String(username || '').trim();
@@ -3058,9 +3145,9 @@ app.post('/api/utenti', authMiddleware, requireRole('admin'), async (req, res) =
     if (dup.rows.length) return res.status(409).json({ error: 'Username già esistente' });
     const hash = await bcrypt.hash(password, SALT_ROUNDS);
     const r = await q(
-      `INSERT INTO utenti (nome,cognome,username,password,ruolo,tipo_utente,giri_consegna,is_agente)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [nome, cognome, uname, hash, ruolo, tipo_utente, JSON.stringify(giri_consegna), is_agente]
+      `INSERT INTO utenti (nome,cognome,username,password,ruolo,tipo_utente,giri_consegna,is_agente,email)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [nome, cognome, uname, hash, ruolo, tipo_utente, JSON.stringify(giri_consegna), is_agente, email]
     );
     res.json(parseUtente(r.rows[0]));
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -3070,7 +3157,7 @@ app.put('/api/utenti/:id', authMiddleware, requireRole('admin'), async (req, res
   try {
     const id = parseInt(req.params.id);
     const { nome, cognome='', username, password, ruolo,
-            tipo_utente='', giri_consegna=[], is_agente=false } = req.body;
+            tipo_utente='', giri_consegna=[], is_agente=false, email='' } = req.body;
     if (!nome||!username) return res.status(400).json({ error: 'Campi mancanti' });
     const uname = String(username || '').trim();
     const dup = await q('SELECT id FROM utenti WHERE LOWER(username)=LOWER($1) AND id!=$2', [uname, id]);
@@ -3079,14 +3166,14 @@ app.put('/api/utenti/:id', authMiddleware, requireRole('admin'), async (req, res
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
       await q(
         `UPDATE utenti SET nome=$1,cognome=$2,username=$3,password=$4,ruolo=$5,
-         tipo_utente=$6,giri_consegna=$7,is_agente=$8 WHERE id=$9`,
-        [nome, cognome, uname, hash, ruolo, tipo_utente, JSON.stringify(giri_consegna), is_agente, id]
+         tipo_utente=$6,giri_consegna=$7,is_agente=$8,email=$9 WHERE id=$10`,
+        [nome, cognome, uname, hash, ruolo, tipo_utente, JSON.stringify(giri_consegna), is_agente, email, id]
       );
     } else {
       await q(
         `UPDATE utenti SET nome=$1,cognome=$2,username=$3,ruolo=$4,
-         tipo_utente=$5,giri_consegna=$6,is_agente=$7 WHERE id=$8`,
-        [nome, cognome, uname, ruolo, tipo_utente, JSON.stringify(giri_consegna), is_agente, id]
+         tipo_utente=$5,giri_consegna=$6,is_agente=$7,email=$8 WHERE id=$9`,
+        [nome, cognome, uname, ruolo, tipo_utente, JSON.stringify(giri_consegna), is_agente, email, id]
       );
     }
     res.json({ ok: true });
