@@ -71,6 +71,7 @@ const SMTP_TLS_SERVERNAME = process.env.SMTP_TLS_SERVERNAME || '';
 const SMTP_FROM = process.env.SMTP_FROM || '';
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'Norbalat Ordini';
 const NOTIFY_EMAIL_TO = process.env.NOTIFY_EMAIL_TO || '';
+const FERIE_REMINDER_EMAIL_TO = process.env.FERIE_REMINDER_EMAIL_TO || 'francesco@norbalat.it';
 const NOTIFY_TIMEZONE = process.env.NOTIFY_TIMEZONE || 'Europe/Rome';
 const EXPERIMENTAL_SOURCE_URL = process.env.EXPERIMENTAL_SOURCE_URL || '';
 const CLAL_BURRO_ZANGOLATO_URL = 'https://www.clal.it/index.php?section=burro_milano#zangolato';
@@ -697,6 +698,15 @@ function notifyLog(...args) {
   console.log('[notifiche-email]', ...args);
 }
 
+function escapeEmailHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function notifyNewClientePendingApproval(clienteNome, createdByName = 'Sistema') {
   try {
     const cfg = await getEmailNotificationSettings();
@@ -760,9 +770,100 @@ async function maybeSendDailyPendingSummary() {
   }
 }
 
+async function maybeSendUpcomingFerieReminder() {
+  try {
+    if (!isSmtpConfigured()) return;
+    const recipients = parseEmailList(FERIE_REMINDER_EMAIL_TO);
+    if (!recipients.length) return;
+
+    const { rows } = await q(
+      `SELECT f.id, f.titolo, f.note, f.data_inizio, f.data_fine, u.nome, u.cognome
+       FROM ferie_dipendenti f
+       JOIN utenti u ON u.id = f.utente_id
+       WHERE f.tipo = 'ferie'
+         AND f.stato = 'confermata'
+         AND f.data_inizio = ((NOW() AT TIME ZONE $1)::date + 7)
+         AND COALESCE(f.promemoria_7g_sent_key, '') <> f.data_inizio::text
+       ORDER BY u.cognome ASC, u.nome ASC, f.data_inizio ASC, f.id ASC`,
+      [NOTIFY_TIMEZONE]
+    );
+    if (!rows.length) return;
+
+    const targetDate = String(rows[0].data_inizio || '').slice(0, 10);
+    const subject = `Promemoria ferie del ${targetDate}`;
+    const text = [
+      `Promemoria ferie in partenza tra 7 giorni (${targetDate}).`,
+      '',
+      ...rows.map(row => {
+        const fullName = `${row.nome || ''} ${row.cognome || ''}`.trim() || 'Dipendente';
+        const title = String(row.titolo || '').trim() || 'Ferie';
+        const note = String(row.note || '').trim();
+        return [
+          `- ${fullName}`,
+          `  Titolo: ${title}`,
+          `  Periodo: ${String(row.data_inizio || '').slice(0, 10)} -> ${String(row.data_fine || '').slice(0, 10)}`,
+          ...(note ? [`  Note: ${note}`] : []),
+        ].join('\n');
+      }),
+    ].join('\n');
+    const html = `
+      <div style="font-family:Arial,sans-serif;color:#102a43;line-height:1.5;">
+        <h2 style="margin:0 0 10px;">Promemoria ferie</h2>
+        <p style="margin:0 0 12px;">Le seguenti ferie iniziano tra 7 giorni, il <b>${escapeEmailHtml(targetDate)}</b>.</p>
+        <table style="border-collapse:collapse;width:100%;max-width:780px;">
+          <thead>
+            <tr>
+              <th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Dipendente</th>
+              <th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Titolo</th>
+              <th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Periodo</th>
+              <th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(row => {
+              const fullName = escapeEmailHtml(`${row.nome || ''} ${row.cognome || ''}`.trim() || 'Dipendente');
+              const title = escapeEmailHtml(String(row.titolo || '').trim() || 'Ferie');
+              const period = `${escapeEmailHtml(String(row.data_inizio || '').slice(0, 10))} -> ${escapeEmailHtml(String(row.data_fine || '').slice(0, 10))}`;
+              const note = escapeEmailHtml(String(row.note || '').trim() || '-');
+              return `
+                <tr>
+                  <td style="padding:8px;border-bottom:1px solid #eef2f6;">${fullName}</td>
+                  <td style="padding:8px;border-bottom:1px solid #eef2f6;">${title}</td>
+                  <td style="padding:8px;border-bottom:1px solid #eef2f6;">${period}</td>
+                  <td style="padding:8px;border-bottom:1px solid #eef2f6;">${note}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    const sent = await sendManagedEmail({ to: recipients, subject, text, html });
+    if (!sent.ok) return;
+
+    const ids = rows.map(row => Number(row.id)).filter(Number.isFinite);
+    if (ids.length) {
+      await q(
+        `UPDATE ferie_dipendenti
+         SET promemoria_7g_sent_key = data_inizio::text,
+             updated_at = NOW()
+         WHERE id = ANY($1::int[])`,
+        [ids]
+      );
+    }
+    notifyLog('promemoria ferie inviato', targetDate, `eventi=${ids.length}`);
+  } catch (e) {
+    notifyLog('errore promemoria ferie:', e.message);
+  }
+}
+
 function startEmailNotificationsScheduler() {
+  maybeSendDailyPendingSummary().catch(() => {});
+  maybeSendUpcomingFerieReminder().catch(() => {});
   setInterval(() => {
     maybeSendDailyPendingSummary().catch(() => {});
+    maybeSendUpcomingFerieReminder().catch(() => {});
   }, 60 * 1000);
 }
 
@@ -1349,6 +1450,7 @@ async function createSchema() {
     ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS visibilita_ruoli JSONB NOT NULL DEFAULT '["admin","amministrazione","direzione"]'::jsonb;
     ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS visibilita_utenti JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS visibilita_solo_creator BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS promemoria_7g_sent_key TEXT DEFAULT '';
     ALTER TABLE doc_files   ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT 'application/octet-stream';
     ALTER TABLE doc_files   ADD COLUMN IF NOT EXISTS size_bytes INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS stato_cliente TEXT DEFAULT '';
@@ -1605,6 +1707,7 @@ async function createSchema() {
       visibilita_ruoli JSONB NOT NULL DEFAULT '["admin","amministrazione","direzione"]'::jsonb,
       visibilita_utenti JSONB NOT NULL DEFAULT '[]'::jsonb,
       visibilita_solo_creator BOOLEAN NOT NULL DEFAULT FALSE,
+      promemoria_7g_sent_key TEXT DEFAULT '',
       created_by      INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
       created_at      TIMESTAMPTZ DEFAULT NOW(),
       updated_at      TIMESTAMPTZ DEFAULT NOW()
