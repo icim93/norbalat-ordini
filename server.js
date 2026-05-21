@@ -782,17 +782,22 @@ async function maybeSendUpcomingFerieReminder() {
        JOIN utenti u ON u.id = f.utente_id
        WHERE f.tipo = 'ferie'
          AND f.stato = 'confermata'
-         AND f.data_inizio = ((NOW() AT TIME ZONE $1)::date + 7)
+         AND f.data_inizio >= (NOW() AT TIME ZONE $1)::date
+         AND f.data_inizio <= ((NOW() AT TIME ZONE $1)::date + 7)
          AND COALESCE(f.promemoria_7g_sent_key, '') <> f.data_inizio::text
        ORDER BY u.cognome ASC, u.nome ASC, f.data_inizio ASC, f.id ASC`,
       [NOTIFY_TIMEZONE]
     );
     if (!rows.length) return;
 
-    const targetDate = String(rows[0].data_inizio || '').slice(0, 10);
-    const subject = `Promemoria ferie del ${targetDate}`;
+    const dateLabels = [...new Set(rows.map(row => String(row.data_inizio || '').slice(0, 10)).filter(Boolean))];
+    const subject = dateLabels.length === 1
+      ? `Promemoria ferie del ${dateLabels[0]}`
+      : `Promemoria ferie in arrivo (${dateLabels[0]} - ${dateLabels[dateLabels.length - 1]})`;
     const text = [
-      `Promemoria ferie in partenza tra 7 giorni (${targetDate}).`,
+      dateLabels.length === 1
+        ? `Promemoria ferie in partenza il ${dateLabels[0]}.`
+        : `Promemoria ferie in partenza entro i prossimi 7 giorni (${dateLabels[0]} -> ${dateLabels[dateLabels.length - 1]}).`,
       '',
       ...rows.map(row => {
         const fullName = `${row.nome || ''} ${row.cognome || ''}`.trim() || 'Dipendente';
@@ -809,7 +814,9 @@ async function maybeSendUpcomingFerieReminder() {
     const html = `
       <div style="font-family:Arial,sans-serif;color:#102a43;line-height:1.5;">
         <h2 style="margin:0 0 10px;">Promemoria ferie</h2>
-        <p style="margin:0 0 12px;">Le seguenti ferie iniziano tra 7 giorni, il <b>${escapeEmailHtml(targetDate)}</b>.</p>
+        <p style="margin:0 0 12px;">${dateLabels.length === 1
+          ? `Le seguenti ferie iniziano il <b>${escapeEmailHtml(dateLabels[0])}</b>.`
+          : `Le seguenti ferie iniziano entro i prossimi 7 giorni, dal <b>${escapeEmailHtml(dateLabels[0])}</b> al <b>${escapeEmailHtml(dateLabels[dateLabels.length - 1])}</b>.`}</p>
         <table style="border-collapse:collapse;width:100%;max-width:780px;">
           <thead>
             <tr>
@@ -852,7 +859,7 @@ async function maybeSendUpcomingFerieReminder() {
         [ids]
       );
     }
-    notifyLog('promemoria ferie inviato', targetDate, `eventi=${ids.length}`);
+    notifyLog('promemoria ferie inviato', dateLabels.join(','), `eventi=${ids.length}`);
   } catch (e) {
     notifyLog('errore promemoria ferie:', e.message);
   }
