@@ -71,7 +71,8 @@ const SMTP_TLS_SERVERNAME = process.env.SMTP_TLS_SERVERNAME || '';
 const SMTP_FROM = process.env.SMTP_FROM || '';
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'Norbalat Ordini';
 const NOTIFY_EMAIL_TO = process.env.NOTIFY_EMAIL_TO || '';
-const FERIE_REMINDER_EMAIL_TO = process.env.FERIE_REMINDER_EMAIL_TO || NOTIFY_EMAIL_TO || 'francesco@norbalat.it';
+const FERIE_NOTIFICATION_REQUIRED_EMAILS = ['francesco@norbalat.it', 'logistica@norbalat.it'];
+const FERIE_REMINDER_EMAIL_TO = process.env.FERIE_REMINDER_EMAIL_TO || NOTIFY_EMAIL_TO || '';
 const NOTIFY_TIMEZONE = process.env.NOTIFY_TIMEZONE || 'Europe/Rome';
 const EXPERIMENTAL_SOURCE_URL = process.env.EXPERIMENTAL_SOURCE_URL || '';
 const CLAL_BURRO_ZANGOLATO_URL = 'https://www.clal.it/index.php?section=burro_milano#zangolato';
@@ -473,6 +474,26 @@ function parseEmailList(raw) {
     .filter(Boolean);
 }
 
+function uniqueEmailList(values) {
+  const seen = new Set();
+  const out = [];
+  for (const value of values || []) {
+    const email = String(value || '').trim();
+    const key = email.toLowerCase();
+    if (!email || seen.has(key)) continue;
+    seen.add(key);
+    out.push(email);
+  }
+  return out;
+}
+
+function getFerieNotificationRecipients() {
+  return uniqueEmailList([
+    ...parseEmailList(FERIE_REMINDER_EMAIL_TO),
+    ...FERIE_NOTIFICATION_REQUIRED_EMAILS,
+  ]);
+}
+
 function getSmtpMissingFields() {
   const missing = [];
   if (!SMTP_HOST) missing.push('SMTP_HOST');
@@ -707,6 +728,46 @@ function escapeEmailHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function emailDateOnly(value) {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value || '').slice(0, 10);
+}
+
+function getFerieRowFullName(row = {}) {
+  return `${row.nome || ''} ${row.cognome || ''}`.trim() || 'Dipendente';
+}
+
+function buildFerieRowsText(rows) {
+  return rows.map(row => {
+    const fullName = getFerieRowFullName(row);
+    const title = String(row.titolo || '').trim() || 'Ferie';
+    const note = String(row.note || '').trim();
+    return [
+      `- ${fullName}`,
+      `  Titolo: ${title}`,
+      `  Periodo: ${emailDateOnly(row.data_inizio)} -> ${emailDateOnly(row.data_fine)}`,
+      ...(note ? [`  Note: ${note}`] : []),
+    ].join('\n');
+  });
+}
+
+function buildFerieRowsHtml(rows) {
+  return rows.map(row => {
+    const fullName = escapeEmailHtml(getFerieRowFullName(row));
+    const title = escapeEmailHtml(String(row.titolo || '').trim() || 'Ferie');
+    const period = `${escapeEmailHtml(emailDateOnly(row.data_inizio))} -> ${escapeEmailHtml(emailDateOnly(row.data_fine))}`;
+    const note = escapeEmailHtml(String(row.note || '').trim() || '-');
+    return `
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #eef2f6;">${fullName}</td>
+        <td style="padding:8px;border-bottom:1px solid #eef2f6;">${title}</td>
+        <td style="padding:8px;border-bottom:1px solid #eef2f6;">${period}</td>
+        <td style="padding:8px;border-bottom:1px solid #eef2f6;">${note}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
 async function notifyNewClientePendingApproval(clienteNome, createdByName = 'Sistema') {
   try {
     const cfg = await getEmailNotificationSettings();
@@ -770,96 +831,127 @@ async function maybeSendDailyPendingSummary() {
   }
 }
 
-async function maybeSendUpcomingFerieReminder() {
+async function notifyNewFeriePendingApproval(ferieRow, createdByName = 'Sistema') {
   try {
     if (!isSmtpConfigured()) return;
-    const recipients = parseEmailList(FERIE_REMINDER_EMAIL_TO);
+    const recipients = getFerieNotificationRecipients();
     if (!recipients.length) return;
 
-    const { rows } = await q(
-      `SELECT f.id, f.titolo, f.note, f.data_inizio, f.data_fine, u.nome, u.cognome
-       FROM ferie_dipendenti f
-       JOIN utenti u ON u.id = f.utente_id
-       WHERE f.tipo = 'ferie'
-         AND f.stato = 'confermata'
-         AND f.data_inizio >= (NOW() AT TIME ZONE $1)::date
-         AND f.data_inizio <= ((NOW() AT TIME ZONE $1)::date + 7)
-         AND COALESCE(f.promemoria_7g_sent_key, '') <> f.data_inizio::text
-       ORDER BY u.cognome ASC, u.nome ASC, f.data_inizio ASC, f.id ASC`,
-      [NOTIFY_TIMEZONE]
-    );
-    if (!rows.length) return;
-
-    const dateLabels = [...new Set(rows.map(row => String(row.data_inizio || '').slice(0, 10)).filter(Boolean))];
-    const subject = dateLabels.length === 1
-      ? `Promemoria ferie del ${dateLabels[0]}`
-      : `Promemoria ferie in arrivo (${dateLabels[0]} - ${dateLabels[dateLabels.length - 1]})`;
+    const fullName = getFerieRowFullName(ferieRow);
+    const title = String(ferieRow?.titolo || '').trim() || 'Ferie';
+    const note = String(ferieRow?.note || '').trim();
+    const period = `${emailDateOnly(ferieRow?.data_inizio)} -> ${emailDateOnly(ferieRow?.data_fine)}`;
+    const subject = `Nuova richiesta ferie da approvare - ${fullName}`;
     const text = [
-      dateLabels.length === 1
-        ? `Promemoria ferie in partenza il ${dateLabels[0]}.`
-        : `Promemoria ferie in partenza entro i prossimi 7 giorni (${dateLabels[0]} -> ${dateLabels[dateLabels.length - 1]}).`,
-      '',
-      ...rows.map(row => {
-        const fullName = `${row.nome || ''} ${row.cognome || ''}`.trim() || 'Dipendente';
-        const title = String(row.titolo || '').trim() || 'Ferie';
-        const note = String(row.note || '').trim();
-        return [
-          `- ${fullName}`,
-          `  Titolo: ${title}`,
-          `  Periodo: ${String(row.data_inizio || '').slice(0, 10)} -> ${String(row.data_fine || '').slice(0, 10)}`,
-          ...(note ? [`  Note: ${note}`] : []),
-        ].join('\n');
-      }),
+      'Nuova voce ferie inserita nel calendario in attesa di approvazione.',
+      `Dipendente: ${fullName}`,
+      `Inserito da: ${createdByName}`,
+      `Titolo: ${title}`,
+      `Periodo: ${period}`,
+      ...(note ? [`Note: ${note}`] : []),
+      `Gestionale: ${APP_URL}`,
     ].join('\n');
     const html = `
       <div style="font-family:Arial,sans-serif;color:#102a43;line-height:1.5;">
-        <h2 style="margin:0 0 10px;">Promemoria ferie</h2>
-        <p style="margin:0 0 12px;">${dateLabels.length === 1
-          ? `Le seguenti ferie iniziano il <b>${escapeEmailHtml(dateLabels[0])}</b>.`
-          : `Le seguenti ferie iniziano entro i prossimi 7 giorni, dal <b>${escapeEmailHtml(dateLabels[0])}</b> al <b>${escapeEmailHtml(dateLabels[dateLabels.length - 1])}</b>.`}</p>
-        <table style="border-collapse:collapse;width:100%;max-width:780px;">
-          <thead>
-            <tr>
-              <th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Dipendente</th>
-              <th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Titolo</th>
-              <th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Periodo</th>
-              <th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Note</th>
-            </tr>
-          </thead>
+        <h2 style="margin:0 0 10px;">Nuova richiesta ferie</h2>
+        <p style="margin:0 0 12px;">E stata inserita una voce ferie in attesa di approvazione.</p>
+        <table style="border-collapse:collapse;width:100%;max-width:680px;">
           <tbody>
-            ${rows.map(row => {
-              const fullName = escapeEmailHtml(`${row.nome || ''} ${row.cognome || ''}`.trim() || 'Dipendente');
-              const title = escapeEmailHtml(String(row.titolo || '').trim() || 'Ferie');
-              const period = `${escapeEmailHtml(String(row.data_inizio || '').slice(0, 10))} -> ${escapeEmailHtml(String(row.data_fine || '').slice(0, 10))}`;
-              const note = escapeEmailHtml(String(row.note || '').trim() || '-');
-              return `
-                <tr>
-                  <td style="padding:8px;border-bottom:1px solid #eef2f6;">${fullName}</td>
-                  <td style="padding:8px;border-bottom:1px solid #eef2f6;">${title}</td>
-                  <td style="padding:8px;border-bottom:1px solid #eef2f6;">${period}</td>
-                  <td style="padding:8px;border-bottom:1px solid #eef2f6;">${note}</td>
-                </tr>
-              `;
-            }).join('')}
+            <tr><th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Dipendente</th><td style="padding:8px;border-bottom:1px solid #d9e2ec;">${escapeEmailHtml(fullName)}</td></tr>
+            <tr><th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Inserito da</th><td style="padding:8px;border-bottom:1px solid #d9e2ec;">${escapeEmailHtml(createdByName)}</td></tr>
+            <tr><th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Titolo</th><td style="padding:8px;border-bottom:1px solid #d9e2ec;">${escapeEmailHtml(title)}</td></tr>
+            <tr><th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Periodo</th><td style="padding:8px;border-bottom:1px solid #d9e2ec;">${escapeEmailHtml(period)}</td></tr>
+            <tr><th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Note</th><td style="padding:8px;border-bottom:1px solid #d9e2ec;">${escapeEmailHtml(note || '-')}</td></tr>
           </tbody>
         </table>
+        <p style="margin:14px 0 0;"><a href="${escapeEmailHtml(APP_URL)}" style="color:#2563eb;">Apri gestionale</a></p>
       </div>
     `;
-
     const sent = await sendManagedEmail({ to: recipients, subject, text, html });
-    if (!sent.ok) return;
+    if (sent.ok) notifyLog('nuova richiesta ferie inviata', fullName);
+  } catch (e) {
+    notifyLog('errore nuova richiesta ferie:', e.message);
+  }
+}
 
-    const ids = rows.map(row => Number(row.id)).filter(Number.isFinite);
-    if (ids.length) {
-      await q(
-        `UPDATE ferie_dipendenti
-         SET promemoria_7g_sent_key = data_inizio::text,
-             updated_at = NOW()
-         WHERE id = ANY($1::int[])`,
-        [ids]
-      );
+const FERIE_REMINDER_CONFIGS = [
+  { daysBefore: 7, label: '7 giorni', sentColumn: 'promemoria_7g_sent_key', minDaysAhead: 4, maxDaysAhead: 7 },
+  { daysBefore: 3, label: '3 giorni', sentColumn: 'promemoria_3g_sent_key', minDaysAhead: 0, maxDaysAhead: 3 },
+];
+
+async function sendFerieReminderForWindow(config) {
+  if (!isSmtpConfigured()) return;
+  const recipients = getFerieNotificationRecipients();
+  if (!recipients.length) return;
+
+  const { rows } = await q(
+    `SELECT f.id, f.titolo, f.note, f.data_inizio, f.data_fine, u.nome, u.cognome
+     FROM ferie_dipendenti f
+     JOIN utenti u ON u.id = f.utente_id
+     WHERE f.tipo = 'ferie'
+       AND f.stato = 'confermata'
+       AND f.data_inizio >= ((NOW() AT TIME ZONE $1)::date + $2::int)
+       AND f.data_inizio <= ((NOW() AT TIME ZONE $1)::date + $3::int)
+       AND COALESCE(f.${config.sentColumn}, '') <> f.data_inizio::text
+     ORDER BY u.cognome ASC, u.nome ASC, f.data_inizio ASC, f.id ASC`,
+    [NOTIFY_TIMEZONE, config.minDaysAhead, config.maxDaysAhead]
+  );
+  if (!rows.length) return;
+
+  const dateLabels = [...new Set(rows.map(row => emailDateOnly(row.data_inizio)).filter(Boolean))];
+  const subject = dateLabels.length === 1
+    ? `Promemoria ferie ${config.label} - ${dateLabels[0]}`
+    : `Promemoria ferie ${config.label} (${dateLabels[0]} - ${dateLabels[dateLabels.length - 1]})`;
+  const text = [
+    dateLabels.length === 1
+      ? `Promemoria ferie ${config.label}: ferie in partenza il ${dateLabels[0]}.`
+      : `Promemoria ferie ${config.label}: ferie in partenza dal ${dateLabels[0]} al ${dateLabels[dateLabels.length - 1]}.`,
+    '',
+    ...buildFerieRowsText(rows),
+  ].join('\n');
+  const html = `
+    <div style="font-family:Arial,sans-serif;color:#102a43;line-height:1.5;">
+      <h2 style="margin:0 0 10px;">Promemoria ferie ${escapeEmailHtml(config.label)}</h2>
+      <p style="margin:0 0 12px;">${dateLabels.length === 1
+        ? `Le seguenti ferie iniziano il <b>${escapeEmailHtml(dateLabels[0])}</b>.`
+        : `Le seguenti ferie iniziano dal <b>${escapeEmailHtml(dateLabels[0])}</b> al <b>${escapeEmailHtml(dateLabels[dateLabels.length - 1])}</b>.`}</p>
+      <table style="border-collapse:collapse;width:100%;max-width:780px;">
+        <thead>
+          <tr>
+            <th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Dipendente</th>
+            <th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Titolo</th>
+            <th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Periodo</th>
+            <th align="left" style="padding:8px;border-bottom:1px solid #d9e2ec;">Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${buildFerieRowsHtml(rows)}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  const sent = await sendManagedEmail({ to: recipients, subject, text, html });
+  if (!sent.ok) return;
+
+  const ids = rows.map(row => Number(row.id)).filter(Number.isFinite);
+  if (ids.length) {
+    await q(
+      `UPDATE ferie_dipendenti
+       SET ${config.sentColumn} = data_inizio::text,
+           updated_at = NOW()
+       WHERE id = ANY($1::int[])`,
+      [ids]
+    );
+  }
+  notifyLog(`promemoria ferie ${config.label} inviato`, dateLabels.join(','), `eventi=${ids.length}`);
+}
+
+async function maybeSendUpcomingFerieReminder() {
+  try {
+    for (const config of FERIE_REMINDER_CONFIGS) {
+      await sendFerieReminderForWindow(config);
     }
-    notifyLog('promemoria ferie inviato', dateLabels.join(','), `eventi=${ids.length}`);
   } catch (e) {
     notifyLog('errore promemoria ferie:', e.message);
   }
@@ -1458,6 +1550,7 @@ async function createSchema() {
     ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS visibilita_utenti JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS visibilita_solo_creator BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS promemoria_7g_sent_key TEXT DEFAULT '';
+    ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS promemoria_3g_sent_key TEXT DEFAULT '';
     ALTER TABLE doc_files   ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT 'application/octet-stream';
     ALTER TABLE doc_files   ADD COLUMN IF NOT EXISTS size_bytes INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE clienti_crm_eventi ADD COLUMN IF NOT EXISTS stato_cliente TEXT DEFAULT '';
@@ -1715,6 +1808,7 @@ async function createSchema() {
       visibilita_utenti JSONB NOT NULL DEFAULT '[]'::jsonb,
       visibilita_solo_creator BOOLEAN NOT NULL DEFAULT FALSE,
       promemoria_7g_sent_key TEXT DEFAULT '',
+      promemoria_3g_sent_key TEXT DEFAULT '',
       created_by      INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
       created_at      TIMESTAMPTZ DEFAULT NOW(),
       updated_at      TIMESTAMPTZ DEFAULT NOW()
@@ -3374,7 +3468,7 @@ app.post('/api/ferie', authMiddleware, async (req, res) => {
     if (dataFine < dataInizio) return res.status(400).json({ error: 'La data fine non puo essere precedente alla data inizio' });
     if ((oraInizio && !/^\d{2}:\d{2}$/.test(oraInizio)) || (oraFine && !/^\d{2}:\d{2}$/.test(oraFine))) return res.status(400).json({ error: 'Orario non valido' });
     if (oraInizio && oraFine && oraFine < oraInizio) return res.status(400).json({ error: 'L\'orario fine non puo essere precedente all\'orario inizio' });
-    const { rows: userRows } = await q('SELECT id FROM utenti WHERE id=$1 LIMIT 1', [utenteId]);
+    const { rows: userRows } = await q('SELECT id, nome, cognome FROM utenti WHERE id=$1 LIMIT 1', [utenteId]);
     if (!userRows.length) return res.status(404).json({ error: 'Referente non trovato' });
     const allowedUsers = visibility.visibilita_utenti;
     if (allowedUsers.length) {
@@ -3405,7 +3499,16 @@ app.post('/api/ferie', authMiddleware, async (req, res) => {
         req.user.id || null,
       ]
     );
-    res.json(rows[0]);
+    const saved = {
+      ...rows[0],
+      nome: userRows[0].nome || '',
+      cognome: userRows[0].cognome || '',
+    };
+    if (tipo === 'ferie' && stato === 'da_approvare') {
+      const creator = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || 'Sistema';
+      notifyNewFeriePendingApproval(saved, creator).catch(() => {});
+    }
+    res.json(saved);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
