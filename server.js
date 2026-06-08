@@ -71,7 +71,7 @@ const SMTP_TLS_SERVERNAME = process.env.SMTP_TLS_SERVERNAME || '';
 const SMTP_FROM = process.env.SMTP_FROM || '';
 const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || 'Norbalat Ordini';
 const NOTIFY_EMAIL_TO = process.env.NOTIFY_EMAIL_TO || '';
-const FERIE_REMINDER_EMAIL_TO = process.env.FERIE_REMINDER_EMAIL_TO || 'francesco@norbalat.it';
+const FERIE_REMINDER_EMAIL_TO = process.env.FERIE_REMINDER_EMAIL_TO || NOTIFY_EMAIL_TO || 'francesco@norbalat.it';
 const NOTIFY_TIMEZONE = process.env.NOTIFY_TIMEZONE || 'Europe/Rome';
 const EXPERIMENTAL_SOURCE_URL = process.env.EXPERIMENTAL_SOURCE_URL || '';
 const CLAL_BURRO_ZANGOLATO_URL = 'https://www.clal.it/index.php?section=burro_milano#zangolato';
