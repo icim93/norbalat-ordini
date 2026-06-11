@@ -1365,6 +1365,29 @@ async function createSchema() {
       updated_at     TIMESTAMPTZ DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS ordini_fornitori (
+      id                SERIAL PRIMARY KEY,
+      fornitore_id      INTEGER NOT NULL REFERENCES clienti(id) ON DELETE RESTRICT,
+      prodotto_id       INTEGER REFERENCES prodotti(id) ON DELETE SET NULL,
+      prodotto_nome     TEXT NOT NULL,
+      quantita          NUMERIC NOT NULL DEFAULT 0,
+      unita_misura      TEXT DEFAULT '',
+      note_magazzino    TEXT DEFAULT '',
+      note_ordine       TEXT DEFAULT '',
+      stato             TEXT NOT NULL DEFAULT 'richiesta' CHECK (stato IN ('richiesta','in_lavorazione','inviato','annullato')),
+      email_to          JSONB NOT NULL DEFAULT '[]'::jsonb,
+      email_subject     TEXT DEFAULT '',
+      email_body        TEXT DEFAULT '',
+      requested_by      INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      requested_by_name TEXT DEFAULT '',
+      requested_at      TIMESTAMPTZ DEFAULT NOW(),
+      updated_by        INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      updated_at        TIMESTAMPTZ DEFAULT NOW(),
+      sent_by           INTEGER REFERENCES utenti(id) ON DELETE SET NULL,
+      sent_by_name      TEXT DEFAULT '',
+      sent_at           TIMESTAMPTZ
+    );
+
     CREATE TABLE IF NOT EXISTS app_settings (
       key         TEXT PRIMARY KEY,
       value       JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -1478,6 +1501,8 @@ async function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_listini_prod_cliente ON listini(prodotto_id,cliente_id);
     CREATE INDEX IF NOT EXISTS idx_listini_validita ON listini(valido_dal,valido_al);
     CREATE INDEX IF NOT EXISTS idx_rese_fornitore_created ON rese_fornitori(fornitore_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_ordini_fornitori_stato ON ordini_fornitori(stato, requested_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_ordini_fornitori_fornitore ON ordini_fornitori(fornitore_id, requested_at DESC);
     CREATE INDEX IF NOT EXISTS idx_crm_cliente_created ON clienti_crm_eventi(cliente_id,created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_doc_folders_parent ON doc_folders(parent_id);
     CREATE INDEX IF NOT EXISTS idx_doc_files_folder ON doc_files(folder_id);
@@ -1503,6 +1528,7 @@ async function createSchema() {
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS codice_fiscale   TEXT DEFAULT '';
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS codice_univoco   TEXT DEFAULT '';
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS pec              TEXT DEFAULT '';
+    ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS email            TEXT DEFAULT '';
     ALTER TABLE clienti     ADD COLUMN IF NOT EXISTS created_at       TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS is_pedana      BOOLEAN DEFAULT FALSE;
     ALTER TABLE ordine_linee ADD COLUMN IF NOT EXISTS nota_riga      TEXT DEFAULT '';
@@ -1538,6 +1564,24 @@ async function createSchema() {
     ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES utenti(id) ON DELETE SET NULL;
     ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE rese_fornitori ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS prodotto_id INTEGER REFERENCES prodotti(id) ON DELETE SET NULL;
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS prodotto_nome TEXT NOT NULL DEFAULT '';
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS quantita NUMERIC NOT NULL DEFAULT 0;
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS unita_misura TEXT DEFAULT '';
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS note_magazzino TEXT DEFAULT '';
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS note_ordine TEXT DEFAULT '';
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS stato TEXT NOT NULL DEFAULT 'richiesta';
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS email_to JSONB NOT NULL DEFAULT '[]'::jsonb;
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS email_subject TEXT DEFAULT '';
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS email_body TEXT DEFAULT '';
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS requested_by INTEGER REFERENCES utenti(id) ON DELETE SET NULL;
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS requested_by_name TEXT DEFAULT '';
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS updated_by INTEGER REFERENCES utenti(id) ON DELETE SET NULL;
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS sent_by INTEGER REFERENCES utenti(id) ON DELETE SET NULL;
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS sent_by_name TEXT DEFAULT '';
+    ALTER TABLE ordini_fornitori ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ;
     ALTER TABLE doc_folders ADD COLUMN IF NOT EXISTS allowed_roles JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE doc_folders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
     ALTER TABLE ferie_dipendenti ADD COLUMN IF NOT EXISTS titolo TEXT DEFAULT '';
@@ -2224,6 +2268,9 @@ const PERMISSIONS = {
   'listini:manage': ['admin', 'direzione'],
   'rese:view': ['admin', 'direzione'],
   'rese:manage': ['admin', 'direzione'],
+  'fornitori:view': ['admin', 'direzione', 'magazzino'],
+  'fornitori:request': ['admin', 'direzione', 'magazzino'],
+  'fornitori:manage': ['admin', 'direzione'],
   'onboarding:manage': ['admin', 'amministrazione'],
   'ordini:create': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
   'ordini:update': ['admin', 'amministrazione', 'direzione', 'autista', 'magazzino'],
@@ -2857,6 +2904,40 @@ const zResaPayload = z.object({
   prezzo_pagato: z.coerce.number().nonnegative(),
   lotto: z.string().max(120).optional().default(''),
   resa_pct: z.coerce.number().positive().max(100),
+});
+
+const zFornitorePayload = z.object({
+  nome: z.string().trim().min(2).max(180),
+  localita: z.string().trim().max(160).optional().default(''),
+  piva: z.string().trim().max(32).optional().default(''),
+  email: z.string().trim().max(300).optional().default(''),
+  pec: z.string().trim().max(160).optional().default(''),
+  telefono: z.string().trim().max(80).optional().default(''),
+  contatto_nome: z.string().trim().max(120).optional().default(''),
+  note: z.string().trim().max(2000).optional().default(''),
+});
+
+const zOrdineFornitorePayload = z.object({
+  fornitore_id: z.coerce.number().int().positive(),
+  prodotto_id: z.coerce.number().int().positive().nullable().optional().default(null),
+  prodotto_nome: z.string().trim().min(1).max(220),
+  quantita: z.coerce.number().positive(),
+  unita_misura: z.string().trim().max(40).optional().default(''),
+  note_magazzino: z.string().trim().max(2000).optional().default(''),
+  note_ordine: z.string().trim().max(4000).optional().default(''),
+  email_to: z.array(z.string().trim().max(300)).optional().default([]),
+  email_subject: z.string().trim().max(220).optional().default(''),
+  email_body: z.string().trim().max(8000).optional().default(''),
+});
+
+const zOrdineFornitoreStatusPayload = z.object({
+  stato: z.enum(['richiesta', 'in_lavorazione', 'annullato']),
+});
+
+const zOrdineFornitoreSendPayload = z.object({
+  email_to: z.array(z.string().trim().max(300)).optional().default([]),
+  email_subject: z.string().trim().max(220).optional().default(''),
+  email_body: z.string().trim().min(1).max(8000),
 });
 
 const zCrmEventoPayload = z.object({
@@ -4755,7 +4836,7 @@ async function getResaRecord(id) {
 
 async function ensureFornitoreCliente(fornitoreId) {
   const { rows } = await q(
-    `SELECT id, nome, e_fornitore
+    `SELECT id, nome, email, pec, telefono, contatto_nome, note, e_fornitore
      FROM clienti
      WHERE id=$1
      LIMIT 1`,
@@ -4774,6 +4855,314 @@ async function ensureFornitoreCliente(fornitoreId) {
   }
   return row;
 }
+
+function normalizeOrderSupplierRecipients(raw) {
+  const values = Array.isArray(raw) ? raw.flatMap(v => parseEmailList(v)) : parseEmailList(raw);
+  return uniqueEmailList(values);
+}
+
+function defaultSupplierOrderSubject(row = {}) {
+  return `Ordine Norbalat - ${String(row.prodotto_nome || 'prodotto').trim()}`;
+}
+
+function defaultSupplierOrderBody(row = {}) {
+  const qty = Number(row.quantita || 0).toLocaleString('it-IT', { maximumFractionDigits: 2 });
+  const um = String(row.unita_misura || '').trim();
+  const note = String(row.note_ordine || row.note_magazzino || '').trim();
+  return [
+    `Buongiorno,`,
+    ``,
+    `con la presente richiediamo disponibilita e conferma ordine per:`,
+    ``,
+    `Prodotto: ${String(row.prodotto_nome || '').trim()}`,
+    `Quantita: ${qty}${um ? ` ${um}` : ''}`,
+    note ? `Note: ${note}` : '',
+    ``,
+    `Restiamo in attesa di conferma.`,
+    ``,
+    `Norbalat`,
+  ].filter(line => line !== '').join('\n');
+}
+
+function normalizeOrdineFornitoreRow(row = {}) {
+  const emailTo = Array.isArray(row.email_to) ? row.email_to : [];
+  return {
+    ...row,
+    email_to: normalizeOrderSupplierRecipients(emailTo),
+    email_subject: row.email_subject || defaultSupplierOrderSubject(row),
+    email_body: row.email_body || defaultSupplierOrderBody(row),
+  };
+}
+
+async function getOrdineFornitoreRecord(id) {
+  const { rows } = await q(
+    `SELECT ofo.*,
+            c.nome AS fornitore_nome,
+            c.email AS fornitore_email,
+            c.pec AS fornitore_pec,
+            c.telefono AS fornitore_telefono,
+            c.contatto_nome AS fornitore_contatto,
+            p.codice AS prodotto_codice
+       FROM ordini_fornitori ofo
+       JOIN clienti c ON c.id = ofo.fornitore_id
+       LEFT JOIN prodotti p ON p.id = ofo.prodotto_id
+      WHERE ofo.id=$1
+      LIMIT 1`,
+    [id]
+  );
+  return rows[0] ? normalizeOrdineFornitoreRow(rows[0]) : null;
+}
+
+async function listOrdiniFornitori() {
+  const { rows } = await q(
+    `SELECT ofo.*,
+            c.nome AS fornitore_nome,
+            c.email AS fornitore_email,
+            c.pec AS fornitore_pec,
+            c.telefono AS fornitore_telefono,
+            c.contatto_nome AS fornitore_contatto,
+            p.codice AS prodotto_codice
+       FROM ordini_fornitori ofo
+       JOIN clienti c ON c.id = ofo.fornitore_id
+       LEFT JOIN prodotti p ON p.id = ofo.prodotto_id
+      ORDER BY ofo.requested_at DESC, ofo.id DESC`
+  );
+  return rows.map(normalizeOrdineFornitoreRow);
+}
+
+function assertSupplierOrderManager(req) {
+  if (!['admin', 'direzione'].includes(req.user?.ruolo)) {
+    const err = new Error('Solo admin e direzione possono formulare o inviare ordini fornitore');
+    err.status = 403;
+    throw err;
+  }
+}
+
+function assertSupplierManagerForRecordMutation(req, existing) {
+  if (['admin', 'direzione'].includes(req.user?.ruolo)) return;
+  const isWarehouseOwner = req.user?.ruolo === 'magazzino'
+    && existing?.stato === 'richiesta'
+    && Number(existing?.requested_by || 0) === Number(req.user?.id || 0);
+  if (isWarehouseOwner) return;
+  const err = new Error('Il magazzino puo modificare o annullare solo le proprie richieste non lavorate');
+  err.status = 403;
+  throw err;
+}
+
+app.get('/api/fornitori', authMiddleware, requirePermission('fornitori:view'), async (req, res) => {
+  try {
+    const { rows } = await q(
+      `SELECT id,nome,localita,piva,email,pec,telefono,contatto_nome,note,e_fornitore,created_at
+         FROM clienti
+        WHERE e_fornitore=TRUE
+        ORDER BY nome`
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.post('/api/fornitori', authMiddleware, requirePermission('fornitori:manage'), async (req, res) => {
+  try {
+    const parsed = zFornitorePayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const payload = parsed.data;
+    const { rows } = await q(
+      `INSERT INTO clienti
+       (nome,localita,piva,email,pec,telefono,contatto_nome,note,e_fornitore,onboarding_stato,sbloccato,created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,TRUE,'approvato',TRUE,NOW())
+       RETURNING id,nome,localita,piva,email,pec,telefono,contatto_nome,note,e_fornitore,created_at`,
+      [payload.nome, payload.localita, payload.piva, payload.email, payload.pec, payload.telefono, payload.contatto_nome, payload.note]
+    );
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Fornitori', `Nuovo fornitore: ${payload.nome}`);
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.put('/api/fornitori/:id', authMiddleware, requirePermission('fornitori:manage'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const parsed = zFornitorePayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const payload = parsed.data;
+    const existing = await ensureFornitoreCliente(id);
+    const { rows } = await q(
+      `UPDATE clienti
+          SET nome=$1, localita=$2, piva=$3, email=$4, pec=$5, telefono=$6, contatto_nome=$7, note=$8, e_fornitore=TRUE
+        WHERE id=$9
+        RETURNING id,nome,localita,piva,email,pec,telefono,contatto_nome,note,e_fornitore,created_at`,
+      [payload.nome, payload.localita, payload.piva, payload.email, payload.pec, payload.telefono, payload.contatto_nome, payload.note, id]
+    );
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Fornitori', `Modifica fornitore: ${existing.nome}`);
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.get('/api/ordini-fornitori', authMiddleware, requirePermission('fornitori:view'), async (req, res) => {
+  try {
+    res.json(await listOrdiniFornitori());
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.post('/api/ordini-fornitori', authMiddleware, requirePermission('fornitori:request'), async (req, res) => {
+  try {
+    const parsed = zOrdineFornitorePayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const payload = parsed.data;
+    const fornitore = await ensureFornitoreCliente(payload.fornitore_id);
+    const recipients = normalizeOrderSupplierRecipients(payload.email_to.length ? payload.email_to : [fornitore.email, fornitore.pec]);
+    const userName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || 'Utente';
+    const stato = ['admin', 'direzione'].includes(req.user.ruolo) ? 'in_lavorazione' : 'richiesta';
+    const { rows } = await q(
+      `INSERT INTO ordini_fornitori
+       (fornitore_id,prodotto_id,prodotto_nome,quantita,unita_misura,note_magazzino,note_ordine,stato,email_to,email_subject,email_body,requested_by,requested_by_name,updated_by,updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$12,NOW())
+       RETURNING *`,
+      [
+        payload.fornitore_id,
+        payload.prodotto_id,
+        payload.prodotto_nome,
+        payload.quantita,
+        payload.unita_misura,
+        payload.note_magazzino,
+        payload.note_ordine,
+        stato,
+        JSON.stringify(recipients),
+        payload.email_subject,
+        payload.email_body,
+        req.user.id || null,
+        userName,
+      ]
+    );
+    await logDB(req.user.id, userName, 'Ordini fornitori', `Richiesta ordine a ${fornitore.nome}: ${payload.prodotto_nome}`);
+    res.json(await getOrdineFornitoreRecord(rows[0].id));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.put('/api/ordini-fornitori/:id', authMiddleware, requirePermission('fornitori:request'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const existing = await getOrdineFornitoreRecord(id);
+    if (!existing) return res.status(404).json({ error: 'Ordine fornitore non trovato' });
+    if (existing.stato === 'inviato') return res.status(400).json({ error: 'Ordine gia inviato' });
+    assertSupplierManagerForRecordMutation(req, existing);
+    const parsed = zOrdineFornitorePayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const payload = parsed.data;
+    const fornitore = await ensureFornitoreCliente(payload.fornitore_id);
+    const recipients = normalizeOrderSupplierRecipients(payload.email_to.length ? payload.email_to : [fornitore.email, fornitore.pec]);
+    const nextStato = ['admin', 'direzione'].includes(req.user.ruolo) ? 'in_lavorazione' : existing.stato;
+    await q(
+      `UPDATE ordini_fornitori
+          SET fornitore_id=$1,
+              prodotto_id=$2,
+              prodotto_nome=$3,
+              quantita=$4,
+              unita_misura=$5,
+              note_magazzino=$6,
+              note_ordine=$7,
+              stato=$8,
+              email_to=$9::jsonb,
+              email_subject=$10,
+              email_body=$11,
+              updated_by=$12,
+              updated_at=NOW()
+        WHERE id=$13`,
+      [
+        payload.fornitore_id,
+        payload.prodotto_id,
+        payload.prodotto_nome,
+        payload.quantita,
+        payload.unita_misura,
+        payload.note_magazzino,
+        payload.note_ordine,
+        nextStato,
+        JSON.stringify(recipients),
+        payload.email_subject,
+        payload.email_body,
+        req.user.id || null,
+        id,
+      ]
+    );
+    await logDB(req.user.id, `${req.user.nome} ${req.user.cognome || ''}`.trim(), 'Ordini fornitori', `Aggiorna ordine fornitore #${id}`);
+    res.json(await getOrdineFornitoreRecord(id));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.patch('/api/ordini-fornitori/:id/stato', authMiddleware, requirePermission('fornitori:request'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const parsed = zOrdineFornitoreStatusPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const existing = await getOrdineFornitoreRecord(id);
+    if (!existing) return res.status(404).json({ error: 'Ordine fornitore non trovato' });
+    if (parsed.data.stato === 'in_lavorazione') assertSupplierOrderManager(req);
+    if (parsed.data.stato === 'annullato') assertSupplierManagerForRecordMutation(req, existing);
+    if (existing.stato === 'inviato') return res.status(400).json({ error: 'Ordine gia inviato' });
+    await q(
+      `UPDATE ordini_fornitori
+          SET stato=$1, updated_by=$2, updated_at=NOW()
+        WHERE id=$3`,
+      [parsed.data.stato, req.user.id || null, id]
+    );
+    res.json(await getOrdineFornitoreRecord(id));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+app.post('/api/ordini-fornitori/:id/send', authMiddleware, requirePermission('fornitori:manage'), async (req, res) => {
+  try {
+    assertSupplierOrderManager(req);
+    const id = parseInt(req.params.id, 10);
+    const existing = await getOrdineFornitoreRecord(id);
+    if (!existing) return res.status(404).json({ error: 'Ordine fornitore non trovato' });
+    if (existing.stato === 'annullato') return res.status(400).json({ error: 'Ordine annullato' });
+    const parsed = zOrdineFornitoreSendPayload.safeParse(req.body || {});
+    if (!parsed.success) return validationError(res, parsed);
+    const payload = parsed.data;
+    const recipients = normalizeOrderSupplierRecipients(payload.email_to.length ? payload.email_to : existing.email_to);
+    if (!recipients.length) return res.status(400).json({ error: 'Inserisci almeno un destinatario email' });
+    const subject = payload.email_subject || existing.email_subject || defaultSupplierOrderSubject(existing);
+    const text = payload.email_body;
+    const html = `<div style="font-family:Arial,sans-serif;line-height:1.5;white-space:pre-wrap;">${escapeEmailHtml(text)}</div>`;
+    const sent = await sendManagedEmail({ to: recipients, subject, text, html });
+    if (!sent.ok) {
+      const reason = sent.reason === 'smtp_not_configured' ? 'SMTP non configurato' : 'Invio email non riuscito';
+      return res.status(400).json({ error: reason, details: sent });
+    }
+    const userName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || 'Utente';
+    await q(
+      `UPDATE ordini_fornitori
+          SET stato='inviato',
+              email_to=$1::jsonb,
+              email_subject=$2,
+              email_body=$3,
+              sent_by=$4,
+              sent_by_name=$5,
+              sent_at=NOW(),
+              updated_by=$4,
+              updated_at=NOW()
+        WHERE id=$6`,
+      [JSON.stringify(recipients), subject, text, req.user.id || null, userName, id]
+    );
+    await logDB(req.user.id, userName, 'Ordini fornitori', `Email inviata ordine fornitore #${id} a ${recipients.join(', ')}`);
+    res.json(await getOrdineFornitoreRecord(id));
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
 
 app.get('/api/rese', authMiddleware, requirePermission('rese:view'), async (req, res) => {
   try {

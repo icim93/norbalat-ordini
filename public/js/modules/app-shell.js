@@ -9,6 +9,7 @@
     magazzino: `<svg ${S}><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg>`,
     giacenze: `<svg ${S}><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>`,
     tentata: `<svg ${S}><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 001.98-1.67L23 6H6"/></svg>`,
+    fornitori: `<svg ${S}><path d="M16 16h6V7l-3-4H8v4"/><path d="M18 16v5"/><path d="M6 18h8"/><path d="M6 14h8"/><rect x="2" y="7" width="14" height="14" rx="2"/></svg>`,
     piano: `<svg ${S}><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,
     autista: `<svg ${S}><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,
     clienti: `<svg ${S}><rect x="2" y="7" width="20" height="15" rx="1"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>`,
@@ -45,6 +46,7 @@
         items: [
           { page: 'magazzino', icon: NAV_ICONS.magazzino, label: 'Preparazione' },
           { page: 'giacenze', icon: NAV_ICONS.giacenze, label: 'Giacenze' },
+          { page: 'fornitori', icon: NAV_ICONS.fornitori, label: 'Ordini Fornitori' },
           { page: 'tentata', icon: NAV_ICONS.tentata, label: 'Tentata Vendita' },
           { page: 'piano', icon: NAV_ICONS.piano, label: 'Piano Carico' },
         ],
@@ -112,6 +114,7 @@
       { page: 'magazzino', icon: NAV_ICONS.magazzino, label: 'Da preparare' },
       { page: 'ferie', icon: NAV_ICONS.ferie, label: 'Calendario' },
       { page: 'giacenze', icon: NAV_ICONS.giacenze, label: 'Giacenze' },
+      { page: 'fornitori', icon: NAV_ICONS.fornitori, label: 'Ordini Fornitori' },
       { page: 'tentata', icon: NAV_ICONS.tentata, label: 'Tentata Vendita' },
       { page: 'documenti', icon: NAV_ICONS.documenti, label: 'Documenti' },
       { page: 'prodotti', icon: NAV_ICONS.prodotti, label: 'Prodotti' },
@@ -125,6 +128,7 @@
       { page: 'dashboard', icon: NAV_ICONS.dashboard, label: 'Dashboard' },
       { page: 'ordini', icon: NAV_ICONS.ordini, label: 'Ordini' },
       { page: 'giacenze', icon: NAV_ICONS.giacenze, label: 'Giacenze' },
+      { page: 'fornitori', icon: NAV_ICONS.fornitori, label: 'Ordini Fornitori' },
       { page: 'clienti', icon: NAV_ICONS.clienti, label: 'Clienti' },
       { page: 'crm', icon: NAV_ICONS.crm, label: 'CRM' },
       { page: 'prodotti', icon: NAV_ICONS.prodotti, label: 'Prodotti' },
@@ -187,6 +191,9 @@
     if (page === 'giacenze') {
       const alerts = window.state.giacenzeAlerts || {};
       return (alerts.sotto_soglia?.length || 0) + (alerts.in_scadenza?.length || 0);
+    }
+    if (page === 'fornitori') {
+      return (window.state.ordiniFornitori || []).filter(o => !['inviato', 'annullato'].includes(o.stato)).length;
     }
     if (page === 'clienti') {
       if (typeof window.canApproveOnboarding === 'function' && window.canApproveOnboarding()) {
@@ -410,6 +417,8 @@
     window.state.listini = [];
     window.state.listiniGruppi = [];
     window.state.rese = [];
+    window.state.fornitori = [];
+    window.state.ordiniFornitori = [];
     window.state.listinoProdottoId = null;
     window.state.ordini = [];
     window.state.camions = [];
@@ -551,6 +560,7 @@
       window.renderMagazzino();
     }
     if (page === 'giacenze') window.renderGiacenzePage();
+    if (page === 'fornitori') window.renderFornitoriPage({ load: true });
     if (page === 'messaggi') window.renderMessaggiPage();
     if (page === 'tentata') window.renderTentataPage();
     if (page === 'piano') window.renderPianoPage();

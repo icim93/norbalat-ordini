@@ -57,6 +57,7 @@ function renderDashboard() {
   const caricoTentata = state.carichiTentataVendita.find(c => c.userId === userId);
   const clienteFollowup = Object.values(state.crmSummary || {}).filter(c => c?.followup_date && String(c.followup_date).slice(0, 10) <= t).length;
   const unreadConversations = (state.messagesRecent || []).filter(item => !!item.unread).slice(0, 4);
+  const ordiniFornitoriAperti = (state.ordiniFornitori || []).filter(o => !['inviato', 'annullato'].includes(o.stato));
   const todaysCalendarEvents = (state.ferie || [])
     .filter(item => {
       const start = String(item.data_inizio || '').slice(0, 10);
@@ -140,6 +141,13 @@ function renderDashboard() {
           <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
             <div style="margin-bottom:8px;">${alertSottoSoglia} prodotti sotto soglia e ${alertScadenze} lotti in scadenza.</div>
             <button class="btn btn-outline btn-sm" onclick="goTo('giacenze')">Apri giacenze</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Ordini fornitori</div></div>
+          <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
+            <div style="margin-bottom:8px;">Richieste aperte: <b>${ordiniFornitoriAperti.length}</b></div>
+            <button class="btn btn-outline btn-sm" onclick="goTo('fornitori')">Apri ordini fornitori</button>
           </div>
         </div>`);
     }
@@ -294,6 +302,7 @@ function getDashboardData() {
     caricoTentata,
     clienteFollowup,
     unreadConversations,
+    ordiniFornitoriAperti,
     todaysCalendarEvents,
   };
 }
@@ -354,6 +363,19 @@ function getDashboardPanelDefs(data) {
           <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
             <div style="margin-bottom:8px;">${data.alertSottoSoglia} prodotti sotto soglia e ${data.alertScadenze} lotti in scadenza.</div>
             <button class="btn btn-outline btn-sm" onclick="goTo('giacenze')">Apri giacenze</button>
+          </div>
+        </div>`,
+    },
+    {
+      id: 'ordini-fornitori',
+      label: 'Ordini fornitori',
+      roles: ['admin', 'magazzino', 'direzione'],
+      render: () => `
+        <div class="card">
+          <div class="card-header"><div class="card-title">Ordini fornitori</div></div>
+          <div style="padding:0 16px 16px;font-size:13px;color:var(--text2);">
+            <div style="margin-bottom:8px;">Richieste aperte: <b>${data.ordiniFornitoriAperti.length}</b></div>
+            <button class="btn btn-outline btn-sm" onclick="goTo('fornitori')">Apri ordini fornitori</button>
           </div>
         </div>`,
     },

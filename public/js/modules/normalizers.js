@@ -27,6 +27,7 @@
       autistaLibero: c.autista_libero || c.autistaLibero || '',
       note: c.note || '',
       piva: c.piva || '',
+      email: c.email || '',
       codiceFiscale: c.codice_fiscale || c.codiceFiscale || '',
       codiceUnivoco: c.codice_univoco || c.codiceUnivoco || '',
       pec: c.pec || '',
@@ -141,6 +142,53 @@
     };
   }
 
+  function normalizeFornitore(f) {
+    return {
+      id: f.id,
+      nome: f.nome || '',
+      localita: f.localita || '',
+      piva: f.piva || '',
+      email: f.email || '',
+      pec: f.pec || '',
+      telefono: f.telefono || '',
+      contattoNome: f.contatto_nome || '',
+      note: f.note || '',
+      eFornitore: !!f.e_fornitore,
+      createdAt: f.created_at || null,
+    };
+  }
+
+  function normalizeOrdineFornitore(o) {
+    return {
+      id: o.id,
+      fornitoreId: o.fornitore_id || null,
+      fornitoreNome: o.fornitore_nome || '',
+      fornitoreEmail: o.fornitore_email || '',
+      fornitorePec: o.fornitore_pec || '',
+      fornitoreTelefono: o.fornitore_telefono || '',
+      fornitoreContatto: o.fornitore_contatto || '',
+      prodottoId: o.prodotto_id || null,
+      prodottoCodice: o.prodotto_codice || '',
+      prodottoNome: o.prodotto_nome || '',
+      quantita: (o.quantita !== undefined && o.quantita !== null) ? Number(o.quantita) : 0,
+      unitaMisura: o.unita_misura || '',
+      noteMagazzino: o.note_magazzino || '',
+      noteOrdine: o.note_ordine || '',
+      stato: o.stato || 'richiesta',
+      emailTo: Array.isArray(o.email_to) ? o.email_to.filter(Boolean) : [],
+      emailSubject: o.email_subject || '',
+      emailBody: o.email_body || '',
+      requestedBy: o.requested_by || null,
+      requestedByName: o.requested_by_name || '',
+      requestedAt: o.requested_at || null,
+      updatedBy: o.updated_by || null,
+      updatedAt: o.updated_at || null,
+      sentBy: o.sent_by || null,
+      sentByName: o.sent_by_name || '',
+      sentAt: o.sent_at || null,
+    };
+  }
+
   function normalizeOrdine(o) {
     return {
       id: o.id,
@@ -197,6 +245,8 @@
   window.normalizeListino = normalizeListino;
   window.normalizeListinoGruppo = normalizeListinoGruppo;
   window.normalizeResa = normalizeResa;
+  window.normalizeFornitore = normalizeFornitore;
+  window.normalizeOrdineFornitore = normalizeOrdineFornitore;
   window.normalizeOrdine = normalizeOrdine;
   window.normalizeCamion = normalizeCamion;
 })();

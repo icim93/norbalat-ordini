@@ -1990,6 +1990,11 @@
     grid-template-columns: 320px 1fr;
     gap: 14px;
   }
+  @media (max-width: 920px) {
+    #page-fornitori .fornitori-layout {
+      grid-template-columns: 1fr !important;
+    }
+  }
   .ferie-calendar-head {
     flex-wrap: wrap;
     gap: 10px;
@@ -3860,6 +3865,61 @@
         <input type="file" id="import-inventario-file" accept=".xlsx,.xls" style="display:none" onchange="importInventarioExcel(this)">
       </div>
 
+      <!-- ─── PAGE: Ordini Fornitori ─── -->
+      <div class="page" id="page-fornitori">
+        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div class="page-title">Ordini Fornitori</div>
+            <div class="page-sub">Richieste dal magazzino, formulazione ordine e invio email</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-outline" onclick="openFornitoreModal()">+ Fornitore</button>
+            <button class="btn btn-green" onclick="openOrdineFornitoreModal()">+ Richiesta ordine</button>
+          </div>
+        </div>
+
+        <div class="stats-grid" id="fornitori-stats" style="margin-bottom:16px;"></div>
+
+        <div class="fornitori-layout" style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,0.9fr);gap:16px;align-items:start;">
+          <div class="card">
+            <div class="card-header">
+              <input type="text" class="search-input" id="search-ordini-fornitori" placeholder="Cerca fornitore, prodotto, note..." oninput="renderFornitoriPage()">
+              <select id="filter-ordini-fornitori-stato" style="width:auto;padding:8px 12px;font-size:13px;" onchange="renderFornitoriPage()">
+                <option value="">Tutti gli stati</option>
+                <option value="richiesta">Da lavorare</option>
+                <option value="in_lavorazione">In lavorazione</option>
+                <option value="inviato">Inviati</option>
+                <option value="annullato">Annullati</option>
+              </select>
+            </div>
+            <div class="table-scroll-wrap"><table>
+              <thead>
+                <tr>
+                  <th>Stato</th>
+                  <th>Data</th>
+                  <th>Fornitore</th>
+                  <th>Ordine</th>
+                  <th>Quantità</th>
+                  <th>Richiesto da</th>
+                  <th>Azioni</th>
+                </tr>
+              </thead>
+              <tbody id="ordini-fornitori-table"></tbody>
+            </table></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Anagrafica fornitori</div>
+            </div>
+            <div style="padding:0 16px 16px;">
+              <input type="text" class="search-input" id="search-fornitori" placeholder="Cerca fornitore..." oninput="renderFornitoriList()" style="margin-bottom:10px;">
+              <div id="fornitori-list" style="display:flex;flex-direction:column;gap:8px;max-height:58vh;overflow:auto;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ─── PAGE: Tentata Vendita ─── -->
       <div class="page" id="page-tentata">
         <div class="page-header">
@@ -5650,6 +5710,114 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-fornitore">
+  <div class="modal" style="max-width:720px;">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-fornitore-title">Nuovo Fornitore</div>
+      <button class="modal-close" onclick="closeModal('modal-fornitore')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="fornitore-id">
+      <div class="form-row">
+        <div class="field form-full">
+          <label>Ragione sociale *</label>
+          <input type="text" id="fornitore-nome" placeholder="Nome fornitore">
+        </div>
+        <div class="field">
+          <label>Email ordini</label>
+          <input type="email" id="fornitore-email" placeholder="ordini@fornitore.it">
+        </div>
+        <div class="field">
+          <label>PEC</label>
+          <input type="email" id="fornitore-pec" placeholder="pec@fornitore.it">
+        </div>
+        <div class="field">
+          <label>Località</label>
+          <input type="text" id="fornitore-localita">
+        </div>
+        <div class="field">
+          <label>P.IVA</label>
+          <input type="text" id="fornitore-piva">
+        </div>
+        <div class="field">
+          <label>Referente</label>
+          <input type="text" id="fornitore-contatto">
+        </div>
+        <div class="field">
+          <label>Telefono</label>
+          <input type="tel" id="fornitore-telefono">
+        </div>
+        <div class="field form-full">
+          <label>Note</label>
+          <textarea id="fornitore-note" rows="3" placeholder="Condizioni, referenti, preferenze ordine..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-fornitore')">Annulla</button>
+      <button class="btn btn-green" onclick="saveFornitore()">Salva fornitore</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-ordine-fornitore">
+  <div class="modal" style="max-width:860px;">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-ordine-fornitore-title">Richiesta ordine fornitore</div>
+        <div id="modal-ordine-fornitore-subtitle" style="font-size:12px;color:var(--text2);margin-top:4px;">Il magazzino apre la richiesta; admin e direzione completano quantità e invio.</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-ordine-fornitore')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ordine-fornitore-id">
+      <input type="hidden" id="ordine-fornitore-prodotto-id">
+      <div class="form-row">
+        <div class="field">
+          <label>Fornitore *</label>
+          <select id="ordine-fornitore-fornitore" onchange="syncOrdineFornitoreRecipients()"></select>
+        </div>
+        <div class="field">
+          <label>Prodotto / ordine *</label>
+          <input type="text" id="ordine-fornitore-prodotto" list="ordine-fornitore-prodotti-list" placeholder="Es. Cagliata, panna, burro...">
+          <datalist id="ordine-fornitore-prodotti-list"></datalist>
+        </div>
+        <div class="field">
+          <label>Quantità *</label>
+          <input type="number" step="0.01" min="0" id="ordine-fornitore-quantita">
+        </div>
+        <div class="field">
+          <label>Unità</label>
+          <input type="text" id="ordine-fornitore-unita" placeholder="kg, colli, pedane...">
+        </div>
+        <div class="field form-full">
+          <label>Note magazzino</label>
+          <textarea id="ordine-fornitore-note-magazzino" rows="3" placeholder="Motivo del riordino, urgenze, stock residuo..."></textarea>
+        </div>
+        <div class="field form-full" id="ordine-fornitore-direzione-fields">
+          <label>Testo / note ordine</label>
+          <textarea id="ordine-fornitore-note-ordine" rows="4" placeholder="Dettagli commerciali da includere o tenere a riferimento..."></textarea>
+        </div>
+        <div class="field form-full">
+          <label>Mailing list destinatari</label>
+          <input type="text" id="ordine-fornitore-email-to" placeholder="fornitore@azienda.it, ordini@azienda.it">
+        </div>
+        <div class="field form-full" id="ordine-fornitore-email-fields">
+          <label>Oggetto email</label>
+          <input type="text" id="ordine-fornitore-email-subject">
+          <label style="margin-top:10px;">Corpo email</label>
+          <textarea id="ordine-fornitore-email-body" rows="8"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-ordine-fornitore')">Annulla</button>
+      <button class="btn btn-outline" id="ordine-fornitore-save-btn" onclick="saveOrdineFornitore()">Salva</button>
+      <button class="btn btn-green" id="ordine-fornitore-send-btn" onclick="sendOrdineFornitoreEmail()">Invia email</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -5679,6 +5847,8 @@ let state = {
   listini:   [],
   listiniGruppi: [],
   rese:      [],
+  fornitori: [],
+  ordiniFornitori: [],
   ordini:    [],
   camions:   [],
   pianoData: '',
@@ -6015,14 +6185,17 @@ async function loadAllData() {
     if (!state.pianoData) state.pianoData = today();
     const canSeePiano = ['admin', 'autista', 'magazzino'].includes(state.currentUser?.ruolo);
     const canSeeRese = ['admin', 'direzione'].includes(state.currentUser?.ruolo);
+    const canSeeFornitori = ['admin', 'direzione', 'magazzino'].includes(state.currentUser?.ruolo);
     const canSeeFerie = !!state.currentUser;
-    const [utenti, clienti, prodotti, listini, listiniGruppi, rese, ordini, camions, giri, tentataConfig, ferie] = await Promise.all([
+    const [utenti, clienti, prodotti, listini, listiniGruppi, rese, fornitori, ordiniFornitori, ordini, camions, giri, tentataConfig, ferie] = await Promise.all([
       api('GET', '/api/utenti'),
       api('GET', '/api/clienti'),
       api('GET', '/api/prodotti'),
       api('GET', '/api/listini'),
       api('GET', '/api/listini/gruppi').catch(() => []),
       canSeeRese ? api('GET', '/api/rese') : Promise.resolve([]),
+      canSeeFornitori ? api('GET', '/api/fornitori').catch(() => []) : Promise.resolve([]),
+      canSeeFornitori ? api('GET', '/api/ordini-fornitori').catch(() => []) : Promise.resolve([]),
       api('GET', '/api/ordini'),
       canSeePiano ? api('GET', `/api/camions?data=${state.pianoData}`) : Promise.resolve([]),
       api('GET', '/api/giri'),
@@ -6036,6 +6209,8 @@ async function loadAllData() {
     state.listini  = (listini  ||[]).map(normalizeListino);
     state.listiniGruppi = (listiniGruppi || []).map(normalizeListinoGruppo);
     state.rese     = (rese     ||[]).map(normalizeResa);
+    state.fornitori = (fornitori || []).map(normalizeFornitore);
+    state.ordiniFornitori = (ordiniFornitori || []).map(normalizeOrdineFornitore);
     state.ordini   = (ordini   ||[]).map(normalizeOrdine);
     const orderCursor = getOrderSyncCursor(state.ordini);
     state.ordersLastSyncAt = orderCursor.timestamp;
@@ -13136,6 +13311,7 @@ function renderGiacenzeAlerts() {
 <script src="/js/modules/listini.js"></script>
 <script src="/js/modules/listini-pdf.js"></script>
 <script src="/js/modules/rese-ui.js"></script>
+<script src="/js/modules/fornitori-ui.js"></script>
 <script src="/js/modules/crm.js"></script>
 <script src="/js/modules/documenti-ui.js"></script>
 <script src="/js/modules/messaggi-ui.js"></script>
