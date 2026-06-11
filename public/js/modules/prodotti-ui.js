@@ -140,10 +140,23 @@ function renderProdottiTable() {
   `).join('');
 }
 
+function fillPrFornitoreSelect(selectedId = null) {
+  const sel = document.getElementById('pr-fornitore-riferimento');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">-- Nessuno --</option>' +
+    (state.fornitori || [])
+      .slice()
+      .sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'it', { sensitivity: 'base' }))
+      .map(f => `<option value="${f.id}">${escapeHtml(f.nome)}</option>`)
+      .join('');
+  sel.value = selectedId ? String(selectedId) : '';
+}
+
 function openNewProdotto() {
   state.editingId = null;
   document.getElementById('modal-prodotto-title').textContent = 'Nuovo Prodotto';
   ['pr-codice', 'pr-nome', 'pr-packaging', 'pr-note', 'pr-punto-riordino', 'pr-peso-medio-pezzo-kg', 'pr-pezzi-per-cartone', 'pr-unita-per-cartone', 'pr-cartoni-per-pedana', 'pr-peso-cartone-kg'].forEach(id => { document.getElementById(id).value = ''; });
+  fillPrFornitoreSelect(null);
   document.getElementById('pr-cat').value = 'FORMAGGI';
   document.getElementById('pr-um').value = 'kg';
   document.getElementById('pr-peso').value = 'F';
@@ -205,6 +218,7 @@ function openEditProdotto(id) {
   document.getElementById('pr-cartoni-per-pedana').value = p.cartoniPerPedana ?? '';
   document.getElementById('pr-peso-cartone-kg').value = p.pesoCartoneKg ?? '';
   document.getElementById('pr-note').value = p.note || '';
+  fillPrFornitoreSelect(p.fornitoreRiferimentoId || null);
   const fileInput = document.getElementById('pr-scheda-file');
   if (fileInput) fileInput.value = '';
   renderProdottiSchedaStatus(p);
@@ -277,6 +291,10 @@ async function saveProdotto() {
     })(),
     assortimento_stato: document.getElementById('pr-assortimento-stato').value,
     note: document.getElementById('pr-note').value.trim(),
+    fornitore_di_riferimento_id: (() => {
+      const v = document.getElementById('pr-fornitore-riferimento')?.value;
+      return v ? parseInt(v, 10) || null : null;
+    })(),
   };
   if (body.punto_riordino !== null && (!Number.isFinite(body.punto_riordino) || body.punto_riordino < 0)) {
     showToast('Punto di riordino non valido', 'warning');

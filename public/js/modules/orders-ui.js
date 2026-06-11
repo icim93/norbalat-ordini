@@ -282,6 +282,7 @@ function getDashboardData() {
   const caricoTentata = state.carichiTentataVendita.find(c => c.userId === userId);
   const clienteFollowup = Object.values(state.crmSummary || {}).filter(c => c?.followup_date && String(c.followup_date).slice(0, 10) <= t).length;
   const unreadConversations = (state.messagesRecent || []).filter(item => !!item.unread).slice(0, 4);
+  const ordiniFornitoriAperti = (state.ordiniFornitori || []).filter(o => !['inviato', 'annullato'].includes(o.stato));
   const todaysCalendarEvents = (state.ferie || [])
     .filter(item => {
       const start = String(item.data_inizio || '').slice(0, 10);

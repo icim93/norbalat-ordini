@@ -57,6 +57,7 @@
           { page: 'clienti', icon: NAV_ICONS.clienti, label: 'Clienti' },
           { page: 'crm', icon: NAV_ICONS.crm, label: 'CRM' },
           { page: 'prodotti', icon: NAV_ICONS.prodotti, label: 'Prodotti' },
+          { page: 'anagrafica-fornitori', icon: NAV_ICONS.fornitori, label: 'Fornitori' },
           { page: 'utenti', icon: NAV_ICONS.utenti, label: 'Utenti' },
           { page: 'ferie', icon: NAV_ICONS.ferie, label: 'Calendario' },
           { page: 'messaggi', icon: NAV_ICONS.messaggi, label: 'Messaggi' },
@@ -129,6 +130,7 @@
       { page: 'ordini', icon: NAV_ICONS.ordini, label: 'Ordini' },
       { page: 'giacenze', icon: NAV_ICONS.giacenze, label: 'Giacenze' },
       { page: 'fornitori', icon: NAV_ICONS.fornitori, label: 'Ordini Fornitori' },
+      { page: 'anagrafica-fornitori', icon: NAV_ICONS.fornitori, label: 'Fornitori' },
       { page: 'clienti', icon: NAV_ICONS.clienti, label: 'Clienti' },
       { page: 'crm', icon: NAV_ICONS.crm, label: 'CRM' },
       { page: 'prodotti', icon: NAV_ICONS.prodotti, label: 'Prodotti' },
@@ -561,6 +563,7 @@
     }
     if (page === 'giacenze') window.renderGiacenzePage();
     if (page === 'fornitori') window.renderFornitoriPage({ load: true });
+    if (page === 'anagrafica-fornitori') window.renderAnagraficaFornitoriPage({ load: true });
     if (page === 'messaggi') window.renderMessaggiPage();
     if (page === 'tentata') window.renderTentataPage();
     if (page === 'piano') window.renderPianoPage();

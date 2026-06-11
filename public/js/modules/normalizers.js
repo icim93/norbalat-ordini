@@ -78,6 +78,8 @@
       schedaTecnicaMime: p.scheda_tecnica_mime || '',
       schedaTecnicaUploadedAt: p.scheda_tecnica_uploaded_at || null,
       hasSchedaTecnica: !!p.has_scheda_tecnica,
+      fornitoreRiferimentoId: p.fornitore_di_riferimento_id || null,
+      fornitoreRiferimentoNome: p.fornitore_di_riferimento_nome || '',
     };
   }
 

@@ -1825,6 +1825,7 @@ async function createSchema() {
     ALTER TABLE movimenti_giacenza ADD COLUMN IF NOT EXISTS undone_by_id INTEGER REFERENCES movimenti_giacenza(id) ON DELETE SET NULL;
 
     ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS soglia_minima NUMERIC;
+    ALTER TABLE prodotti ADD COLUMN IF NOT EXISTS fornitore_di_riferimento_id INTEGER REFERENCES clienti(id) ON DELETE SET NULL;
 
     CREATE INDEX IF NOT EXISTS idx_giacenze_prodotto ON giacenze(prodotto_id);
     CREATE INDEX IF NOT EXISTS idx_movimenti_giacenza_prodotto ON movimenti_giacenza(prodotto_id);
@@ -2918,10 +2919,10 @@ const zFornitorePayload = z.object({
 });
 
 const zOrdineFornitorePayload = z.object({
-  fornitore_id: z.coerce.number().int().positive(),
+  fornitore_id: z.coerce.number().int().positive().nullable().optional().default(null),
   prodotto_id: z.coerce.number().int().positive().nullable().optional().default(null),
   prodotto_nome: z.string().trim().min(1).max(220),
-  quantita: z.coerce.number().positive(),
+  quantita: z.coerce.number().min(0).optional().default(0),
   unita_misura: z.string().trim().max(40).optional().default(''),
   note_magazzino: z.string().trim().max(2000).optional().default(''),
   note_ordine: z.string().trim().max(4000).optional().default(''),
@@ -4183,14 +4184,17 @@ app.get('/api/prodotti', authMiddleware, async (req, res) => {
   try {
     const { rows } = await q(`
       SELECT
-        id, codice, nome, categoria, um, packaging, peso_fisso, gestione_giacenza, punto_riordino,
-        cartoni_attivi, peso_medio_pezzo_kg, pezzi_per_cartone, unita_per_cartone, pedane_attive, cartoni_per_pedana, peso_cartone_kg,
-        assortimento_stato, ultimo_riordino_qta, ultimo_riordino_at, ultimo_riordino_utente_id, ultimo_riordino_utente_nome,
-        auto_anagrafato, auto_anagrafato_at, note,
-        scheda_tecnica_nome, scheda_tecnica_mime, scheda_tecnica_uploaded_at,
-        (scheda_tecnica_data IS NOT NULL) AS has_scheda_tecnica
-      FROM prodotti
-      ORDER BY categoria,nome
+        p.id, p.codice, p.nome, p.categoria, p.um, p.packaging, p.peso_fisso, p.gestione_giacenza, p.punto_riordino,
+        p.cartoni_attivi, p.peso_medio_pezzo_kg, p.pezzi_per_cartone, p.unita_per_cartone, p.pedane_attive, p.cartoni_per_pedana, p.peso_cartone_kg,
+        p.assortimento_stato, p.ultimo_riordino_qta, p.ultimo_riordino_at, p.ultimo_riordino_utente_id, p.ultimo_riordino_utente_nome,
+        p.auto_anagrafato, p.auto_anagrafato_at, p.note,
+        p.scheda_tecnica_nome, p.scheda_tecnica_mime, p.scheda_tecnica_uploaded_at,
+        (p.scheda_tecnica_data IS NOT NULL) AS has_scheda_tecnica,
+        p.fornitore_di_riferimento_id,
+        c.nome AS fornitore_di_riferimento_nome
+      FROM prodotti p
+      LEFT JOIN clienti c ON c.id = p.fornitore_di_riferimento_id
+      ORDER BY p.categoria, p.nome
     `);
     res.json(rows);
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -4202,6 +4206,7 @@ app.post('/api/prodotti', authMiddleware, requirePermission('prodotti:manage'), 
       codice, nome, categoria, um, packaging = '', peso_fisso = false,
       gestione_giacenza = true, punto_riordino = null, assortimento_stato = 'attivo', note = '',
       cartoni_attivi = false, peso_medio_pezzo_kg = null, pezzi_per_cartone = null, unita_per_cartone = null, pedane_attive = false, cartoni_per_pedana = null, peso_cartone_kg = null,
+      fornitore_di_riferimento_id = null,
     } = req.body;
     if (!codice||!nome||!categoria||!um) return res.status(400).json({ error: 'Campi mancanti' });
     const puntoRiordino = punto_riordino === '' || punto_riordino === null || punto_riordino === undefined
@@ -4221,10 +4226,11 @@ app.post('/api/prodotti', authMiddleware, requirePermission('prodotti:manage'), 
     }
     const dup = await q('SELECT id FROM prodotti WHERE codice=$1', [codice.toUpperCase()]);
     if (dup.rows.length) return res.status(409).json({ error: 'Codice già esistente' });
+    const forniRif = fornitore_di_riferimento_id ? parseInt(fornitore_di_riferimento_id, 10) || null : null;
     const r = await q(
-      `INSERT INTO prodotti (codice,nome,categoria,um,packaging,peso_fisso,gestione_giacenza,punto_riordino,cartoni_attivi,peso_medio_pezzo_kg,pezzi_per_cartone,unita_per_cartone,pedane_attive,cartoni_per_pedana,peso_cartone_kg,assortimento_stato,note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
-      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, conv.cartoniAttivi, conv.pesoMedioPezzoKg, conv.pezziPerCartone, conv.unitaPerCartone, conv.pedaneAttive, conv.cartoniPerPedana, conv.pesoCartoneKg, assortimentoStato, note]
+      `INSERT INTO prodotti (codice,nome,categoria,um,packaging,peso_fisso,gestione_giacenza,punto_riordino,cartoni_attivi,peso_medio_pezzo_kg,pezzi_per_cartone,unita_per_cartone,pedane_attive,cartoni_per_pedana,peso_cartone_kg,assortimento_stato,note,fornitore_di_riferimento_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
+      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, conv.cartoniAttivi, conv.pesoMedioPezzoKg, conv.pezziPerCartone, conv.unitaPerCartone, conv.pedaneAttive, conv.cartoniPerPedana, conv.pesoCartoneKg, assortimentoStato, note, forniRif]
     );
     res.json({ id: r.rows[0].id });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -4237,6 +4243,7 @@ app.put('/api/prodotti/:id', authMiddleware, requirePermission('prodotti:manage'
       codice, nome, categoria, um, packaging = '', peso_fisso = false,
       gestione_giacenza = true, punto_riordino = null, assortimento_stato = 'attivo', note = '',
       cartoni_attivi = false, peso_medio_pezzo_kg = null, pezzi_per_cartone = null, unita_per_cartone = null, pedane_attive = false, cartoni_per_pedana = null, peso_cartone_kg = null,
+      fornitore_di_riferimento_id = null,
     } = req.body;
     if (!codice||!nome) return res.status(400).json({ error: 'Campi mancanti' });
     const puntoRiordino = punto_riordino === '' || punto_riordino === null || punto_riordino === undefined
@@ -4256,11 +4263,12 @@ app.put('/api/prodotti/:id', authMiddleware, requirePermission('prodotti:manage'
     }
     const dup = await q('SELECT id FROM prodotti WHERE codice=$1 AND id!=$2', [codice.toUpperCase(), id]);
     if (dup.rows.length) return res.status(409).json({ error: 'Codice già in uso' });
+    const forniRif = fornitore_di_riferimento_id ? parseInt(fornitore_di_riferimento_id, 10) || null : null;
     await q(
       `UPDATE prodotti
        SET codice=$1,nome=$2,categoria=$3,um=$4,packaging=$5,peso_fisso=$6,
-           gestione_giacenza=$7,punto_riordino=$8,cartoni_attivi=$9,peso_medio_pezzo_kg=$10,pezzi_per_cartone=$11,unita_per_cartone=$12,pedane_attive=$13,cartoni_per_pedana=$14,peso_cartone_kg=$15,assortimento_stato=$16,auto_anagrafato=FALSE,auto_anagrafato_at=NULL,note=$17 WHERE id=$18`,
-      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, conv.cartoniAttivi, conv.pesoMedioPezzoKg, conv.pezziPerCartone, conv.unitaPerCartone, conv.pedaneAttive, conv.cartoniPerPedana, conv.pesoCartoneKg, assortimentoStato, note, id]
+           gestione_giacenza=$7,punto_riordino=$8,cartoni_attivi=$9,peso_medio_pezzo_kg=$10,pezzi_per_cartone=$11,unita_per_cartone=$12,pedane_attive=$13,cartoni_per_pedana=$14,peso_cartone_kg=$15,assortimento_stato=$16,auto_anagrafato=FALSE,auto_anagrafato_at=NULL,note=$17,fornitore_di_riferimento_id=$18 WHERE id=$19`,
+      [codice.toUpperCase(), nome, categoria, um, packaging, peso_fisso, !!gestione_giacenza, puntoRiordino, conv.cartoniAttivi, conv.pesoMedioPezzoKg, conv.pezziPerCartone, conv.unitaPerCartone, conv.pedaneAttive, conv.cartoniPerPedana, conv.pesoCartoneKg, assortimentoStato, note, forniRif, id]
     );
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
@@ -5016,7 +5024,13 @@ app.post('/api/ordini-fornitori', authMiddleware, requirePermission('fornitori:r
     const parsed = zOrdineFornitorePayload.safeParse(req.body || {});
     if (!parsed.success) return validationError(res, parsed);
     const payload = parsed.data;
-    const fornitore = await ensureFornitoreCliente(payload.fornitore_id);
+    let fornitoreId = payload.fornitore_id;
+    if (!fornitoreId && payload.prodotto_id) {
+      const prow = await q(`SELECT fornitore_di_riferimento_id FROM prodotti WHERE id=$1 LIMIT 1`, [payload.prodotto_id]);
+      fornitoreId = prow.rows[0]?.fornitore_di_riferimento_id || null;
+    }
+    if (!fornitoreId) return res.status(400).json({ error: 'Fornitore non specificato e prodotto senza fornitore di riferimento' });
+    const fornitore = await ensureFornitoreCliente(fornitoreId);
     const recipients = normalizeOrderSupplierRecipients(payload.email_to.length ? payload.email_to : [fornitore.email, fornitore.pec]);
     const userName = `${req.user.nome || ''} ${req.user.cognome || ''}`.trim() || req.user.username || 'Utente';
     const stato = ['admin', 'direzione'].includes(req.user.ruolo) ? 'in_lavorazione' : 'richiesta';
@@ -5026,7 +5040,7 @@ app.post('/api/ordini-fornitori', authMiddleware, requirePermission('fornitori:r
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$12,NOW())
        RETURNING *`,
       [
-        payload.fornitore_id,
+        fornitoreId,
         payload.prodotto_id,
         payload.prodotto_nome,
         payload.quantita,
@@ -5042,7 +5056,26 @@ app.post('/api/ordini-fornitori', authMiddleware, requirePermission('fornitori:r
       ]
     );
     await logDB(req.user.id, userName, 'Ordini fornitori', `Richiesta ordine a ${fornitore.nome}: ${payload.prodotto_nome}`);
-    res.json(await getOrdineFornitoreRecord(rows[0].id));
+    const saved = await getOrdineFornitoreRecord(rows[0].id);
+    if (stato === 'richiesta') {
+      const admins = await q(`SELECT email FROM utenti WHERE ruolo IN ('admin','direzione') AND email IS NOT NULL AND email != '' LIMIT 20`);
+      const adminEmails = admins.rows.map(r => r.email).filter(Boolean);
+      if (adminEmails.length) {
+        const subject = `Norbalat - Nuova richiesta ordine: ${payload.prodotto_nome}`;
+        const text = [
+          `${userName} ha aperto una nuova richiesta ordine fornitore.`,
+          ``,
+          `Prodotto: ${payload.prodotto_nome}`,
+          `Fornitore: ${fornitore.nome}`,
+          payload.note_magazzino ? `Note magazzino: ${payload.note_magazzino}` : '',
+          ``,
+          `Accedi al programma per definire la quantita e inviare l'ordine.`,
+        ].filter(l => l !== '').join('\n');
+        const html = `<div style="font-family:Arial,sans-serif;line-height:1.5;white-space:pre-wrap;">${escapeEmailHtml(text)}</div>`;
+        await sendManagedEmail({ to: adminEmails, subject, text, html }).catch(() => {});
+      }
+    }
+    res.json(saved);
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }
@@ -5058,7 +5091,14 @@ app.put('/api/ordini-fornitori/:id', authMiddleware, requirePermission('fornitor
     const parsed = zOrdineFornitorePayload.safeParse(req.body || {});
     if (!parsed.success) return validationError(res, parsed);
     const payload = parsed.data;
-    const fornitore = await ensureFornitoreCliente(payload.fornitore_id);
+    let fornitoreId = payload.fornitore_id;
+    if (!fornitoreId && payload.prodotto_id) {
+      const prow = await q(`SELECT fornitore_di_riferimento_id FROM prodotti WHERE id=$1 LIMIT 1`, [payload.prodotto_id]);
+      fornitoreId = prow.rows[0]?.fornitore_di_riferimento_id || null;
+    }
+    if (!fornitoreId) fornitoreId = existing.fornitore_id || null;
+    if (!fornitoreId) return res.status(400).json({ error: 'Fornitore non specificato' });
+    const fornitore = await ensureFornitoreCliente(fornitoreId);
     const recipients = normalizeOrderSupplierRecipients(payload.email_to.length ? payload.email_to : [fornitore.email, fornitore.pec]);
     const nextStato = ['admin', 'direzione'].includes(req.user.ruolo) ? 'in_lavorazione' : existing.stato;
     await q(
@@ -5078,7 +5118,7 @@ app.put('/api/ordini-fornitori/:id', authMiddleware, requirePermission('fornitor
               updated_at=NOW()
         WHERE id=$13`,
       [
-        payload.fornitore_id,
+        fornitoreId,
         payload.prodotto_id,
         payload.prodotto_nome,
         payload.quantita,
@@ -7588,7 +7628,8 @@ app.get('/api/notifiche/ordini', authMiddleware, async (req, res) => {
     const { rows } = await q(
       `SELECT id, user_id, user_name, action, detail, ts
          FROM activity_log
-        WHERE action IN ('Nuovo ordine', 'Modifica ordine')
+        WHERE (action IN ('Nuovo ordine', 'Modifica ordine'))
+           OR (action = 'Ordini fornitori' AND detail LIKE 'Richiesta ordine%')
         ORDER BY id DESC
         LIMIT $1`,
       [limit]

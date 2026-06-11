@@ -3867,56 +3867,46 @@
 
       <!-- ─── PAGE: Ordini Fornitori ─── -->
       <div class="page" id="page-fornitori">
-        <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-          <div>
+        <div class="page-header">
             <div class="page-title">Ordini Fornitori</div>
-            <div class="page-sub">Richieste dal magazzino, formulazione ordine e invio email</div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-outline" onclick="openFornitoreModal()">+ Fornitore</button>
             <button class="btn btn-green" onclick="openOrdineFornitoreModal()">+ Richiesta ordine</button>
+        </div>
+        <div class="stats-grid" id="fornitori-stats" style="margin-bottom:16px;"></div>
+        <div class="card">
+          <div class="card-header" style="gap:8px;flex-wrap:wrap;">
+            <div class="card-title">Ordini fornitore</div>
+            <input type="text" class="search-input" id="search-ordini-fornitori" placeholder="Cerca fornitore, prodotto, note..." oninput="renderFornitoriPage()" style="max-width:260px;">
+            <select id="filter-ordini-fornitori-stato" style="width:auto;padding:8px 12px;font-size:13px;" onchange="renderFornitoriPage()">
+              <option value="">Tutti gli stati</option>
+              <option value="richiesta">Da lavorare</option>
+              <option value="in_lavorazione">In lavorazione</option>
+              <option value="inviato">Inviato</option>
+              <option value="annullato">Annullato</option>
+            </select>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="table">
+              <thead><tr>
+                <th>Stato</th><th>Data</th><th>Fornitore</th><th>Prodotto / Note</th><th>Quantità</th><th>Richiedente</th><th></th>
+              </tr></thead>
+              <tbody id="ordini-fornitori-table"></tbody>
+            </table>
           </div>
         </div>
+      </div>
 
-        <div class="stats-grid" id="fornitori-stats" style="margin-bottom:16px;"></div>
-
-        <div class="fornitori-layout" style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,0.9fr);gap:16px;align-items:start;">
-          <div class="card">
-            <div class="card-header">
-              <input type="text" class="search-input" id="search-ordini-fornitori" placeholder="Cerca fornitore, prodotto, note..." oninput="renderFornitoriPage()">
-              <select id="filter-ordini-fornitori-stato" style="width:auto;padding:8px 12px;font-size:13px;" onchange="renderFornitoriPage()">
-                <option value="">Tutti gli stati</option>
-                <option value="richiesta">Da lavorare</option>
-                <option value="in_lavorazione">In lavorazione</option>
-                <option value="inviato">Inviati</option>
-                <option value="annullato">Annullati</option>
-              </select>
-            </div>
-            <div class="table-scroll-wrap"><table>
-              <thead>
-                <tr>
-                  <th>Stato</th>
-                  <th>Data</th>
-                  <th>Fornitore</th>
-                  <th>Ordine</th>
-                  <th>Quantità</th>
-                  <th>Richiesto da</th>
-                  <th>Azioni</th>
-                </tr>
-              </thead>
-              <tbody id="ordini-fornitori-table"></tbody>
-            </table></div>
+      <!-- ─── PAGE: Anagrafica Fornitori ─── -->
+      <div class="page" id="page-anagrafica-fornitori">
+        <div class="page-header">
+          <div class="page-title">Anagrafica Fornitori</div>
+          <button class="btn btn-green" onclick="openFornitoreModal()">+ Nuovo fornitore</button>
+        </div>
+        <div class="card" style="max-width:700px;">
+          <div class="card-header">
+            <div class="card-title">Fornitori</div>
+            <input type="text" class="search-input" id="search-fornitori" placeholder="Cerca fornitore..." oninput="renderFornitoriList()" style="max-width:240px;">
           </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Anagrafica fornitori</div>
-            </div>
-            <div style="padding:0 16px 16px;">
-              <input type="text" class="search-input" id="search-fornitori" placeholder="Cerca fornitore..." oninput="renderFornitoriList()" style="margin-bottom:10px;">
-              <div id="fornitori-list" style="display:flex;flex-direction:column;gap:8px;max-height:58vh;overflow:auto;"></div>
-            </div>
-          </div>
+          <div id="fornitori-list" style="padding:12px;display:flex;flex-direction:column;gap:8px;"></div>
         </div>
       </div>
 
@@ -4805,6 +4795,10 @@
         <div class="field form-full">
           <label>📌 Note fisse prodotto</label>
           <textarea id="pr-note" placeholder="Es: Conservare a 4°C, prodotto stagionale…" style="min-height:60px;"></textarea>
+        </div>
+        <div class="field">
+          <label>Fornitore di riferimento</label>
+          <select id="pr-fornitore-riferimento"><option value="">-- Nessuno --</option></select>
         </div>
         <div class="field form-full">
           <label>Scheda tecnica</label>
@@ -5773,15 +5767,16 @@
       <input type="hidden" id="ordine-fornitore-id">
       <input type="hidden" id="ordine-fornitore-prodotto-id">
       <div class="form-row">
-        <div class="field">
+        <div id="ordine-fornitore-fornitore-row" class="field">
           <label>Fornitore *</label>
           <select id="ordine-fornitore-fornitore" onchange="syncOrdineFornitoreRecipients()"></select>
         </div>
         <div class="field">
           <label>Prodotto / ordine *</label>
-          <input type="text" id="ordine-fornitore-prodotto" list="ordine-fornitore-prodotti-list" placeholder="Es. Cagliata, panna, burro...">
+          <input type="text" id="ordine-fornitore-prodotto" list="ordine-fornitore-prodotti-list" placeholder="Es. Cagliata, panna, burro..." oninput="syncFornitoreFromProdotto()">
           <datalist id="ordine-fornitore-prodotti-list"></datalist>
         </div>
+        <div id="ordine-fornitore-quantita-row" style="display:contents;">
         <div class="field">
           <label>Quantità *</label>
           <input type="number" step="0.01" min="0" id="ordine-fornitore-quantita">
@@ -5789,6 +5784,7 @@
         <div class="field">
           <label>Unità</label>
           <input type="text" id="ordine-fornitore-unita" placeholder="kg, colli, pedane...">
+        </div>
         </div>
         <div class="field form-full">
           <label>Note magazzino</label>
@@ -5814,6 +5810,7 @@
       <button class="btn btn-outline" onclick="closeModal('modal-ordine-fornitore')">Annulla</button>
       <button class="btn btn-outline" id="ordine-fornitore-save-btn" onclick="saveOrdineFornitore()">Salva</button>
       <button class="btn btn-green" id="ordine-fornitore-send-btn" onclick="sendOrdineFornitoreEmail()">Invia email</button>
+      <button class="btn btn-outline" id="ordine-fornitore-wa-btn" onclick="sendOrdineFornitoreWhatsApp()" style="background:#25D366;color:#fff;border-color:#25D366;">WhatsApp</button>
     </div>
   </div>
 </div>
@@ -6461,21 +6458,34 @@ function renderTopbarNotifications() {
   headCount.textContent = state.topbarNotifications.length
     ? `${state.topbarNotifications.length} recenti`
     : 'Nessuna notifica';
-  list.innerHTML = state.topbarNotifications.length
+  const pendingFornitoriItems = (['admin', 'direzione'].includes(state.currentUser?.ruolo))
+    ? (state.ordiniFornitori || []).filter(o => o.stato === 'richiesta').slice(0, 5)
+    : [];
+  const fornitoriHtml = pendingFornitoriItems.map(o => `
+    <button class="topbar-notify-item unseen" onclick="closeAllTopbarPanels?.();goTo('fornitori');setTimeout(()=>openOrdineFornitoreModal(${o.id}),80)">
+      <div class="topbar-notify-title" style="color:var(--orange);">&#9888; Richiesta ordine da evadere</div>
+      <div class="topbar-notify-meta">${escapeHtml(o.prodottoNome)} &middot; ${escapeHtml(o.fornitoreNome)} &middot; ${escapeHtml(o.requestedByName || 'Magazzino')}</div>
+    </button>
+  `).join('');
+  const activityHtml = state.topbarNotifications.length
     ? state.topbarNotifications.map(item => {
         const orderMatch = String(item.detail || '').match(/#(\d+)/);
+        const isFornitori = String(item.action || '') === 'Ordini fornitori';
         const isUpdate = String(item.action || '').toLowerCase() === 'modifica ordine';
-        const verb = isUpdate ? 'ha modificato' : 'ha aggiunto';
-        const orderLabel = orderMatch ? ` ordine #${orderMatch[1]}` : (isUpdate ? ' un ordine' : ' un nuovo ordine');
+        const verb = isFornitori ? 'ha richiesto ordine' : (isUpdate ? 'ha modificato' : 'ha aggiunto');
+        const orderLabel = isFornitori
+          ? (item.detail ? ` — ${item.detail}` : '')
+          : (orderMatch ? ` ordine #${orderMatch[1]}` : (isUpdate ? ' un ordine' : ' un nuovo ordine'));
         const unseenClass = Number(item.id) > seenId ? ' unseen' : '';
         return `
           <button class="topbar-notify-item${unseenClass}" onclick="openOrderNotification(${item.id}, ${orderMatch ? Number(orderMatch[1]) : 0})">
             <div class="topbar-notify-title"><b>${escapeHtml(item.userName || 'Utente')}</b> ${escapeHtml(verb)}${escapeHtml(orderLabel)}</div>
-            <div class="topbar-notify-meta">${escapeHtml(formatNotificationDateTime(item.ts))}${item.detail ? ` · ${escapeHtml(item.detail)}` : ''}</div>
+            <div class="topbar-notify-meta">${escapeHtml(formatNotificationDateTime(item.ts))}${item.detail && !isFornitori ? ` · ${escapeHtml(item.detail)}` : ''}</div>
           </button>
         `;
       }).join('')
-    : '<div class="topbar-notify-empty">Nessun nuovo ordine registrato di recente.</div>';
+    : '';
+  list.innerHTML = (fornitoriHtml + activityHtml) || '<div class="topbar-notify-empty">Nessuna attivita recente.</div>';
 }
 
 async function loadTopbarNotifications() {
