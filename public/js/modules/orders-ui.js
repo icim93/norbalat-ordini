@@ -714,12 +714,15 @@ function renderOrdiniTable() {
   if (typeof refreshNavBadges === 'function') refreshNavBadges();
 
   // Toolbar bulk
+  const isAdmin = state.currentUser?.ruolo === 'admin';
   const toolbar = document.getElementById('bulk-toolbar');
   if (toolbar) {
     if (selectedOrders.size > 0) {
       toolbar.style.display = 'flex';
       const lbl = toolbar.querySelector('#bulk-count');
       if (lbl) lbl.textContent = `${selectedOrders.size} selezionat${selectedOrders.size===1?'o':'i'}`;
+      const statoWrap = document.getElementById('bulk-stato-wrap');
+      if (statoWrap) statoWrap.style.display = isAdmin ? 'flex' : 'none';
     } else {
       toolbar.style.display = 'none';
     }
@@ -735,6 +738,8 @@ function renderOrdiniTable() {
   const thCheck = document.getElementById('th-select-all');
   if (thCheck) thCheck.checked = allSelected;
 
+  const STATI_LABELS = { attesa:'Attesa', sospeso:'Sospeso', preparazione:'Prep.', preparato:'Preparato', consegnato:'Consegnato', annullato:'Annullato' };
+  const STATI_ALL = ['attesa','sospeso','preparazione','preparato','consegnato','annullato'];
   tbody.innerHTML = list.map(o => {
     const checked = selectedOrders.has(o.id) ? 'checked' : '';
     const cliente = getCliente(o.clienteId);
@@ -749,6 +754,11 @@ function renderOrdiniTable() {
       (o.stef || o.altroVettore) ? 'table-row-warning' : '',
       o.stato === 'annullato' ? 'table-row-dimmed' : '',
     ].filter(Boolean).join(' ');
+    const quickStatoSelect = isAdmin ? `
+      <select title="Cambia stato rapidamente" aria-label="Cambia stato" onchange="quickChangeStatoOrdine(${o.id},this)"
+        style="padding:2px 4px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);cursor:pointer;max-width:100px;">
+        ${STATI_ALL.map(s => `<option value="${s}"${o.stato===s?' selected':''}>${STATI_LABELS[s]||s}</option>`).join('')}
+      </select>` : '';
     return `
     <tr class="${rowClass}">
       <td style="width:36px;padding:8px 6px;">
@@ -778,6 +788,7 @@ function renderOrdiniTable() {
       <td class="col-note" style="font-size:13px;color:var(--text2);">${o.note || '-'}</td>
       <td>
         <div class="table-actions">
+        ${quickStatoSelect}
         <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">Mod</button>
         <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">Dett</button>
         <button class="btn btn-outline btn-sm" title="Vai alla preparazione" aria-label="Vai alla preparazione" onclick="openPreparazioneOrdine(${o.id})">Prep</button>
@@ -821,6 +832,44 @@ async function deleteSelectedOrders() {
   }
   showToast(`${ok} ordine${ok>1?'i':''} eliminat${ok>1?'i':'o'} confermato`, 'success');
   renderOrdiniTable();
+}
+
+async function bulkChangeStatoOrders() {
+  if (!selectedOrders.size) return;
+  const statoEl = document.getElementById('bulk-stato-select');
+  const stato = statoEl?.value;
+  if (!stato) { showToast('Seleziona uno stato', 'error'); return; }
+  const n = selectedOrders.size;
+  if (!await customConfirm(`Cambiare stato a "${stato}" per ${n} ordine${n>1?'i':''}?`, 'Cambia stato', 'Cambio stato multiplo')) return;
+  const ids = [...selectedOrders];
+  let ok = 0;
+  for (const id of ids) {
+    try {
+      await api('PATCH', `/api/ordini/${id}/stato`, { stato });
+      const o = state.ordini.find(x => x.id === id);
+      if (o) o.stato = stato;
+      ok++;
+    } catch(_) { /* ignora singolo errore */ }
+  }
+  if (statoEl) statoEl.value = '';
+  showToast(`Stato aggiornato per ${ok} ordine${ok>1?'i':''}`, 'success');
+  renderOrdiniTable();
+}
+
+async function quickChangeStatoOrdine(id, selectEl) {
+  const stato = selectEl.value;
+  const ordine = state.ordini.find(x => x.id === id);
+  const prev = ordine?.stato;
+  if (!stato || stato === prev) return;
+  try {
+    await api('PATCH', `/api/ordini/${id}/stato`, { stato });
+    if (ordine) ordine.stato = stato;
+    showToast(`Ordine #${id} → ${stato}`, 'success');
+    renderOrdiniTable();
+  } catch(e) {
+    if (selectEl) selectEl.value = prev;
+    showToast('Errore aggiornamento stato', 'error');
+  }
 }
 
 function openPreparazioneOrdine(orderId) {
