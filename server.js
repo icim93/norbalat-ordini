@@ -6200,6 +6200,42 @@ app.patch('/api/ordini/:id/stato', authMiddleware, requirePermission('ordini:sta
   } finally { client.release(); }
 });
 
+app.patch('/api/ordini/:id/assegnazione', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { giro_override, autista_di_giro } = req.body;
+    const sets = [];
+    const params = [];
+    if (giro_override !== undefined) {
+      params.push(String(giro_override || '').trim());
+      sets.push(`giro_override=$${params.length}`);
+    }
+    if (autista_di_giro !== undefined) {
+      const autistaId = (autista_di_giro === null || autista_di_giro === '') ? null : parseInt(autista_di_giro);
+      if (autistaId !== null) {
+        if (!Number.isFinite(autistaId)) return res.status(400).json({ error: 'Autista non valido' });
+        const u = await q('SELECT id FROM utenti WHERE id=$1', [autistaId]);
+        if (!u.rows.length) return res.status(400).json({ error: 'Autista non trovato' });
+      }
+      params.push(autistaId);
+      sets.push(`autista_di_giro=$${params.length}`);
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nessun campo da aggiornare' });
+    params.push(id);
+    const r = await q(
+      `UPDATE ordini SET ${sets.join(',')}, updated_at=NOW() WHERE id=$${params.length}
+       RETURNING id, giro_override, autista_di_giro`,
+      params
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Ordine non trovato' });
+    const u = req.user;
+    await logDB(u.id, `${u.nome} ${u.cognome||''}`.trim(), 'Assegnazione ordine', `#${id}`);
+    res.json({ ok: true, ...r.rows[0] });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.patch('/api/ordini/:ordineId/linee/:lineaId/preparazione', authMiddleware, requireRole('admin', 'magazzino'), async (req, res) => {
   const client = await pool.connect();
   try {

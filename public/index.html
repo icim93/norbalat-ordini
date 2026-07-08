@@ -3341,6 +3341,34 @@
         </div>
       </div>
 
+      <!-- ─── PAGE: Riepilogo Domani (solo admin) ─── -->
+      <div class="page" id="page-riepilogo-domani">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Riepilogo Domani</div>
+            <div class="page-sub" id="riepilogo-domani-sub">Panoramica di ordini e giri per il giorno successivo</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div class="toolbar-shell">
+              <div class="toolbar-filters">
+                <div class="toolbar-field">
+                  <label class="toolbar-label">Giorno</label>
+                  <input type="date" id="riepilogo-domani-data" onchange="renderRiepilogoDomani()">
+                </div>
+              </div>
+              <div class="toolbar-actions">
+                <button class="btn btn-outline" onclick="setRiepilogoDomaniData(1)">Domani</button>
+                <button class="btn btn-outline" onclick="setRiepilogoDomaniData(2)">Dopodomani</button>
+              </div>
+            </div>
+          </div>
+          <div class="status-strip" id="riepilogo-domani-strip"></div>
+        </div>
+        <div id="riepilogo-domani-content"></div>
+      </div>
+
       <!-- ─── PAGE: Clienti ─── -->
       <div class="page" id="page-clienti">
         <div class="page-header">

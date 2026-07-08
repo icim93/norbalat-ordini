@@ -740,6 +740,10 @@ function renderOrdiniTable() {
 
   const STATI_LABELS = { attesa:'Attesa', sospeso:'Sospeso', preparazione:'Prep.', preparato:'Preparato', consegnato:'Consegnato', annullato:'Annullato' };
   const STATI_ALL = ['attesa','sospeso','preparazione','preparato','consegnato','annullato'];
+  const giriConfigurati = [...new Set((state.giriCalendario || []).map(g => String(g.giro || '').trim()).filter(g => g && g.toLowerCase() !== 'nessun giro'))]
+    .sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+  const autistiSelezionabili = state.utenti.filter(u => typeof isOrdineAutistaSelezionabile === 'function' ? isOrdineAutistaSelezionabile(u) : u.ruolo === 'autista');
+  const quickSelectStyle = 'padding:2px 4px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);cursor:pointer;max-width:100px;';
   tbody.innerHTML = list.map(o => {
     const checked = selectedOrders.has(o.id) ? 'checked' : '';
     const cliente = getCliente(o.clienteId);
@@ -756,8 +760,29 @@ function renderOrdiniTable() {
     ].filter(Boolean).join(' ');
     const quickStatoSelect = isAdmin ? `
       <select title="Cambia stato rapidamente" aria-label="Cambia stato" onchange="quickChangeStatoOrdine(${o.id},this)"
-        style="padding:2px 4px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--surface);cursor:pointer;max-width:100px;">
+        style="${quickSelectStyle}">
         ${STATI_ALL.map(s => `<option value="${s}"${o.stato===s?' selected':''}>${STATI_LABELS[s]||s}</option>`).join('')}
+      </select>` : '';
+    const giroOverride = String(o.giroOverride || '').trim();
+    const giroOptions = [...giriConfigurati];
+    if (giroOverride && giroOverride.toLowerCase() !== 'nessun giro' && !giroOptions.some(g => g.toLowerCase() === giroOverride.toLowerCase())) giroOptions.push(giroOverride);
+    const quickGiroSelect = isAdmin ? `
+      <select title="Cambia giro rapidamente" aria-label="Cambia giro" onchange="quickChangeGiroOrdine(${o.id},this)"
+        style="${quickSelectStyle}">
+        <option value=""${!giroOverride?' selected':''}>Giro cliente${(cliente.giro||'').trim() ? ` (${escapeHtml((cliente.giro||'').trim())})` : ''}</option>
+        <option value="nessun giro"${giroOverride.toLowerCase()==='nessun giro'?' selected':''}>Nessun giro</option>
+        ${giroOptions.map(g => `<option value="${escapeHtml(g)}"${giroOverride.toLowerCase()===g.toLowerCase()?' selected':''}>${escapeHtml(g)}</option>`).join('')}
+      </select>` : '';
+    const autistaOptions = [...autistiSelezionabili];
+    if (o.autistaDiGiro && !autistaOptions.some(a => a.id === o.autistaDiGiro)) {
+      const extra = state.utenti.find(u => u.id === o.autistaDiGiro);
+      if (extra) autistaOptions.push(extra);
+    }
+    const quickAutistaSelect = isAdmin ? `
+      <select title="Cambia autista rapidamente" aria-label="Cambia autista" onchange="quickChangeAutistaOrdine(${o.id},this)"
+        style="${quickSelectStyle}">
+        <option value=""${!o.autistaDiGiro?' selected':''}>- Autista -</option>
+        ${autistaOptions.map(a => `<option value="${a.id}"${o.autistaDiGiro===a.id?' selected':''}>${escapeHtml((a.nome+' '+(a.cognome||'')).trim())}</option>`).join('')}
       </select>` : '';
     return `
     <tr class="${rowClass}">
@@ -789,6 +814,8 @@ function renderOrdiniTable() {
       <td>
         <div class="table-actions">
         ${quickStatoSelect}
+        ${quickGiroSelect}
+        ${quickAutistaSelect}
         <button class="btn btn-outline btn-sm" title="Modifica ordine" aria-label="Modifica ordine" onclick="openEditOrder(${o.id})">Mod</button>
         <button class="btn btn-outline btn-sm" title="Apri dettaglio ordine" aria-label="Apri dettaglio ordine" onclick="openDettaglio(${o.id})">Dett</button>
         <button class="btn btn-outline btn-sm" title="Vai alla preparazione" aria-label="Vai alla preparazione" onclick="openPreparazioneOrdine(${o.id})">Prep</button>
@@ -872,6 +899,39 @@ async function quickChangeStatoOrdine(id, selectEl) {
   }
 }
 
+async function quickChangeGiroOrdine(id, selectEl) {
+  const ordine = state.ordini.find(x => x.id === id);
+  const prev = String(ordine?.giroOverride || '').trim();
+  const giro = selectEl.value;
+  if (giro === prev) return;
+  try {
+    await api('PATCH', `/api/ordini/${id}/assegnazione`, { giro_override: giro });
+    if (ordine) ordine.giroOverride = giro;
+    showToast(`Ordine #${id} → giro ${giro || 'del cliente'}`, 'success');
+    renderOrdiniTable();
+  } catch(e) {
+    if (selectEl) selectEl.value = prev;
+    showToast('Errore aggiornamento giro', 'error');
+  }
+}
+
+async function quickChangeAutistaOrdine(id, selectEl) {
+  const ordine = state.ordini.find(x => x.id === id);
+  const prev = ordine?.autistaDiGiro || null;
+  const autistaId = parseInt(selectEl.value) || null;
+  if (autistaId === prev) return;
+  try {
+    await api('PATCH', `/api/ordini/${id}/assegnazione`, { autista_di_giro: autistaId });
+    if (ordine) ordine.autistaDiGiro = autistaId;
+    const autista = autistaId ? state.utenti.find(u => u.id === autistaId) : null;
+    showToast(`Ordine #${id} → ${autista ? (autista.nome + ' ' + (autista.cognome || '')).trim() : 'nessun autista'}`, 'success');
+    renderOrdiniTable();
+  } catch(e) {
+    if (selectEl) selectEl.value = prev || '';
+    showToast('Errore aggiornamento autista', 'error');
+  }
+}
+
 function openPreparazioneOrdine(orderId) {
   const o = state.ordini.find(x => x.id === Number(orderId));
   if (!o) return;
@@ -885,6 +945,220 @@ function openPreparazioneOrdine(orderId) {
   if (typeof highlightMagazzinoOrder === 'function') {
     setTimeout(() => highlightMagazzinoOrder(o.id), 150);
   }
+}
+
+// ================================================
+// RIEPILOGO GIORNO SUCCESSIVO (solo admin)
+// ================================================
+
+const RIEPILOGO_STATI_COLORI = {
+  attesa: '#f59e0b',
+  sospeso: '#9ca3af',
+  preparazione: '#3b82f6',
+  preparato: '#6366f1',
+  consegnato: '#10b981',
+};
+const RIEPILOGO_STATI_LABELS = {
+  attesa: 'In attesa',
+  sospeso: 'In sospeso',
+  preparazione: 'In preparazione',
+  preparato: 'Preparato',
+  consegnato: 'Consegnato',
+};
+
+function riepilogoDomaniAddDays(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  const pad = v => String(v).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function setRiepilogoDomaniData(offset) {
+  const input = document.getElementById('riepilogo-domani-data');
+  if (input) input.value = riepilogoDomaniAddDays(offset);
+  renderRiepilogoDomani();
+}
+
+function riepilogoColliOrdine(o) {
+  return (o.linee || []).reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+}
+
+function riepilogoStatoBar(ordini) {
+  const totale = ordini.length || 1;
+  const segments = Object.keys(RIEPILOGO_STATI_COLORI)
+    .map(stato => ({ stato, count: ordini.filter(o => o.stato === stato).length }))
+    .filter(s => s.count > 0);
+  if (!segments.length) return '';
+  const bar = segments.map(s =>
+    `<span title="${RIEPILOGO_STATI_LABELS[s.stato] || s.stato}: ${s.count}" style="display:block;flex:${s.count} 0 auto;min-width:10px;background:${RIEPILOGO_STATI_COLORI[s.stato]};"></span>`
+  ).join('');
+  const legend = segments.map(s =>
+    `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);">
+      <span style="width:8px;height:8px;border-radius:2px;background:${RIEPILOGO_STATI_COLORI[s.stato]};display:inline-block;"></span>
+      ${RIEPILOGO_STATI_LABELS[s.stato] || s.stato}: <b>${s.count}</b>
+    </span>`
+  ).join('');
+  return `
+    <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin:8px 0 6px;background:var(--border);">${bar}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px;">${legend}</div>`;
+}
+
+function riepilogoOrdineRow(o) {
+  const cliente = getCliente(o.clienteId);
+  const autista = o.autistaDiGiro ? state.utenti.find(u => u.id === o.autistaDiGiro) : null;
+  const colli = riepilogoColliOrdine(o);
+  const flags = [
+    o.dataNonCerta ? '<span class="badge badge-red">Data incerta</span>' : '',
+    o.stef ? '<span class="badge badge-blue">STEF</span>' : '',
+    o.altroVettore ? '<span class="badge badge-orange">Altro vettore</span>' : '',
+  ].filter(Boolean).join(' ');
+  return `
+    <div onclick="openDettaglio(${o.id})" style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;">
+      <span style="font-family:'DM Mono',monospace;font-weight:600;color:var(--accent);">#${o.id}</span>
+      <span style="min-width:0;flex:1;">
+        <b>${escapeHtml(cliente.nome)}</b>
+        ${cliente.localita ? `<span style="color:var(--text3);font-size:11px;"> · ${escapeHtml(cliente.localita)}</span>` : ''}
+        ${flags ? `<span style="margin-left:4px;">${flags}</span>` : ''}
+        <div style="font-size:11px;color:${autista ? 'var(--text3)' : '#dc2626'};">
+          ${autista ? escapeHtml((autista.nome + ' ' + (autista.cognome || '')).trim()) : 'Autista non assegnato'}
+        </div>
+      </span>
+      <span style="white-space:nowrap;font-size:12px;color:var(--text2);">${colli} colli</span>
+      ${statoBadge(o.stato)}
+    </div>`;
+}
+
+function riepilogoGiroCard(giro, ordini) {
+  const colli = ordini.reduce((sum, o) => sum + riepilogoColliOrdine(o), 0);
+  const clienti = new Set(ordini.map(o => o.clienteId)).size;
+  const autisti = [...new Set(ordini.filter(o => o.autistaDiGiro).map(o => o.autistaDiGiro))]
+    .map(id => state.utenti.find(u => u.id === id))
+    .filter(Boolean)
+    .map(u => (u.nome + ' ' + (u.cognome || '')).trim());
+  const senzaAutista = ordini.filter(o => !o.autistaDiGiro).length;
+  const suggerito = (!autisti.length && typeof getAutistaDiGiro === 'function') ? getAutistaDiGiro(giro) : null;
+  const autistaLabel = autisti.length
+    ? escapeHtml(autisti.join(', '))
+    : (suggerito ? `${escapeHtml((suggerito.nome + ' ' + (suggerito.cognome || '')).trim())} <span style="color:var(--text3);">(da assegnare)</span>` : '<span style="color:#dc2626;">Nessun autista</span>');
+  return `
+    <div class="card">
+      <div class="card-header" style="align-items:flex-start;">
+        <div style="min-width:0;">
+          <div class="card-title" style="text-transform:capitalize;">🚚 ${escapeHtml(giro)}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px;">${autistaLabel}${senzaAutista && autisti.length ? ` <span style="color:#dc2626;">· ${senzaAutista} senza autista</span>` : ''}</div>
+        </div>
+        <div style="text-align:right;white-space:nowrap;">
+          <div style="font-size:18px;font-weight:700;">${ordini.length} <span style="font-size:11px;font-weight:400;color:var(--text2);">ordini</span></div>
+          <div style="font-size:11px;color:var(--text2);">${clienti} clienti · ${colli} colli</div>
+        </div>
+      </div>
+      <div style="padding:0 16px 12px;">
+        ${riepilogoStatoBar(ordini)}
+        ${ordini.map(riepilogoOrdineRow).join('')}
+        <div style="margin-top:10px;">
+          <button class="btn btn-outline btn-sm" onclick="openRiepilogoGiroInMagazzino('${escapeHtml(giro)}')">Apri in preparazione</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function openRiepilogoGiroInMagazzino(giro) {
+  const data = document.getElementById('riepilogo-domani-data')?.value || riepilogoDomaniAddDays(1);
+  const dt = document.getElementById('filter-magazzino-data');
+  const giroSel = document.getElementById('filter-magazzino-giro');
+  const stato = document.getElementById('filter-magazzino-stato');
+  if (dt) dt.value = data;
+  if (giroSel) giroSel.value = String(giro || '').toLowerCase() === 'nessun giro' ? 'nessun giro' : giro;
+  if (stato) stato.value = '';
+  goTo('magazzino');
+}
+
+function renderRiepilogoDomani() {
+  const content = document.getElementById('riepilogo-domani-content');
+  if (!content) return;
+  const input = document.getElementById('riepilogo-domani-data');
+  if (input && !input.value) input.value = riepilogoDomaniAddDays(1);
+  const data = input?.value || riepilogoDomaniAddDays(1);
+  const dateObj = new Date(data + 'T12:00:00');
+  const sub = document.getElementById('riepilogo-domani-sub');
+  if (sub) sub.textContent = dateObj.toLocaleDateString('it-IT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  const ordini = state.ordini.filter(o => o.data === data && o.stato !== 'annullato');
+  const esterni = ordini.filter(o => o.stef || o.altroVettore);
+  const interni = ordini.filter(o => !o.stef && !o.altroVettore);
+
+  const giriMap = {};
+  interni.forEach(o => {
+    const g = (getOrdineGiroEffettivo(o) || '').trim().toLowerCase() || 'nessun giro';
+    (giriMap[g] = giriMap[g] || []).push(o);
+  });
+  const giriAttivi = Object.keys(giriMap).filter(g => g !== 'nessun giro').sort();
+  const senzaGiro = giriMap['nessun giro'] || [];
+  const senzaAutista = ordini.filter(o => !o.autistaDiGiro).length;
+  const colliTotali = ordini.reduce((sum, o) => sum + riepilogoColliOrdine(o), 0);
+  const dataIncerta = ordini.filter(o => o.dataNonCerta).length;
+
+  const strip = document.getElementById('riepilogo-domani-strip');
+  if (strip) {
+    strip.innerHTML = [
+      `<span class="status-pill"><span>Ordini</span><strong>${ordini.length}</strong></span>`,
+      `<span class="status-pill"><span>Clienti</span><strong>${new Set(ordini.map(o => o.clienteId)).size}</strong></span>`,
+      `<span class="status-pill info"><span>Giri attivi</span><strong>${giriAttivi.length}</strong></span>`,
+      `<span class="status-pill"><span>Colli</span><strong>${colliTotali}</strong></span>`,
+      senzaAutista ? `<span class="status-pill alert"><span>Senza autista</span><strong>${senzaAutista}</strong></span>` : '',
+      senzaGiro.length ? `<span class="status-pill warn"><span>Senza giro</span><strong>${senzaGiro.length}</strong></span>` : '',
+      esterni.length ? `<span class="status-pill"><span>Vettori esterni</span><strong>${esterni.length}</strong></span>` : '',
+      dataIncerta ? `<span class="status-pill alert"><span>Date incerte</span><strong>${dataIncerta}</strong></span>` : '',
+    ].filter(Boolean).join('');
+  }
+
+  if (!ordini.length) {
+    content.innerHTML = `<div class="card"><div class="empty-state" style="padding:40px 20px;"><div class="empty-icon">📭</div><p>Nessun ordine per ${dateObj.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div></div>`;
+    return;
+  }
+
+  const cards = giriAttivi.map(g => riepilogoGiroCard(g, giriMap[g]));
+  if (senzaGiro.length) cards.push(riepilogoGiroCard('nessun giro', senzaGiro));
+  if (esterni.length) {
+    const colliEst = esterni.reduce((sum, o) => sum + riepilogoColliOrdine(o), 0);
+    cards.push(`
+      <div class="card">
+        <div class="card-header" style="align-items:flex-start;">
+          <div>
+            <div class="card-title">📦 Vettori esterni</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px;">STEF e altri vettori</div>
+          </div>
+          <div style="text-align:right;white-space:nowrap;">
+            <div style="font-size:18px;font-weight:700;">${esterni.length} <span style="font-size:11px;font-weight:400;color:var(--text2);">ordini</span></div>
+            <div style="font-size:11px;color:var(--text2);">${colliEst} colli</div>
+          </div>
+        </div>
+        <div style="padding:0 16px 12px;">
+          ${riepilogoStatoBar(esterni)}
+          ${esterni.map(riepilogoOrdineRow).join('')}
+        </div>
+      </div>`);
+  }
+
+  // Giri previsti dal calendario per quel giorno ma senza ordini
+  const weekday = dateObj.getDay();
+  const giriPrevistiVuoti = (state.giriCalendario || [])
+    .filter(g => (g.giorni || []).includes(weekday))
+    .map(g => String(g.giro || '').trim())
+    .filter(g => g && !giriMap[g.toLowerCase()]);
+  const previstiVuotiHtml = giriPrevistiVuoti.length ? `
+    <div class="card" style="margin-top:14px;border-style:dashed;">
+      <div class="card-header"><div class="card-title">Giri in calendario senza ordini</div></div>
+      <div style="padding:0 16px 14px;display:flex;gap:8px;flex-wrap:wrap;">
+        ${giriPrevistiVuoti.map(g => `<span class="badge badge-gray" style="text-transform:capitalize;">${escapeHtml(g)}</span>`).join('')}
+      </div>
+    </div>` : '';
+
+  content.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;align-items:start;">
+      ${cards.join('')}
+    </div>
+    ${previstiVuotiHtml}`;
 }
 
 // ================================================
