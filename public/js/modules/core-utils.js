@@ -42,6 +42,14 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
 
+  function getOrdiniPeriodoCutoff(periodo) {
+    if (periodo === 'all') return null;
+    const d = new Date();
+    if (periodo === '1y') d.setFullYear(d.getFullYear() - 1);
+    else d.setMonth(d.getMonth() - 3); // default '3m'
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
   function getNextBusinessDate(fromDate = today()) {
     const base = String(fromDate || today()).slice(0, 10);
     const d = new Date(`${base}T00:00:00`);
@@ -135,6 +143,7 @@
   window.TENTATA_VENDITA_CLIENT_NAME = TENTATA_VENDITA_CLIENT_NAME;
   window.TENTATA_VENDITA_CLIENT_CLASS = TENTATA_VENDITA_CLIENT_CLASS;
   window.today = today;
+  window.getOrdiniPeriodoCutoff = getOrdiniPeriodoCutoff;
   window.getNextBusinessDate = getNextBusinessDate;
   window.getNextDayOrderCutoffInfo = getNextDayOrderCutoffInfo;
   window.ensureNextDayOrderCutoffAllowed = ensureNextDayOrderCutoffAllowed;

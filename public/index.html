@@ -3297,6 +3297,14 @@
                     <option value="annullato">Annullato</option>
                   </select>
                 </div>
+                <div class="toolbar-field">
+                  <label class="toolbar-label">Periodo</label>
+                  <select class="toolbar-select" id="filter-periodo-ordini" onchange="setOrdiniPeriodo(this.value)">
+                    <option value="3m">Ultimi 3 mesi</option>
+                    <option value="1y">Ultimo anno</option>
+                    <option value="all">Tutto lo storico</option>
+                  </select>
+                </div>
               </div>
               <div class="toolbar-actions">
                 <button class="btn btn-outline" onclick="resetOrdiniFilters()">Reset</button>
@@ -6233,7 +6241,7 @@ async function loadAllData() {
       canSeeRese ? api('GET', '/api/rese') : Promise.resolve([]),
       canSeeFornitori ? api('GET', '/api/fornitori').catch(() => []) : Promise.resolve([]),
       canSeeFornitori ? api('GET', '/api/ordini-fornitori').catch(() => []) : Promise.resolve([]),
-      api('GET', '/api/ordini'),
+      api('GET', `/api/ordini?data_da=${getOrdiniPeriodoCutoff(state.ordiniPeriodo || '3m')}`),
       canSeePiano ? api('GET', `/api/camions?data=${state.pianoData}`) : Promise.resolve([]),
       api('GET', '/api/giri'),
       api('GET', '/api/impostazioni/tentata-vendita').catch(() => ({ carichi: [] })),
@@ -6248,6 +6256,8 @@ async function loadAllData() {
     state.rese     = (rese     ||[]).map(normalizeResa);
     state.fornitori = (fornitori || []).map(normalizeFornitore);
     state.ordiniFornitori = (ordiniFornitori || []).map(normalizeOrdineFornitore);
+    state.ordiniPeriodo = state.ordiniPeriodo || '3m';
+    state.ordiniLoadedFrom = getOrdiniPeriodoCutoff(state.ordiniPeriodo);
     state.ordini   = (ordini   ||[]).map(normalizeOrdine);
     const orderCursor = getOrderSyncCursor(state.ordini);
     state.ordersLastSyncAt = orderCursor.timestamp;
@@ -6343,6 +6353,26 @@ function mergeOrdersIntoState(rows = []) {
   }
   return changed;
 }
+
+async function setOrdiniPeriodo(periodo) {
+  const nuovoCutoff = getOrdiniPeriodoCutoff(periodo);
+  const coverageCutoff = state.ordiniLoadedFrom; // null = tutto lo storico già caricato
+  const needsMoreHistory = coverageCutoff && (!nuovoCutoff || nuovoCutoff < coverageCutoff);
+  state.ordiniPeriodo = periodo;
+  if (needsMoreHistory) {
+    try {
+      const query = nuovoCutoff ? `?data_da=${nuovoCutoff}` : '';
+      const rows = await api('GET', `/api/ordini${query}`);
+      mergeOrdersIntoState(rows || []);
+      state.ordiniLoadedFrom = nuovoCutoff;
+    } catch (e) {
+      showToast('Errore caricamento storico ordini', 'warning');
+      return;
+    }
+  }
+  if (typeof renderOrdiniTable === 'function') renderOrdiniTable();
+}
+window.setOrdiniPeriodo = setOrdiniPeriodo;
 
 function isRemoteOrderRefreshSafe() {
   if (!state.currentPage) return false;

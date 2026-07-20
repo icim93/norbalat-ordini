@@ -705,7 +705,9 @@ function renderOrdiniStatusStrip(list) {
 function renderOrdiniTable() {
   const q = (document.getElementById('search-ordini')?.value || '').toLowerCase();
   const filterStato = document.getElementById('filter-stato')?.value || '';
+  const periodoCutoff = getOrdiniPeriodoCutoff(state.ordiniPeriodo || '3m');
   let list = [...state.ordini];
+  if (periodoCutoff) list = list.filter(o => o.data >= periodoCutoff);
   if (q) list = list.filter(o => getCliente(o.clienteId).nome.toLowerCase().includes(q) || getAgente(o.agenteId).nomeCompleto.toLowerCase().includes(q));
   if (filterStato) list = list.filter(o => o.stato === filterStato);
   list = applyOrdiniSort(list);
@@ -835,7 +837,9 @@ function toggleSelectOrder(id, checked) {
 function selectAllOrders(checked) {
   const q = (document.getElementById('search-ordini')?.value || '').toLowerCase();
   const filterStato = document.getElementById('filter-stato')?.value || '';
+  const periodoCutoff = getOrdiniPeriodoCutoff(state.ordiniPeriodo || '3m');
   let list = [...state.ordini];
+  if (periodoCutoff) list = list.filter(o => o.data >= periodoCutoff);
   if (q) list = list.filter(o => getCliente(o.clienteId).nome.toLowerCase().includes(q));
   if (filterStato) list = list.filter(o => o.stato === filterStato);
   if (checked) list.forEach(o => selectedOrders.add(o.id));

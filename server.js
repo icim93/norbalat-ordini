@@ -5747,10 +5747,11 @@ async function mergePreparedLinesIntoOrder({
 
 app.get('/api/ordini', authMiddleware, async (req, res) => {
   try {
-    const { data, stato, agente_id, autista_id, giro, search } = req.query;
+    const { data, data_da, stato, agente_id, autista_id, giro, search } = req.query;
     const where = ['1=1'], params = [];
     let pi = 1;
     if (data)       { where.push(`o.data=$${pi++}`);             params.push(data); }
+    if (data_da)    { where.push(`o.data>=$${pi++}`);            params.push(data_da); }
     if (stato)      { where.push(`o.stato=$${pi++}`);            params.push(stato); }
     if (agente_id)  { where.push(`o.agente_id=$${pi++}`);        params.push(parseInt(agente_id)); }
     if (autista_id) { where.push(`o.autista_di_giro=$${pi++}`);  params.push(parseInt(autista_id)); }
