@@ -115,6 +115,7 @@
     magazzino: [
       { page: 'dashboard', icon: NAV_ICONS.dashboard, label: 'Dashboard' },
       { page: 'magazzino', icon: NAV_ICONS.magazzino, label: 'Da preparare' },
+      { page: 'riepilogo-domani', icon: NAV_ICONS.domani, label: 'Riepilogo Domani' },
       { page: 'ferie', icon: NAV_ICONS.ferie, label: 'Calendario' },
       { page: 'giacenze', icon: NAV_ICONS.giacenze, label: 'Giacenze' },
       { page: 'fornitori', icon: NAV_ICONS.fornitori, label: 'Ordini Fornitori' },
