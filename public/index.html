@@ -3980,6 +3980,56 @@
         <div id="tentata-rientro-container"></div>
       </div>
 
+      <!-- ─── PAGE: Modulo Tentata Vendita (stampa) ─── -->
+      <div class="page" id="page-tentata-stampa">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Modulo Tentata Vendita</div>
+            <div class="page-sub">Stampa il modulo giornaliero da compilare a mano per il carico</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header">
+            <div class="toolbar-shell">
+              <div class="toolbar-filters">
+                <div class="toolbar-field">
+                  <label class="toolbar-label">Autista / Giro</label>
+                  <select id="tv-stampa-autista" onchange="renderTentataStampaModulo()">
+                    <option value="">- Seleziona autista -</option>
+                  </select>
+                </div>
+                <div class="toolbar-field">
+                  <label class="toolbar-label">Data</label>
+                  <input type="date" id="tv-stampa-data" onchange="renderTentataStampaModulo()">
+                </div>
+              </div>
+              <div class="toolbar-actions">
+                <button class="btn btn-green" onclick="stampaModuloTentataVendita()">🖨️ Stampa modulo</button>
+              </div>
+            </div>
+          </div>
+          <div style="padding:12px 16px;font-size:13px;color:var(--text2);" id="tv-stampa-info"></div>
+          <div class="table-scroll-wrap">
+            <table>
+              <thead>
+                <tr><th>Prodotto</th><th style="width:90px;"></th></tr>
+              </thead>
+              <tbody id="tv-stampa-righe"></tbody>
+            </table>
+          </div>
+          <div style="padding:12px 16px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+            <div class="toolbar-field grow">
+              <label class="toolbar-label">Aggiungi prodotto</label>
+              <select id="tv-stampa-add-prod">
+                <option value="">- Aggiungi prodotto -</option>
+              </select>
+            </div>
+            <button class="btn btn-outline" onclick="aggiungiProdottoTentataStampa()">+ Aggiungi</button>
+          </div>
+        </div>
+      </div>
+
       <div class="page" id="page-messaggi">
         <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
           <div>
@@ -10577,6 +10627,144 @@ async function saveTentataConfig(options = {}) {
       queueTentataConfigAutosave();
     }
   }
+}
+
+// ═══════════════════════════════════════════════
+// TENTATA VENDITA — MODULO STAMPA (MAGAZZINO)
+// ═══════════════════════════════════════════════
+
+let tentataStampaRighe = [];
+
+function initTentataStampaPage() {
+  const autistaSel = document.getElementById('tv-stampa-autista');
+  if (autistaSel) {
+    const autisti = state.utenti.filter(u => u.ruolo === 'autista')
+      .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' }));
+    autistaSel.innerHTML = '<option value="">- Seleziona autista -</option>' + autisti
+      .map(u => `<option value="${u.id}">${escapeHtml(u.nome || '')}${(u.giriConsegna || []).length ? ' (' + escapeHtml(u.giriConsegna.join(', ')) + ')' : ''}</option>`)
+      .join('');
+  }
+  const dataInput = document.getElementById('tv-stampa-data');
+  if (dataInput && !dataInput.value) dataInput.value = today();
+  const prodSel = document.getElementById('tv-stampa-add-prod');
+  if (prodSel) {
+    prodSel.innerHTML = '<option value="">- Aggiungi prodotto -</option>' + [...state.prodotti]
+      .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'it', { sensitivity: 'base' }))
+      .map(p => `<option value="${p.id}">[${escapeHtml(p.codice || '')}] ${escapeHtml(p.nome || '')}</option>`)
+      .join('');
+  }
+  renderTentataStampaModulo();
+}
+
+function renderTentataStampaModulo() {
+  const userId = parseInt(document.getElementById('tv-stampa-autista')?.value || '0', 10) || null;
+  const dataStr = document.getElementById('tv-stampa-data')?.value || today();
+  const infoEl = document.getElementById('tv-stampa-info');
+  tentataStampaRighe = [];
+  if (userId) {
+    const template = typeof getTentataActiveTemplate === 'function' ? getTentataActiveTemplate(userId, dataStr) : null;
+    const linee = template && Array.isArray(template.linee) ? template.linee : [];
+    tentataStampaRighe = linee
+      .map(l => getProdotto(l.prodId))
+      .filter(p => p && p.id)
+      .map(p => ({ prodottoId: p.id }));
+    if (infoEl) {
+      infoEl.textContent = template
+        ? (linee.length ? `Profilo "${template.nome}" — ${linee.length} prodotti preimpostati` : `Profilo "${template.nome}" non ha prodotti configurati: aggiungili manualmente`)
+        : 'Nessun preset configurato per questo autista in questo giorno: aggiungi i prodotti manualmente';
+    }
+  } else if (infoEl) {
+    infoEl.textContent = 'Seleziona un autista per caricare i prodotti preimpostati';
+  }
+  renderTentataStampaRighe();
+}
+
+function renderTentataStampaRighe() {
+  const tbody = document.getElementById('tv-stampa-righe');
+  if (!tbody) return;
+  if (!tentataStampaRighe.length) {
+    tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text2);">Nessun prodotto in elenco</td></tr>';
+    return;
+  }
+  tbody.innerHTML = tentataStampaRighe.map((r, idx) => {
+    const p = getProdotto(r.prodottoId);
+    return `<tr><td>${escapeHtml(p ? p.nome : '—')}</td><td><button class="btn btn-outline btn-sm" onclick="rimuoviProdottoTentataStampa(${idx})">Rimuovi</button></td></tr>`;
+  }).join('');
+}
+
+function aggiungiProdottoTentataStampa() {
+  const sel = document.getElementById('tv-stampa-add-prod');
+  const prodottoId = parseInt(sel?.value || '0', 10);
+  if (!prodottoId) return;
+  if (tentataStampaRighe.some(r => r.prodottoId === prodottoId)) {
+    showToast('Prodotto già presente in elenco', 'warning');
+    return;
+  }
+  tentataStampaRighe.push({ prodottoId });
+  sel.value = '';
+  renderTentataStampaRighe();
+}
+
+function rimuoviProdottoTentataStampa(idx) {
+  tentataStampaRighe.splice(idx, 1);
+  renderTentataStampaRighe();
+}
+
+function stampaModuloTentataVendita() {
+  if (!tentataStampaRighe.length) {
+    showToast('Aggiungi almeno un prodotto prima di stampare', 'warning');
+    return;
+  }
+  const userId = parseInt(document.getElementById('tv-stampa-autista')?.value || '0', 10) || null;
+  const autista = userId ? state.utenti.find(u => u.id === userId) : null;
+  const dataStr = document.getElementById('tv-stampa-data')?.value || today();
+  const dataLabel = formatDate(dataStr);
+  const righeHtml = tentataStampaRighe.map(r => {
+    const p = getProdotto(r.prodottoId);
+    return `<tr>
+      <td class="tv-cell-blank"></td>
+      <td>${escapeHtml(p ? p.nome : '—')}</td>
+      <td class="tv-cell-blank"></td>
+      <td class="tv-cell-blank"></td>
+      <td class="tv-cell-blank"></td>
+    </tr>`;
+  }).join('');
+  const content = `
+    <div class="print-page">
+      <div class="print-page-header">
+        <div>
+          <div style="font-size:18px;font-weight:700;">Modulo Tentata Vendita</div>
+          <div style="font-size:13px;">${autista ? escapeHtml(autista.nome) : 'Autista non specificato'}${autista && (autista.giriConsegna || []).length ? ' — ' + escapeHtml(autista.giriConsegna.join(', ')) : ''}</div>
+        </div>
+        <div style="font-size:13px;">Data: <strong>${escapeHtml(dataLabel)}</strong></div>
+      </div>
+      <table class="tv-print-table">
+        <thead>
+          <tr><th>Scadenza / Lotto</th><th>Prodotto</th><th>Quantità</th><th>Colli</th><th>Prezzo</th></tr>
+        </thead>
+        <tbody>${righeHtml}</tbody>
+      </table>
+    </div>
+  `;
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Modulo Tentata Vendita — ${escapeHtml(dataLabel)}</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1814; background: #fff; }
+      .print-page { width: 210mm; min-height: 297mm; padding: 10mm; margin: 0 auto; }
+      .print-page-header { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; border-bottom:2px solid #333; padding-bottom:8px; margin-bottom:16px; }
+      table.tv-print-table { width:100%; border-collapse: collapse; }
+      .tv-print-table th, .tv-print-table td { border:1px solid #333; padding:10px 8px; text-align:left; }
+      .tv-print-table th { background:#eee; font-size:12px; }
+      .tv-print-table td { height:34px; font-size:12px; }
+      .tv-cell-blank { min-width: 90px; }
+      @media print { @page { margin: 8mm; size: A4 portrait; } .print-page { width:auto; min-height:auto; padding:0; margin:0; } }
+    </style>
+  </head><body>${content}</body></html>`);
+  win.document.close();
+  setTimeout(() => win.print(), 300);
 }
 
 // ═══════════════════════════════════════════════

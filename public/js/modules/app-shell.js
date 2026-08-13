@@ -10,6 +10,7 @@
     magazzino: `<svg ${S}><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg>`,
     giacenze: `<svg ${S}><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>`,
     tentata: `<svg ${S}><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 001.98-1.67L23 6H6"/></svg>`,
+    tentataStampa: `<svg ${S}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>`,
     fornitori: `<svg ${S}><path d="M16 16h6V7l-3-4H8v4"/><path d="M18 16v5"/><path d="M6 18h8"/><path d="M6 14h8"/><rect x="2" y="7" width="14" height="14" rx="2"/></svg>`,
     piano: `<svg ${S}><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,
     autista: `<svg ${S}><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,
@@ -50,6 +51,7 @@
           { page: 'giacenze', icon: NAV_ICONS.giacenze, label: 'Giacenze' },
           { page: 'fornitori', icon: NAV_ICONS.fornitori, label: 'Ordini Fornitori' },
           { page: 'tentata', icon: NAV_ICONS.tentata, label: 'Tentata Vendita' },
+          { page: 'tentata-stampa', icon: NAV_ICONS.tentataStampa, label: 'Modulo TV' },
           { page: 'piano', icon: NAV_ICONS.piano, label: 'Piano Carico' },
         ],
       },
@@ -120,6 +122,7 @@
       { page: 'giacenze', icon: NAV_ICONS.giacenze, label: 'Giacenze' },
       { page: 'fornitori', icon: NAV_ICONS.fornitori, label: 'Ordini Fornitori' },
       { page: 'tentata', icon: NAV_ICONS.tentata, label: 'Tentata Vendita' },
+      { page: 'tentata-stampa', icon: NAV_ICONS.tentataStampa, label: 'Modulo TV' },
       { page: 'documenti', icon: NAV_ICONS.documenti, label: 'Documenti' },
       { page: 'prodotti', icon: NAV_ICONS.prodotti, label: 'Prodotti' },
       { page: 'piano', icon: NAV_ICONS.piano, label: 'Piano Carico' },
@@ -578,6 +581,7 @@
     if (page === 'anagrafica-fornitori') window.renderAnagraficaFornitoriPage({ load: true });
     if (page === 'messaggi') window.renderMessaggiPage();
     if (page === 'tentata') window.renderTentataPage();
+    if (page === 'tentata-stampa' && typeof window.initTentataStampaPage === 'function') window.initTentataStampaPage();
     if (page === 'piano') window.renderPianoPage();
     if (page === 'ferie') window.renderFeriePage();
     if (page === 'report') window.renderReport();
