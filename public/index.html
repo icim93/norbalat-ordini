@@ -10656,15 +10656,6 @@ function initTentataStampaPage() {
   renderTentataStampaModulo();
 }
 
-function getTentataStampaRighePerAutista(userId, dataStr) {
-  const template = typeof getTentataActiveTemplate === 'function' ? getTentataActiveTemplate(userId, dataStr) : null;
-  const linee = template && Array.isArray(template.linee) ? template.linee : [];
-  return linee
-    .map(l => getProdotto(l.prodId))
-    .filter(p => p && p.id)
-    .map(p => ({ prodottoId: p.id }));
-}
-
 function renderTentataStampaModulo() {
   const userId = parseInt(document.getElementById('tv-stampa-autista')?.value || '0', 10) || null;
   const dataStr = document.getElementById('tv-stampa-data')?.value || today();
@@ -10673,7 +10664,10 @@ function renderTentataStampaModulo() {
   if (userId) {
     const template = typeof getTentataActiveTemplate === 'function' ? getTentataActiveTemplate(userId, dataStr) : null;
     const linee = template && Array.isArray(template.linee) ? template.linee : [];
-    tentataStampaRighe = getTentataStampaRighePerAutista(userId, dataStr);
+    tentataStampaRighe = linee
+      .map(l => getProdotto(l.prodId))
+      .filter(p => p && p.id)
+      .map(p => ({ prodottoId: p.id }));
     if (infoEl) {
       infoEl.textContent = template
         ? (linee.length ? `Profilo "${template.nome}" — ${linee.length} prodotti preimpostati` : `Profilo "${template.nome}" non ha prodotti configurati: aggiungili manualmente`)
@@ -10716,17 +10710,16 @@ function rimuoviProdottoTentataStampa(idx) {
   renderTentataStampaRighe();
 }
 
-function stampaModuloTentataVendita(righeOverride, autistaOverride, dataOverride) {
-  const righe = righeOverride || tentataStampaRighe;
-  if (!righe.length) {
+function stampaModuloTentataVendita() {
+  if (!tentataStampaRighe.length) {
     showToast('Aggiungi almeno un prodotto prima di stampare', 'warning');
     return;
   }
   const userId = parseInt(document.getElementById('tv-stampa-autista')?.value || '0', 10) || null;
-  const autista = autistaOverride !== undefined ? autistaOverride : (userId ? state.utenti.find(u => u.id === userId) : null);
-  const dataStr = dataOverride || document.getElementById('tv-stampa-data')?.value || today();
+  const autista = userId ? state.utenti.find(u => u.id === userId) : null;
+  const dataStr = document.getElementById('tv-stampa-data')?.value || today();
   const dataLabel = formatDate(dataStr);
-  const righeHtml = righe.map(r => {
+  const righeHtml = tentataStampaRighe.map(r => {
     const p = getProdotto(r.prodottoId);
     return `<tr>
       <td class="tv-cell-blank"></td>
