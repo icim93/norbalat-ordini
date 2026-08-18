@@ -1044,6 +1044,8 @@ function riepilogoGiroCard(giro, ordini) {
   const autistaLabel = autisti.length
     ? escapeHtml(autisti.join(', '))
     : (suggerito ? `${escapeHtml((suggerito.nome + ' ' + (suggerito.cognome || '')).trim())} <span style="color:var(--text3);">(da assegnare)</span>` : '<span style="color:#dc2626;">Nessun autista</span>');
+  const autistiIds = [...new Set(ordini.filter(o => o.autistaDiGiro).map(o => o.autistaDiGiro))];
+  const stampaAutistaId = autistiIds.length === 1 ? autistiIds[0] : (suggerito ? suggerito.id : null);
   return `
     <div class="card">
       <div class="card-header" style="align-items:flex-start;">
@@ -1059,11 +1061,28 @@ function riepilogoGiroCard(giro, ordini) {
       <div style="padding:0 16px 12px;">
         ${riepilogoStatoBar(ordini)}
         ${ordini.map(riepilogoOrdineRow).join('')}
-        <div style="margin-top:10px;">
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-outline btn-sm" onclick="openRiepilogoGiroInMagazzino('${escapeHtml(giro)}')">Apri in preparazione</button>
+          <button class="btn btn-outline btn-sm" onclick="stampaModuloTentataVenditaGiro('${escapeHtml(giro)}', ${stampaAutistaId || 'null'})">🖨️ Stampa modulo</button>
         </div>
       </div>
     </div>`;
+}
+
+function stampaModuloTentataVenditaGiro(giro, userId) {
+  if (!userId) {
+    showToast('Nessun autista assegnato per questo giro: assegna un autista prima di stampare', 'warning');
+    return;
+  }
+  if (typeof getTentataStampaRighePerAutista !== 'function' || typeof stampaModuloTentataVendita !== 'function') return;
+  const dataStr = document.getElementById('riepilogo-domani-data')?.value || riepilogoDomaniAddDays(1);
+  const righe = getTentataStampaRighePerAutista(userId, dataStr);
+  if (!righe.length) {
+    showToast('Nessun preset configurato per questo autista in questo giorno: apri "Modulo TV" per aggiungere i prodotti manualmente', 'warning');
+    return;
+  }
+  const autista = state.utenti.find(u => u.id === userId) || null;
+  stampaModuloTentataVendita(righe, autista, dataStr);
 }
 
 function openRiepilogoGiroInMagazzino(giro) {
