@@ -1059,11 +1059,24 @@ function riepilogoGiroCard(giro, ordini) {
       <div style="padding:0 16px 12px;">
         ${riepilogoStatoBar(ordini)}
         ${ordini.map(riepilogoOrdineRow).join('')}
-        <div style="margin-top:10px;">
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-outline btn-sm" onclick="openRiepilogoGiroInMagazzino('${escapeHtml(giro)}')">Apri in preparazione</button>
+          ${giro !== 'nessun giro' ? `<button class="btn btn-outline btn-sm" onclick="stampaReportMagazzinoGiro('${escapeHtml(giro)}')">🖨️ Stampa report magazzino</button>` : ''}
         </div>
       </div>
     </div>`;
+}
+
+function stampaReportMagazzinoGiro(giro) {
+  const dataStr = document.getElementById('riepilogo-domani-data')?.value || riepilogoDomaniAddDays(1);
+  const pdfData = document.getElementById('pdf-data');
+  const pdfTipoMag = document.querySelector('input[name="pdf-tipo"][value="magazzino"]');
+  const giroCbs = document.querySelectorAll('.pdf-giro-cb');
+  if (!pdfData || !pdfTipoMag || !giroCbs.length || typeof stampaPDFGiornaliero !== 'function') return;
+  pdfData.value = dataStr;
+  pdfTipoMag.checked = true;
+  giroCbs.forEach(cb => { cb.checked = cb.value === giro; });
+  stampaPDFGiornaliero();
 }
 
 function openRiepilogoGiroInMagazzino(giro) {
