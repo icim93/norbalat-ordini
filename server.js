@@ -2334,6 +2334,11 @@ function canApproveCalendarFerie(reqUser) {
   return role === 'admin' || role === 'direzione';
 }
 
+function canAutoApproveNewCliente(reqUser) {
+  const role = String(reqUser?.ruolo || '').trim();
+  return role === 'admin' || role === 'direzione';
+}
+
 function normalizeCalendarVisibility(raw = {}) {
   const creatorOnly = !!raw.visibilita_solo_creator;
   const allowedRoles = creatorOnly ? [] : normalizeAllowedRoles(raw.visibilita_ruoli);
@@ -3799,16 +3804,20 @@ app.post('/api/clienti/lookup-piva', authMiddleware, requirePermission('clienti:
             contatto_nome='', telefono='' } = req.body;
       if (!nome) return res.status(400).json({ error: 'Nome obbligatorio' });
       if (!String(piva || '').trim()) return res.status(400).json({ error: 'Partita IVA obbligatoria' });
+      const u = req.user;
+      const creator = `${u.nome} ${u.cognome||''}`.trim();
+      const autoApprove = canAutoApproveNewCliente(u);
+      const onboardingStato = autoApprove ? 'approvato' : 'in_attesa';
+      const onboardingApprovatoDa = autoApprove ? creator : null;
+      const onboardingApprovatoAt = autoApprove ? new Date() : null;
       const r = await q(
-      `INSERT INTO clienti (nome,crm_tipo,alias,localita,giro,agente_id,autista_di_giro,autista_libero,note,piva,codice_fiscale,codice_univoco,pec,cond_pagamento,e_fornitore,classificazione,contatto_nome,telefono,onboarding_stato,onboarding_checklist,fido,sbloccato)
-         VALUES ($1,'cliente',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'in_attesa',$18::jsonb,0,FALSE)
+      `INSERT INTO clienti (nome,crm_tipo,alias,localita,giro,agente_id,autista_di_giro,autista_libero,note,piva,codice_fiscale,codice_univoco,pec,cond_pagamento,e_fornitore,classificazione,contatto_nome,telefono,onboarding_stato,onboarding_checklist,fido,sbloccato,onboarding_approvato_da,onboarding_approvato_at)
+         VALUES ($1,'cliente',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$19,$18::jsonb,0,$20,$21,$22)
          RETURNING id,nome,crm_tipo,alias,localita,giro,autista_di_giro,autista_libero,piva,codice_fiscale,codice_univoco,pec,classificazione,cond_pagamento,e_fornitore,contatto_nome,telefono,onboarding_contatto_tipo,onboarding_stato,fido,sbloccato,created_at,crm_convertito_at`,
-      [nome, alias, localita, giro, agente_id||null, autista_di_giro||null, String(autista_libero || '').trim(), note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, contatto_nome, telefono, JSON.stringify({})]
+      [nome, alias, localita, giro, agente_id||null, autista_di_giro||null, String(autista_libero || '').trim(), note, piva, codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore, classificazione, contatto_nome, telefono, JSON.stringify({}), onboardingStato, autoApprove, onboardingApprovatoDa, onboardingApprovatoAt]
       );
-    const u = req.user;
-    const creator = `${u.nome} ${u.cognome||''}`.trim();
     await logDB(u.id, creator, 'Nuovo cliente', nome);
-    notifyNewClientePendingApproval(nome, creator).catch(() => {});
+    if (!autoApprove) notifyNewClientePendingApproval(nome, creator).catch(() => {});
     res.json(r.rows[0]);
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -3846,6 +3855,11 @@ app.post('/api/clienti/:id/converti-da-crm', authMiddleware, requirePermission('
       codice_fiscale, codice_univoco, pec, cond_pagamento, e_fornitore,
       classificazione, contatto_nome, telefono,
     } = parsed.data;
+    const actor = `${req.user.nome} ${req.user.cognome || ''}`.trim();
+    const autoApprove = canAutoApproveNewCliente(req.user);
+    const onboardingStato = autoApprove ? 'approvato' : 'in_attesa';
+    const onboardingApprovatoDa = autoApprove ? actor : null;
+    const onboardingApprovatoAt = autoApprove ? new Date() : null;
     const r = await q(
       `UPDATE clienti
           SET nome=$1,
@@ -3867,8 +3881,11 @@ app.post('/api/clienti/:id/converti-da-crm', authMiddleware, requirePermission('
               contatto_nome=$16,
               telefono=$17,
               onboarding_contatto_tipo=COALESCE(NULLIF(onboarding_contatto_tipo, ''), onboarding_contatto_tipo),
-              onboarding_stato='in_attesa',
+              onboarding_stato=$19,
               onboarding_checklist=COALESCE(onboarding_checklist, '{}'::jsonb),
+              sbloccato=CASE WHEN $20 THEN TRUE ELSE sbloccato END,
+              onboarding_approvato_da=CASE WHEN $20 THEN $21 ELSE onboarding_approvato_da END,
+              onboarding_approvato_at=CASE WHEN $20 THEN $22 ELSE onboarding_approvato_at END,
               crm_convertito_at=COALESCE(crm_convertito_at, NOW())
         WHERE id=$18
         RETURNING *`,
@@ -3876,11 +3893,11 @@ app.post('/api/clienti/:id/converti-da-crm', authMiddleware, requirePermission('
         nome, alias, localita, giro, agente_id || null, autista_di_giro || null, String(autista_libero || '').trim(), note, piva,
         codice_fiscale, codice_univoco, pec, cond_pagamento, !!e_fornitore,
         classificazione, contatto_nome, telefono, id,
+        onboardingStato, autoApprove, onboardingApprovatoDa, onboardingApprovatoAt,
       ]
     );
-    const actor = `${req.user.nome} ${req.user.cognome || ''}`.trim();
     await logDB(req.user.id, actor, 'Conversione CRM', `${current.rows[0].nome} -> ${nome}`);
-    notifyNewClientePendingApproval(nome, actor).catch(() => {});
+    if (!autoApprove) notifyNewClientePendingApproval(nome, actor).catch(() => {});
     res.json(r.rows[0]);
   } catch (e) {
     res.status(500).json({ error: e.message });
